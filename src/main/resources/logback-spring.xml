@@ -1,52 +1,58 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
-    <property name="LOGS" value="./logs" />
-
+    <!-- Путь к директории с лог-файлами -->
+    <property name="LOGS" value="./logs"/>
+    <!-- Получаем имя приложения из spring.application.name для имени файла лога -->
     <springProperty scope="context" name="appName" source="spring.application.name"/>
 
+    <!-- Регистрируем наш кастомный конвертер для маскирования данных -->
+    <conversionRule conversionWord="masked" converterClass="com.example.ragollama.util.LogMaskingConverter" />
+
+    <!-- Аппендер для вывода логов в консоль -->
     <appender name="Console" class="ch.qos.logback.core.ConsoleAppender">
         <layout class="ch.qos.logback.classic.PatternLayout">
-            <Pattern>
-                %black(%d{ISO8601}) %highlight(%-5level) [%blue(%t)] %yellow(%C{1}): %msg%n%throwable
-            </Pattern>
+            <!--
+                Паттерн для вывода:
+                %d{ISO8601}     - дата и время в формате ISO 8601
+                %highlight(%-5level) - уровень логгирования с подсветкой
+                [%15.15t]       - имя потока
+                %cyan(%C{1})    - имя класса с подсветкой
+                [rid:%X{requestId}] - ID запроса из MDC
+                %masked         - наше кастомное правило для маскирования сообщения
+                %n%throwable    - перенос строки и stack trace, если есть
+            -->
+            <Pattern>%d{ISO8601} %highlight(%-5level) [%15.15t] %cyan(%C{1}): [rid:%X{requestId}] %masked%n%throwable</Pattern>
         </layout>
     </appender>
 
+    <!-- Аппендер для записи логов в файл с ротацией -->
     <appender name="RollingFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${LOGS}/${appName}.log</file>
         <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
-            <Pattern>%d %p %C{1} [%t] %m%n</Pattern>
+            <Pattern>%d %p %C{1} [%t] [rid:%X{requestId}] %masked%n</Pattern>
         </encoder>
 
+        <!-- Политика ротации файлов по времени и размеру -->
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <!-- rollover daily and when the file reaches 10 MegaBytes -->
-            <fileNamePattern>${LOGS}/archived/${appName}-%d{yyyy-MM-dd}.%i.log
-            </fileNamePattern>
+            <!-- Архивные файлы будут создаваться каждый день или когда размер достигнет 10MB -->
+            <fileNamePattern>${LOGS}/archived/${appName}-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
             <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
                 <maxFileSize>10MB</maxFileSize>
             </timeBasedFileNamingAndTriggeringPolicy>
         </rollingPolicy>
     </appender>
 
-    <!-- LOG everything at INFO level -->
+    <!-- Корневой логгер. Уровень INFO по умолчанию для всех библиотек -->
     <root level="info">
-        <appender-ref ref="Console" />
-        <appender-ref ref="RollingFile" />
+        <appender-ref ref="Console"/>
+        <appender-ref ref="RollingFile"/>
     </root>
 
-    <!-- LOG "com.example.ragollama.*" at DEBUG level -->
+    <!-- Логгер для нашего приложения. Устанавливаем уровень DEBUG для более подробных логов -->
     <logger name="com.example.ragollama" level="debug" additivity="false">
-        <appender-ref ref="Console" />
-        <appender-ref ref="RollingFile" />
-    </logger>
-
-    <!-- Specific loggers -->
-    <logger name="org.hibernate.SQL" level="debug" additivity="false">
         <appender-ref ref="Console"/>
-    </logger>
-    <logger name="org.hibernate.type.descriptor.sql" level="trace" additivity="false">
-        <appender-ref ref="Console"/>
+        <appender-ref ref="RollingFile"/>
     </logger>
 
 </configuration>

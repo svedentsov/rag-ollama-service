@@ -20,21 +20,22 @@ import static org.springframework.security.config.http.SessionCreationPolicy.STA
 public class SecurityConfig {
 
     /**
-     * Определяет цепочку фильтров безопасности для HTTP-запросов.
+     * Определяет цепочку фильтров безопасности для всех HTTP-запросов.
      * <p>
      * В данной конфигурации:
      * <ul>
-     *   <li>Отключается защита от CSRF, так как мы создаем stateless REST API,
-     *       где такая защита менее актуальна.</li>
-     *   <li>Разрешаются все входящие запросы ({@code permitAll()}) для упрощения
-     *       демонстрации. В реальном приложении здесь будут настроены правила
-     *       аутентификации и авторизации.</li>
+     *   <li>Отключается защита от CSRF ({@code csrf(AbstractHttpConfigurer::disable)}),
+     *       что является стандартной практикой для stateless REST API, где аутентификация
+     *       происходит по токенам, а не по сессионным cookie.</li>
+     *   <li>Разрешаются все входящие запросы ({@code requestMatchers("/**").permitAll()}) для
+     *       упрощения демонстрации. В реальном приложении здесь будут настроены правила
+     *       аутентификации и авторизации (например, с использованием JWT).</li>
      *   <li>Устанавливается политика управления сессиями в {@code STATELESS},
-     *       чтобы Spring Security не создавал HTTP-сессии.</li>
+     *       чтобы Spring Security не создавал и не использовал HTTP-сессии.</li>
      * </ul>
      *
-     * @param http объект {@link HttpSecurity} для конфигурации.
-     * @return сконфигурированная цепочка фильтров {@link SecurityFilterChain}.
+     * @param http объект {@link HttpSecurity} для текучей конфигурации правил безопасности.
+     * @return Сконфигурированная и готовая к использованию цепочка фильтров {@link SecurityFilterChain}.
      * @throws Exception если при конфигурации возникает ошибка.
      */
     @Bean
@@ -42,11 +43,9 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(req -> req
-                        // Разрешаем доступ ко всем эндпоинтам для демонстрационных целей
+                        // Для демонстрационных целей разрешаем доступ ко всем эндпоинтам.
+                        // В реальном приложении здесь будут более строгие правила.
                         .requestMatchers("/**").permitAll()
-                        // В реальном приложении здесь будут более строгие правила:
-                        // .requestMatchers("/api/public/**").permitAll()
-                        // .requestMatchers("/api/private/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(STATELESS));

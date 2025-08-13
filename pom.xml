@@ -26,8 +26,10 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
+    <!-- Управление версиями зависимостей в одном месте -->
     <dependencyManagement>
         <dependencies>
+            <!-- BOM для Spring AI, обеспечивает совместимость версий -->
             <dependency>
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
@@ -35,11 +37,19 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <!-- BOM для Resilience4j -->
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-bom</artifactId>
+                <version>2.3.0</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
     <dependencies>
-        <!-- Spring Boot starters -->
+        <!-- === Основные зависимости Spring Boot === -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -61,38 +71,39 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
-        <!-- Spring AI -->
+        <!-- === Зависимости Spring AI === -->
+        <!-- Ядро Spring AI -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-model</artifactId>
             <version>${spring-ai.version}</version>
         </dependency>
-
+        <!-- Клиент для чат-моделей -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-client-chat</artifactId>
             <version>${spring-ai.version}</version>
         </dependency>
-
+        <!-- Абстракции для векторных хранилищ -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-vector-store</artifactId>
             <version>${spring-ai.version}</version>
         </dependency>
-
+        <!-- Интеграция с Ollama -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-ollama</artifactId>
             <version>${spring-ai.version}</version>
         </dependency>
-
+        <!-- Интеграция с PgVector -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-vector-store-pgvector</artifactId>
             <version>${spring-ai.version}</version>
         </dependency>
 
-        <!-- Database -->
+        <!-- === База данных и миграции === -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
@@ -107,7 +118,7 @@
             <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
 
-        <!-- Utils -->
+        <!-- === Утилиты для разработки === -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
@@ -120,7 +131,7 @@
             <version>${mapstruct.version}</version>
         </dependency>
 
-        <!-- OpenAPI / Observability / Tests -->
+        <!-- === Документация, метрики и отказоустойчивость === -->
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
@@ -130,7 +141,29 @@
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-circuitbreaker</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-retry</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-timelimiter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-core</artifactId>
+            <version>8.14.0</version>
+        </dependency>
 
+        <!-- === Тестирование === -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -150,7 +183,7 @@
 
     <build>
         <plugins>
-            <!-- Spring Boot plugin -->
+            <!-- Плагин Spring Boot для создания исполняемого JAR -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
@@ -164,24 +197,27 @@
                 </configuration>
             </plugin>
 
-            <!-- Compiler plugin: MapStruct + Lombok processors -->
+            <!-- Плагин компилятора для настройки обработчиков аннотаций -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.11.0</version>
                 <configuration>
-                    <release>21</release>
+                    <release>${java.version}</release>
                     <annotationProcessorPaths>
+                        <!-- Обработчик для MapStruct -->
                         <path>
                             <groupId>org.mapstruct</groupId>
                             <artifactId>mapstruct-processor</artifactId>
                             <version>${mapstruct.version}</version>
                         </path>
+                        <!-- Обработчик для Lombok -->
                         <path>
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok</artifactId>
                             <version>${lombok.version}</version>
                         </path>
+                        <!-- Связка Lombok и MapStruct -->
                         <path>
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok-mapstruct-binding</artifactId>

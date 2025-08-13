@@ -17,7 +17,10 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Сервис для управления диалогом с AI.
+ * Сервис для управления логикой простого чата с AI.
+ * <p>
+ * Отвечает за обработку запросов, взаимодействие с LLM,
+ * защиту от prompt injection и сохранение истории диалога в базу данных.
  */
 @Service
 @RequiredArgsConstructor
@@ -29,28 +32,53 @@ public class ChatService {
     private final ChatMessageRepository chatMessageRepository;
     private final PromptGuardService promptGuardService;
 
+    /**
+     * Обрабатывает запрос пользователя в чат.
+     * <p>
+     * Процесс обработки включает:
+     * 1. Проверку на prompt injection.
+     * 2. Определение ID сессии (использование существующего или создание нового).
+     * 3. Сохранение сообщения пользователя в БД.
+     * 4. Отправку запроса к LLM через {@link ChatClient}.
+     * 5. Сохранение ответа AI в БД.
+     * 6. Формирование и возврат ответа клиенту.
+     *
+     * @param request DTO с сообщением пользователя и ID сессии.
+     * @return {@link ChatResponse} с ответом AI и ID сессии.
+     */
     @Transactional
     public ChatResponse processChatRequest(ChatRequest request) {
+        // 1. Проверка на вредоносный ввод
         promptGuardService.checkForInjection(request.message());
 
+        // 2. Управление сессией
         UUID sessionId = request.sessionId() != null ? request.sessionId() : UUID.randomUUID();
-        log.info("Processing chat request for session ID: {}", sessionId);
+        log.info("Обработка запроса в чат для сессии ID: {}", sessionId);
 
+        // 3. Сохранение сообщения пользователя
         saveMessage(sessionId, MessageRole.USER, request.message());
 
+        // 4. Взаимодействие с LLM
         Prompt prompt = new Prompt(request.message());
-        // fluent API
         String aiResponseContent = chatClient.prompt(prompt)
                 .call()
                 .content();
+        log.debug("Ответ AI для сессии {}: {}", sessionId, aiResponseContent);
 
-        log.debug("AI response for session {}: {}", sessionId, aiResponseContent);
-
+        // 5. Сохранение ответа AI
         saveMessage(sessionId, MessageRole.ASSISTANT, aiResponseContent);
 
+        // 6. Возврат результата
         return new ChatResponse(aiResponseContent, sessionId);
     }
 
+    /**
+     * Приватный метод для сохранения сообщения в базу данных.
+     *
+     * @param sessionId ID текущей сессии.
+     * @param role      Роль отправителя (USER или ASSISTANT).
+     * @param content   Текст сообщения.
+     */
     private void saveMessage(UUID sessionId, MessageRole role, String content) {
         ChatMessage message = ChatMessage.builder()
                 .sessionId(sessionId)
@@ -59,7 +87,7 @@ public class ChatService {
                 .createdAt(LocalDateTime.now())
                 .build();
         chatMessageRepository.save(message);
-        log.debug("Saved message for session {}: Role={}, Content='{}'", sessionId, role,
-                content == null ? "" : content.substring(0, Math.min(content.length(), 50)) + "...");
+        log.debug("Сохранено сообщение для сессии {}: Role={}, Content='{}...'", sessionId, role,
+                content.substring(0, Math.min(content.length(), 50)));
     }
 }

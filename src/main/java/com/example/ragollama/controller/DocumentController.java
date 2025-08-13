@@ -16,7 +16,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Контроллер для управления документами в векторном хранилище.
+ * REST-контроллер для управления документами в векторном хранилище.
+ * <p>
+ * Предоставляет API для загрузки и индексации текстовых документов,
+ * которые будут использоваться в RAG-сценариях.
  */
 @RestController
 @RequestMapping("/api/v1/documents")
@@ -26,6 +29,16 @@ public class DocumentController {
 
     private final DocumentService documentService;
 
+    /**
+     * Принимает текстовый документ, обрабатывает и сохраняет его в векторное хранилище.
+     * <p>
+     * Процесс включает разбиение текста на чанки, создание для каждого чанка
+     * векторного представления (эмбеддинга) и сохранение в базе данных PgVector.
+     *
+     * @param documentRequest DTO с исходным именем и текстом документа.
+     * @return {@link ResponseEntity} со статусом 201 (CREATED) и {@link DocumentResponse},
+     * содержащим ID документа и количество созданных чанков.
+     */
     @PostMapping
     @Operation(
             summary = "Загрузить и проиндексировать документ",

@@ -2,27 +2,31 @@ package com.example.ragollama;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.scheduling.annotation.EnableAsync;
 
 /**
- * Главный класс приложения, точка входа для Spring Boot микросервиса.
+ * Главный класс приложения Spring Boot.
  * <p>
- * Этот класс инициализирует и запускает Spring Application Context.
- * Аннотация {@code @SpringBootApplication} объединяет в себе:
+ * {@link SpringBootApplication} - составная аннотация, включающая:
  * <ul>
  *   <li>{@code @Configuration}: помечает класс как источник определений бинов.</li>
- *   <li>{@code @EnableAutoConfiguration}: пытается автоматически сконфигурировать Spring приложение
- *       на основе зависимостей в classpath.</li>
- *   <li>{@code @ComponentScan}: сканирует компоненты, конфигурации и сервисы в пакете
- *       {@code com.example.ragollama} и его подпакетах.</li>
+ *   <li>{@code @EnableAutoConfiguration}: включает автоконфигурацию Spring Boot.</li>
+ *   <li>{@code @ComponentScan}: сканирует компоненты в текущем пакете и подпакетах.</li>
  * </ul>
+ * {@link EnableCaching} - включает механизм кэширования Spring.
+ * <p>
+ * {@link EnableAsync} - включает поддержку асинхронного выполнения методов, отмеченных аннотацией {@code @Async}.
  */
 @SpringBootApplication
+@EnableCaching
+@EnableAsync
 public class RagOllamaApplication {
 
     /**
-     * Основной метод, который запускает Spring Boot приложение.
+     * Точка входа в приложение.
      *
-     * @param args аргументы командной строки.
+     * @param args Аргументы командной строки.
      */
     public static void main(String[] args) {
         SpringApplication.run(RagOllamaApplication.class, args);

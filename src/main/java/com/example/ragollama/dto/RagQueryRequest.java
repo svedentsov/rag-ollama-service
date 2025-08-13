@@ -1,20 +1,15 @@
 package com.example.ragollama.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.DecimalMax;
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
 
 /**
- * DTO для RAG-запроса.
+ * DTO для RAG-запроса, содержащий вопрос пользователя и параметры поиска.
  *
- * @param query               Вопрос пользователя.
- * @param topK                Количество наиболее релевантных документов для извлечения.
- * @param similarityThreshold Минимальный порог схожести для документов (от 0.0 до 1.0).
+ * @param query               Вопрос пользователя, на основе которого будет производиться поиск и генерация ответа.
+ * @param topK                Количество наиболее релевантных документов (чанков) для извлечения из векторного хранилища.
+ * @param similarityThreshold Минимальный порог схожести (от 0.0 до 1.0), которому должны соответствовать
+ *                            извлекаемые документы. Документы с меньшей схожестью будут отфильтрованы.
  */
 @Schema(description = "DTO для RAG-запроса")
 public record RagQueryRequest(
@@ -31,7 +26,10 @@ public record RagQueryRequest(
         @NotNull @DecimalMin("0.0") @DecimalMax("1.0")
         Double similarityThreshold
 ) {
-    // Конструктор по умолчанию для установки значений, если они не предоставлены
+    /**
+     * Компактный конструктор для установки значений по умолчанию, если они не предоставлены в запросе.
+     * Это упрощает использование API, делая параметры `topK` и `similarityThreshold` опциональными.
+     */
     public RagQueryRequest {
         if (topK == null) topK = 4;
         if (similarityThreshold == null) similarityThreshold = 0.7;

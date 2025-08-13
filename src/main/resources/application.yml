@@ -2,9 +2,9 @@
 # Основные настройки сервера
 # ===================================================================
 server:
-  port: 8080
-  # Включаем отображение стектрейса только при наличии параметра ?trace=true. Безопасная практика.
+  port: 8080 # Порт, на котором будет работать приложение
   error:
+    # Включать stacktrace в ответ об ошибке только при наличии параметра `trace=true`
     include-stacktrace: on_param
 
 # ===================================================================
@@ -12,11 +12,26 @@ server:
 # ===================================================================
 spring:
   application:
-    name: rag-ollama-service
+    name: rag-ollama-service # Имя приложения, используется в логах и метриках
+  lifecycle:
+    # Таймаут для корректного завершения работы приложения
+    timeout-per-shutdown-phase: 30s
+  # Настройки пулов потоков для асинхронных задач
+  task:
+    execution:
+      pool:
+        core-size: 4
+        max-size: 10
+      shutdown:
+        await-termination: true
+        await-termination-period: 30s
+    scheduling:
+      shutdown:
+        await-termination: true
+        await-termination-period: 30s
 
   # --- Настройки подключения к базе данных (PostgreSQL) ---
   datasource:
-    # URL будет указывать на контейнер Docker, который мы определим в docker-compose.yml
     url: jdbc:postgresql://localhost:5432/ragdb
     username: user
     password: password
@@ -24,51 +39,46 @@ spring:
 
   # --- Настройки JPA и Hibernate ---
   jpa:
-    # 'validate' - лучшая практика для продакшена с Flyway. Hibernate проверит,
-    # что схема БД соответствует сущностям, но не будет ее изменять.
+    # `validate`: проверять схему БД на соответствие сущностям при старте
     hibernate:
       ddl-auto: validate
-    # Показываем SQL-запросы в логах для удобства разработки
-    show-sql: true
+    show-sql: true # Показывать генерируемые SQL-запросы в логах
     properties:
       hibernate:
-        format_sql: true # Форматируем SQL для лучшей читаемости
+        format_sql: true # Форматировать SQL-запросы для лучшей читаемости
 
   # --- Настройки миграций базы данных Flyway ---
   flyway:
     enabled: true
-    # Путь к SQL-миграциям в classpath
-    locations: classpath:db/migration
+    locations: classpath:db/migration # Путь к SQL-миграциям
+
+  # --- Настройки кэширования (Caffeine) ---
+  cache:
+    cache-names: vector_search_results # Имя кэша для результатов RAG-запросов
+    caffeine:
+      # Настройки кэша: макс. 500 записей, время жизни записи 10 минут
+      spec: maximumSize=500,expireAfterWrite=10m
 
   # ===================================================================
   # Настройки Spring AI
   # ===================================================================
   ai:
-    # --- Настройки локальной модели Ollama ---
     ollama:
-      # URL API Ollama, который будет запущен в Docker
-      base-url: http://localhost:11434
+      base-url: http://localhost:11434 # URL запущенного сервиса Ollama
       chat:
         options:
-          # Модель, которую будет использовать Ollama. Убедитесь, что она загружена (ollama pull llama3)
-          model: llama3
-          # Температура влияет на "креативность" ответов. 0 - детерминированный, >1 - очень случайный.
-          temperature: 0.7
-          # Максимальное количество токенов в ответе
-          max-tokens: 2048
-
-    # --- Настройки векторного хранилища PgVector ---
+          model: llama3 # Модель для генерации текста
+          temperature: 0.7 # Уровень "креативности" модели (0.0 - детерминированный, 1.0 - макс. креативный)
+          max-tokens: 2048 # Максимальное количество токенов в ответе
+      embedding:
+        options:
+          model: mxbai-embed-large # Модель для создания векторных представлений (эмбеддингов)
     vectorstore:
       pgvector:
-        # Имя таблицы для хранения векторов
-        table-name: vector_store
-        # Тип индекса для быстрого поиска. HNSW - современный и эффективный.
-        index-type: HNSW
-        # Метрика для измерения "расстояния" между векторами. COSINE_DISTANCE - стандарт для текстовых эмбеддингов.
-        distance-type: COSINE_DISTANCE
-        # Размерность векторов. Должна соответствовать модели эмбеддингов.
-        # Модель по умолчанию 'mxbai-embed-large' генерирует векторы размерностью 1024.
-        dimensions: 1024
+        table-name: vector_store # Имя таблицы для хранения векторов
+        index-type: HNSW # Тип индекса для быстрого поиска (Hierarchical Navigable Small World)
+        distance-type: COSINE_DISTANCE # Метрика для измерения схожести векторов (косинусное расстояние)
+        dimensions: 1024 # Размерность вектора (зависит от embedding-модели)
 
 # ===================================================================
 # Настройки Actuator для мониторинга (Observability)
@@ -77,39 +87,79 @@ management:
   endpoints:
     web:
       exposure:
-        # Явно указываем эндпоинты, которые должны быть доступны.
-        # '*' - небезопасно для продакшена.
-        include: health, info, prometheus
+        # Эндпоинты, доступные по HTTP
+        include: health, info, prometheus, metrics
   endpoint:
     health:
-      # Показываем детали состояния компонентов только авторизованным пользователям
+      # Показывать детали состояния компонентов только авторизованным пользователям (или всегда, если security отключен)
       show-details: when_authorized
   metrics:
-    # Добавляем тег с именем приложения ко всем метрикам для удобства в Prometheus/Grafana
     tags:
+      # Глобальный тег, который будет добавляться ко всем метрикам
       application: ${spring.application.name}
+    distribution:
+      # Включить гистограммы для метрики времени ответа HTTP-сервера
+      percentiles-histogram:
+        http.server.requests: true
+      # Определить "корзины" (SLA) для гистограмм времени ответа
+      sla:
+        http.server.requests: 50ms, 100ms, 200ms, 500ms, 1s, 2s
 
 # ===================================================================
 # Настройки OpenAPI / Swagger
 # ===================================================================
 springdoc:
   api-docs:
-    path: /api-docs
+    path: /api-docs # Путь к JSON-спецификации OpenAPI
   swagger-ui:
-    path: /swagger-ui.html
-  # Устанавливаем медиа-типы по умолчанию для всех эндпоинтов
+    path: /swagger-ui.html # Путь к интерактивной документации Swagger UI
   default-consumes-media-type: application/json
   default-produces-media-type: application/json
 
 # ===================================================================
-# Настройки логирования
+# Настройки отказоустойчивости (Resilience4j)
 # ===================================================================
-logging:
-  level:
-    root: INFO
-    # Включаем DEBUG-уровень для нашего кода для более детального логгирования
-    com.example.ragollama: DEBUG
-    # Включаем логирование SQL-запросов через фреймворк логирования
-    org.hibernate.SQL: DEBUG
-    # Включаем логирование параметров SQL-запросов. Крайне полезно для отладки.
-    org.hibernate.type.descriptor.sql: TRACE
+resilience4j:
+  circuitbreaker:
+    instances:
+      ollamaApi:
+        register-health-indicator: true # Интеграция с Actuator Health
+        sliding-window-size: 10 # Количество вызовов для анализа
+        minimum-number-of-calls: 5 # Минимальное кол-во вызовов для срабатывания
+        permitted-number-of-calls-in-half-open-state: 3 # Попыток в полуоткрытом состоянии
+        automatic-transition-from-open-to-half-open-enabled: true
+        wait-duration-in-open-state: 5s # Время в открытом состоянии
+        failure-rate-threshold: 50 # Порог ошибок в % для размыкания цепи
+        event-consumer-buffer-size: 10
+  retry:
+    instances:
+      ollamaApi:
+        max-attempts: 3 # Максимальное число попыток (1 + 2 повтора)
+        wait-duration: 2s # Пауза между попытками
+        # Повторять только при сетевых ошибках или таймаутах
+        retry-on-exception: "org.springframework.web.client.ResourceAccessException, java.util.concurrent.TimeoutException"
+  timelimiter:
+    instances:
+      ollamaApi:
+        timeout-duration: 30s # Общий таймаут на выполнение асинхронного метода
+        cancel-running-future: true # Прерывать выполнение, если таймаут истек
+
+# ===================================================================
+# Кастомные настройки приложения
+# ===================================================================
+app:
+  prompt:
+    # Путь к шаблону промпта для RAG
+    rag-template-path: "prompts/rag-prompt.tmpl"
+  reranking:
+    enabled: true # Включить/выключить переранжирование
+    keyword-match-boost: 0.1 # "Бонус" к релевантности за совпадение ключевого слова
+  rate-limiting:
+    enabled: true # Включить/выключить ограничение частоты запросов
+    limits:
+      - endpoint: "/api/v1/rag/query"
+        capacity: 10 # 10 запросов
+        refill-period-minutes: 1 # за 1 минуту
+      - endpoint: "/api/v1/chat"
+        capacity: 20
+        refill-period-minutes: 1

@@ -7,18 +7,21 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
- * Сервис для управления документами в векторном хранилище.
+ * Сервис для обработки и сохранения документов в векторном хранилище.
  * <p>
- * Отвечает за загрузку, обработку (разбиение на чанки) и индексацию
- * текстовых документов для последующего использования в RAG-запросах.
+ * Отвечает за основной этап "Ingestion" в RAG-архитектуре:
+ * получение текста, его разделение на чанки, векторизацию и сохранение.
  */
 @Service
 @RequiredArgsConstructor
@@ -37,37 +40,61 @@ public class DocumentService {
     private final TokenTextSplitter tokenTextSplitter;
 
     /**
-     * Обрабатывает и сохраняет документ в векторное хранилище.
+     * Синхронно обрабатывает и сохраняет документ.
      * <p>
-     * Процесс включает следующие шаги:
-     * 1. Генерация уникального ID для исходного документа.
-     * 2. Создание объекта {@link Document} с текстом и метаданными (имя источника).
-     * 3. Применение {@link TokenTextSplitter} для разбиения документа на чанки.
-     *    Это необходимо для эффективной работы с векторным хранилищем и контекстом LLM.
-     * 4. Добавление чанков в {@link VectorStore}, где для каждого чанка будет
-     *    создан и сохранен эмбеддинг.
+     * {@link CacheEvict} используется для очистки кэша результатов поиска. Это необходимо,
+     * так как добавление нового документа может изменить результаты будущих поисковых запросов.
      *
-     * @param request DTO с текстом документа и его названием.
-     * @return DTO с информацией о количестве загруженных чанков.
+     * @param request DTO с данными документа.
+     * @return {@link DocumentResponse} с результатом обработки.
      */
     @Transactional
+    @CacheEvict(value = "vector_search_results", allEntries = true)
     public DocumentResponse processAndStoreDocument(DocumentRequest request) {
-        log.info("Processing document with source name: '{}'", request.sourceName());
+        log.info("Синхронная обработка документа: '{}'", request.sourceName());
+        return ingestDocument(request);
+    }
 
+    /**
+     * Асинхронно обрабатывает и сохраняет документ.
+     * <p>
+     * Метод помечен аннотацией {@link Async}, что позволяет выполнять его в отдельном потоке,
+     * не блокируя вызывающий поток (например, HTTP-обработчик).
+     *
+     * @param request DTO с данными документа.
+     * @return {@link CompletableFuture} с {@link DocumentResponse} после завершения.
+     */
+    @Async
+    @Transactional
+    @CacheEvict(value = "vector_search_results", allEntries = true)
+    public CompletableFuture<DocumentResponse> processAndStoreDocumentAsync(DocumentRequest request) {
+        log.info("Асинхронная обработка документа: '{}'", request.sourceName());
+        return CompletableFuture.completedFuture(ingestDocument(request));
+    }
+
+    /**
+     * Внутренний метод, реализующий логику индексации документа.
+     *
+     * @param request DTO с данными документа.
+     * @return Результат обработки.
+     */
+    private DocumentResponse ingestDocument(DocumentRequest request) {
+        // Создаем уникальный ID для всего документа
         String documentId = UUID.randomUUID().toString();
+
+        // Создаем объект Document из Spring AI, добавляя метаданные
         Document document = new Document(
                 request.text(),
                 Map.of("source", request.sourceName(), "documentId", documentId)
         );
 
-        // Разбиваем документ на чанки с помощью сплиттера
+        // Разбиваем документ на чанки с помощью TokenTextSplitter
         List<Document> chunks = tokenTextSplitter.apply(List.of(document));
-        log.info("Document split into {} chunks.", chunks.size());
+        log.info("Документ '{}' разделен на {} чанков.", request.sourceName(), chunks.size());
 
-        // Добавляем чанки в векторное хранилище. На этом этапе Spring AI
-        // автоматически вызовет модель для создания эмбеддингов.
+        // Добавляем чанки в векторное хранилище, где они будут векторизованы и сохранены
         vectorStore.add(chunks);
-        log.info("Successfully added {} chunks to the vector store.", chunks.size());
+        log.info("Успешно добавлено {} чанков в векторное хранилище.", chunks.size());
 
         return new DocumentResponse(documentId, chunks.size());
     }

@@ -15,7 +15,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Контроллер для простого диалога с AI без RAG.
+ * Контроллер для прямого диалога с LLM без использования RAG.
+ * <p>
+ * Предоставляет эндпоинт для простого чата с AI, поддерживая
+ * контекст диалога через идентификатор сессии.
  */
 @RestController
 @RequestMapping("/api/v1/chat")
@@ -25,6 +28,15 @@ public class ChatController {
 
     private final ChatService chatService;
 
+    /**
+     * Обрабатывает сообщение от пользователя, отправляет его в AI модель и возвращает ответ.
+     * <p>
+     * Если в запросе указан {@code sessionId}, диалог продолжается в рамках существующей сессии.
+     * Если {@code sessionId} не указан, создается новая сессия. История диалога сохраняется в базе данных.
+     *
+     * @param chatRequest DTO с сообщением пользователя и опциональным ID сессии.
+     * @return {@link ResponseEntity} с DTO {@link ChatResponse}, содержащим ответ AI и ID сессии.
+     */
     @PostMapping
     @Operation(
             summary = "Отправить сообщение в чат",

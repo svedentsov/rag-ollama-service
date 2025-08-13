@@ -15,7 +15,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Контроллер для выполнения RAG-запросов.
+ * REST-контроллер для выполнения запросов по технологии Retrieval-Augmented Generation (RAG).
+ * <p>
+ * Этот контроллер является центральной точкой для взаимодействия с RAG-системой.
  */
 @RestController
 @RequestMapping("/api/v1/rag")
@@ -25,6 +27,16 @@ public class RagController {
 
     private final RagService ragService;
 
+    /**
+     * Выполняет RAG-запрос: находит релевантную информацию и генерирует ответ.
+     * <p>
+     * Процесс состоит из двух этапов:
+     * 1. **Retrieval**: Поиск наиболее релевантных документов (чанков) в векторном хранилище по запросу пользователя.
+     * 2. **Generation**: Отправка найденного контекста вместе с исходным вопросом в LLM для генерации осмысленного ответа.
+     *
+     * @param ragQueryRequest DTO с вопросом пользователя и параметрами поиска.
+     * @return {@link ResponseEntity} с {@link RagQueryResponse}, содержащим сгенерированный ответ и ссылки на источники.
+     */
     @PostMapping("/query")
     @Operation(
             summary = "Задать вопрос на основе загруженных документов",
