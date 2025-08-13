@@ -1,0 +1,74 @@
+# Версия синтаксиса Docker Compose
+version: '3.8'
+
+# Определение сервисов (контейнеров)
+services:
+
+  # Сервис PostgreSQL с расширением pgvector
+  postgres:
+    # Используем официальный образ pgvector, который включает PostgreSQL и расширение
+    image: pgvector/pgvector:pg16
+    container_name: rag-postgres
+    # Переменные окружения для настройки PostgreSQL
+    environment:
+      # Имя пользователя базы данных
+      - POSTGRES_USER=user
+      # Пароль для пользователя
+      - POSTGRES_PASSWORD=password
+      # Имя создаваемой по умолчанию базы данных
+      - POSTGRES_DB=ragdb
+    # Проброс портов: <порт на хосте>:<порт в контейнере>
+    # Позволяет нашему приложению, запущенному на хосте, подключаться к БД в контейнере
+    ports:
+      - "5432:5432"
+    # Тома (volumes) для сохранения данных между перезапусками контейнера
+    volumes:
+      # Именованный том для хранения данных PostgreSQL
+      - postgres-data:/var/lib/postgresql/data
+    # Политика перезапуска контейнера в случае сбоя
+    restart: unless-stopped
+    # Проверка состояния. Docker будет считать сервис "здоровым",
+    # если команда pg_isready успешно выполняется.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d ragdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # Сеть, к которой будет подключен контейнер
+    networks:
+      - rag-net
+
+  # Сервис Ollama для запуска локальных LLM
+  ollama:
+    # Используем официальный образ Ollama
+    image: ollama/ollama
+    container_name: rag-ollama
+    # Проброс порта API Ollama
+    ports:
+      - "11434:11434"
+    # Том для сохранения загруженных моделей
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+    # Проверка состояния. Проверяем, что API Ollama отвечает.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - rag-net
+
+# Определение именованных томов
+volumes:
+  postgres-data:
+    driver: local
+  ollama-data:
+    driver: local
+
+# Определение сетей
+networks:
+  rag-net:
+    driver: bridge
