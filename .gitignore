@@ -1,45 +1,83 @@
-# Compiled class file
-*.class
+# Содержимое файла: .gitignore
 
-# Log file
-*.log
-
-# BlueJ files
-*.ctxt
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
-
-# Package Files #
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
-*.iml
-
-# Project-specific files
-.idea/
+# ===================================================================
+# Файлы Gradle
+# ===================================================================
+# Игнорируем кэши и служебные файлы Gradle
 .gradle/
-.allure/
-allure-results/
-gradle/
+# Игнорируем директорию со сборочными артефактами
 build/
-bin/
-out/
-logs/
+
+# ===================================================================
+# Файлы Maven (оставляем на всякий случай, чтобы игнорировать старые артефакты)
+# ===================================================================
 target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+build-helper-maven-plugin.properties
+
+# ===================================================================
+# Файлы IDE
+# ===================================================================
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Eclipse
 .classpath
 .project
 .settings/
+bin/
+
+# NetBeans
+nbproject/private/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# VS Code
 .vscode/
 
-# Gradle Wrapper files
-/gradlew
-/gradlew.bat
+# ===================================================================
+# Логи и временные файлы
+# ===================================================================
+# Директория для логов, настроенная в logback-spring.xml
+logs/
+*.log
+*.tmp
 
-# Miscellaneous
-.todo
-/.idea/
+# Отчеты о тестировании (например, Allure)
+allure-results/
+
+# ===================================================================
+# Файлы операционной системы
+# ===================================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# ===================================================================
+# Разное
+# ===================================================================
+# Логи падения JVM
+hs_err_pid*
+replay_pid*
+
+# Локальные файлы с переменными окружения
+.env
+.env.local
+.env.*.local

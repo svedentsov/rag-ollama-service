@@ -3,6 +3,8 @@ package com.example.ragollama.config;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
@@ -19,9 +21,10 @@ public class AppConfig {
     /**
      * Конфигурирует и создает бин {@link RestTemplate} с заданными таймаутами.
      * <p>
-     * Spring AI для Ollama использует {@code RestTemplate} "под капотом" для отправки HTTP-запросов.
-     * Некоторые запросы к LLM могут выполняться долго, поэтому важно установить адекватные
-     * таймауты на подключение и чтение, чтобы избежать преждевременного разрыва соединения.
+     * Spring AI для Ollama использует {@code RestTemplate} "под капотом".
+     * Вместо устаревших методов setConnectTimeout/setReadTimeout на builder'е,
+     * мы настраиваем таймауты напрямую через ClientHttpRequestFactory, что является
+     * современным подходом.
      *
      * @param builder Стандартный {@link RestTemplateBuilder}, предоставляемый Spring Boot.
      * @return Сконфигурированный экземпляр {@link RestTemplate}.
@@ -29,8 +32,19 @@ public class AppConfig {
     @Bean
     public RestTemplate restTemplate(RestTemplateBuilder builder) {
         return builder
-                .setConnectTimeout(Duration.ofSeconds(10)) // Таймаут на установку соединения
-                .setReadTimeout(Duration.ofMinutes(2))      // Таймаут на ожидание ответа (увеличен для LLM)
+                // Применяем кастомную фабрику с настроенными таймаутами
+                .requestFactory(this::clientHttpRequestFactory)
                 .build();
+    }
+
+    /**
+     * Создает и настраивает фабрику для HTTP-запросов с таймаутами.
+     * @return Сконфигурированный ClientHttpRequestFactory.
+     */
+    private ClientHttpRequestFactory clientHttpRequestFactory() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(10)); // Таймаут на установку соединения
+        factory.setReadTimeout(Duration.ofMinutes(2));   // Таймаут на ожидание ответа
+        return factory;
     }
 }

@@ -37,8 +37,7 @@
 
 1.  **Docker и Docker Compose**: [Инструкция по установке](https://docs.docker.com/get-docker/)
 2.  **Java 21+ SDK**: (например, [OpenJDK](https://openjdk.java.net/))
-3.  **Maven 3.8+**
-4.  **Git**
+3.  **Git**
 
 ## Быстрый старт
 
@@ -49,7 +48,7 @@
     ```
 
 2.  **Запустите всю инфраструктуру с помощью Docker Compose:**
-    Эта команда скачает образы, запустит контейнеры (PostgreSQL, Ollama) и соберет образ вашего приложения.
+    Эта команда скачает образы, запустит контейнеры (PostgreSQL, Ollama) и соберет образ вашего приложения с помощью Gradle.
     ```bash
     docker-compose up --build -d
     ```
@@ -67,9 +66,9 @@
     Дождитесь окончания загрузки. Если вы хотите использовать другие модели (например, `mistral`), не забудьте изменить их имена в `application.yml`.
 
 4.  **Запустите Spring Boot приложение (альтернативный способ без Docker):**
-    Если вы не хотите запускать приложение в Docker (шаг 2), вы можете запустить его локально через Maven. Убедитесь, что PostgreSQL и Ollama запущены через `docker-compose up -d postgres ollama`.
+    Если вы не хотите запускать приложение в Docker (шаг 2), вы можете запустить его локально через Gradle Wrapper. Убедитесь, что PostgreSQL и Ollama запущены через `docker-compose up -d postgres ollama`.
     ```bash
-    mvn spring-boot:run
+    ./gradlew bootRun
     ```
     Сервис будет доступен на `http://localhost:8080`.
 
