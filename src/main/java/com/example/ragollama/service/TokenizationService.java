@@ -1,12 +1,12 @@
 package com.example.ragollama.service;
 
+import com.example.ragollama.config.properties.AppProperties;
 import com.knuddels.jtokkit.Encodings;
 import com.knuddels.jtokkit.api.Encoding;
 import com.knuddels.jtokkit.api.EncodingRegistry;
 import com.knuddels.jtokkit.api.EncodingType;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
@@ -27,20 +27,18 @@ public class TokenizationService {
     private final String encodingModel;
     private Encoding encoding;
 
-    public TokenizationService(@Value("${app.tokenization.encoding-model}") String encodingModel) {
-        this.encodingModel = encodingModel;
+    /**
+     * Конструктор, использующий централизованный бин конфигурации.
+     *
+     * @param appProperties Объект с настройками приложения.
+     */
+    public TokenizationService(AppProperties appProperties) {
+        this.encodingModel = appProperties.tokenization().encodingModel();
     }
 
-    /**
-     * Инициализирует токенизатор после создания бина.
-     * <p>
-     * EncodingRegistry является потокобезопасной и ее создание - относительно
-     * дорогая операция, поэтому мы делаем это один раз при старте приложения.
-     */
     @PostConstruct
     public void init() {
         EncodingRegistry registry = Encodings.newDefaultEncodingRegistry();
-
         try {
             Optional<Encoding> opt = registry.getEncoding(encodingModel);
             if (opt.isPresent()) {
@@ -53,7 +51,6 @@ public class TokenizationService {
                 log.warn("Используется fallback-модель кодирования: {}", EncodingType.O200K_BASE.getName());
             }
         } catch (Exception e) {
-            // Ловим любые непредвиденные исключения и пробуем взять fallback из нового реестра
             log.error("Ошибка при инициализации TokenizationService с моделью '{}'.", encodingModel, e);
             EncodingRegistry fallbackRegistry = Encodings.newDefaultEncodingRegistry();
             this.encoding = fallbackRegistry.getEncoding(EncodingType.O200K_BASE.getName())

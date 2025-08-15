@@ -1,9 +1,9 @@
 package com.example.ragollama.service;
 
+import com.example.ragollama.config.properties.AppProperties;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.PromptTemplate;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
@@ -18,8 +18,8 @@ import java.util.Map;
  * Централизует логику загрузки и рендеринга шаблонов промптов,
  * что позволяет легко изменять их без перекомпиляции кода.
  */
-@Service
 @Slf4j
+@Service
 public class PromptService {
 
     private final ResourceLoader resourceLoader;
@@ -27,14 +27,14 @@ public class PromptService {
     private PromptTemplate ragPromptTemplate;
 
     /**
-     * Конструктор сервиса.
+     * Конструктор сервиса, использующий централизованные настройки.
      *
-     * @param resourceLoader  Стандартный загрузчик ресурсов Spring.
-     * @param ragTemplatePath Путь к файлу шаблона RAG-промпта, заданный в {@code application.yml}.
+     * @param resourceLoader Загрузчик ресурсов Spring.
+     * @param appProperties  Объект с настройками приложения.
      */
-    public PromptService(ResourceLoader resourceLoader, @Value("${app.prompt.rag-template-path}") String ragTemplatePath) {
+    public PromptService(ResourceLoader resourceLoader, AppProperties appProperties) {
         this.resourceLoader = resourceLoader;
-        this.ragTemplatePath = ragTemplatePath;
+        this.ragTemplatePath = appProperties.prompt().ragTemplatePath();
     }
 
     /**

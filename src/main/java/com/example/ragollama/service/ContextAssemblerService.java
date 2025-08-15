@@ -1,8 +1,8 @@
 package com.example.ragollama.service;
 
+import com.example.ragollama.config.properties.AppProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -24,11 +24,15 @@ public class ContextAssemblerService {
     private final TokenizationService tokenizationService;
     private final int maxContextTokens;
 
-    // Оставляем этот явный конструктор. Он необходим для @Value.
-    public ContextAssemblerService(TokenizationService tokenizationService,
-                                   @Value("${app.context.max-tokens}") int maxContextTokens) {
+    /**
+     * Конструктор, который получает настройки из централизованного бина AppProperties.
+     *
+     * @param tokenizationService Сервис для подсчета токенов.
+     * @param appProperties       Централизованный объект с настройками приложения.
+     */
+    public ContextAssemblerService(TokenizationService tokenizationService, AppProperties appProperties) {
         this.tokenizationService = tokenizationService;
-        this.maxContextTokens = maxContextTokens;
+        this.maxContextTokens = appProperties.context().maxTokens();
         log.info("ContextAssemblerService инициализирован с лимитом в {} токенов.", maxContextTokens);
     }
 

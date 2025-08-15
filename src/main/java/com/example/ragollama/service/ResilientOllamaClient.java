@@ -70,18 +70,19 @@ public class ResilientOllamaClient {
     }
 
     /**
-     * Выполняет стриминговый вызов к LLM с применением политик отказоустойчивости.
+     * Выполняет стриминговый вызов к LLM с применением политик отказоустойчивости в реактивном стиле.
      *
      * @param prompt Промпт для LLM.
-     * @return Реактивный поток (Flux) с токенами ответа.
+     * @return {@link Flux}, эммитящий токены ответа по мере их генерации и защищенный
+     *         механизмами Retry, CircuitBreaker и TimeLimiter.
      */
     public Flux<String> streamChat(Prompt prompt) {
-        return metricService.recordTimer("llm.stream.requests",
-                        () -> chatClient.prompt(prompt).stream().content()
-                )
-                .transform(CircuitBreakerOperator.of(this.circuitBreaker))
-                .transform(RetryOperator.of(this.retry))
-                .transform(TimeLimiterOperator.of(this.timeLimiter));
+        return chatClient.prompt(prompt)
+                .stream()
+                .content()
+                .transformDeferred(RetryOperator.of(retry))
+                .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
+                .transformDeferred(TimeLimiterOperator.of(timeLimiter));
     }
 
     /**

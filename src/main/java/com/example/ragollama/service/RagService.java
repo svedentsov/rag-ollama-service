@@ -20,16 +20,16 @@ import java.util.concurrent.CompletableFuture;
  * <p>
  * Такая структура разделяет обязанности, делая код более чистым и тестируемым.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class RagService {
 
     private final RagOrchestrationService ragOrchestrator;
     private final PromptGuardService promptGuardService;
 
     /**
-     * Обрабатывает асинхронный RAG-запрос.
+     * Обрабатывает асинхронный RAG-запрос, возвращая полный ответ.
      *
      * @param request DTO с запросом пользователя.
      * @return CompletableFuture с финальным ответом.
@@ -37,22 +37,18 @@ public class RagService {
     public CompletableFuture<RagQueryResponse> queryAsync(RagQueryRequest request) {
         log.info("Получен асинхронный RAG-запрос: '{}'", request.query());
         promptGuardService.checkForInjection(request.query());
-
-        // Делегируем всю сложную работу оркестратору
         return ragOrchestrator.execute(request.query(), request.topK(), request.similarityThreshold());
     }
 
     /**
-     * Обрабатывает RAG-запрос для потоковой передачи ответа.
+     * Обрабатывает RAG-запрос и возвращает ответ в виде потока.
      *
      * @param request DTO с запросом пользователя.
-     * @return Flux<String> с токенами ответа.
+     * @return {@link Flux} с частями сгенерированного ответа.
      */
     public Flux<String> queryStream(RagQueryRequest request) {
-        log.info("Получен стриминговый RAG-запрос: '{}'", request.query());
+        log.info("Получен потоковый RAG-запрос: '{}'", request.query());
         promptGuardService.checkForInjection(request.query());
-
-        // Делегируем всю сложную работу оркестратору
         return ragOrchestrator.executeStream(request.query(), request.topK(), request.similarityThreshold());
     }
 }

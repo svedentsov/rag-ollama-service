@@ -1,22 +1,14 @@
 package com.example.ragollama.service;
 
+import com.example.ragollama.config.properties.AppProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * Сервис для переранжирования результатов поиска (reranking).
- * <p>
- * Этот сервис является опциональным и активируется только если свойство
- * {@code app.reranking.enabled} установлено в {@code true}.
- * Его задача — уточнить порядок документов, полученных от векторного поиска,
- * используя дополнительные эвристики.
- */
 @Service
 @Slf4j
 @ConditionalOnProperty(name = "app.reranking.enabled", havingValue = "true")
@@ -27,11 +19,11 @@ public class RerankingService {
     /**
      * Конструктор сервиса.
      *
-     * @param keywordMatchBoost "Усилитель" для документов, содержащих ключевые слова из запроса.
-     *                          Значение задается в {@code application.yml}.
+     * @param appProperties "Усилитель" для документов, содержащих ключевые слова из запроса.
+     *                      Значение задается в {@code application.yml}.
      */
-    public RerankingService(@Value("${app.reranking.keyword-match-boost}") double keywordMatchBoost) {
-        this.keywordMatchBoost = keywordMatchBoost;
+    public RerankingService(AppProperties appProperties) {
+        this.keywordMatchBoost = appProperties.reranking().keywordMatchBoost();
         log.info("RerankingService enabled with keyword match boost: {}", keywordMatchBoost);
     }
 
@@ -50,19 +42,15 @@ public class RerankingService {
         if (documents == null || documents.isEmpty()) {
             return List.of();
         }
-
         List<String> queryKeywords = Arrays.asList(originalQuery.toLowerCase().split("\\s+"));
-
         return documents.stream()
                 .peek(doc -> {
                     float originalSimilarity = doc.getMetadata().get("distance") != null ? 1 - (float) doc.getMetadata().get("distance") : 0f;
                     long matchCount = queryKeywords.stream()
                             .filter(kw -> doc.getText().toLowerCase().contains(kw))
                             .count();
-                    // Добавляем небольшой буст за каждое совпадение ключевого слова
                     float boost = (float) (matchCount * keywordMatchBoost);
                     float newSimilarity = originalSimilarity + boost;
-
                     doc.getMetadata().put("rerankedSimilarity", Math.min(1.0f, newSimilarity));
                     doc.getMetadata().put("originalSimilarity", originalSimilarity);
                 })

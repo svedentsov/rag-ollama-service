@@ -1,3 +1,4 @@
+// src/main/java/com/example/ragollama/service/RagOrchestrationService.java
 package com.example.ragollama.service;
 
 import com.example.ragollama.dto.RagQueryResponse;
@@ -26,51 +27,48 @@ public class RagOrchestrationService {
     private final Optional<RerankingService> rerankingService;
     private final ContextAssemblerService contextAssemblerService;
     private final VectorSearchService vectorSearchService;
-    private final AsyncTaskExecutor taskExecutor; // <-- ИЗМЕНЕНИЕ: Внедряем Executor
+    private final AsyncTaskExecutor taskExecutor;
 
+    /**
+     * Выполняет полный RAG-пайплайн и возвращает готовый ответ.
+     *
+     * @return CompletableFuture с финальным ответом.
+     */
     public CompletableFuture<RagQueryResponse> execute(String query, int topK, double similarityThreshold) {
         CompletableFuture<List<Document>> documentsFuture = retrieveAndRerankDocuments(query, topK, similarityThreshold);
-
-        // === ИЗМЕНЕНИЕ: Указываем Executor для следующего шага ===
         return documentsFuture.thenComposeAsync(documents -> generateAnswer(documents, query), taskExecutor);
     }
 
+    /**
+     * Выполняет RAG-пайплайн и возвращает ответ в виде реактивного потока.
+     *
+     * @return {@link Flux} с частями ответа от LLM.
+     */
     public Flux<String> executeStream(String query, int topK, double similarityThreshold) {
-        // === ИЗМЕНЕНИЕ: Указываем Executor для CompletableFuture внутри Mono ===
-        Mono<List<Document>> documentsMono = Mono.fromFuture(
-                () -> retrieveAndRerankDocuments(query, topK, similarityThreshold)
-        );
+        // Этап извлечения документов остается асинхронным
+        CompletableFuture<List<Document>> documentsFuture = retrieveAndRerankDocuments(query, topK, similarityThreshold);
 
-        return documentsMono
-                .flatMapMany(documents -> {
-                    String context = contextAssemblerService.assembleContext(documents);
-                    if (context.isEmpty()) {
-                        log.warn("Не найдено релевантных документов для стрим-запроса: '{}'", query);
-                        return Flux.just("Извините, я не смог найти релевантную информацию в базе знаний по вашему вопросу.");
-                    }
-                    String promptString = promptService.createRagPrompt(Map.of("context", context, "question", query));
-                    return resilientOllamaClient.streamChat(new Prompt(promptString));
-                });
+        // ИСПРАВЛЕНИЕ: Используем Mono.fromFuture для конвертации CompletableFuture в реактивный тип (Mono).
+        // Затем используем .flatMapMany для перехода от Mono<List<Document>> к Flux<String>
+        return Mono.fromFuture(documentsFuture)
+                .flatMapMany(documents -> generateAnswerStream(documents, query));
     }
 
     private CompletableFuture<List<Document>> retrieveAndRerankDocuments(String query, int topK, double similarityThreshold) {
-        // === ИЗМЕНЕНИЕ: Явно передаем наш Executor в supplyAsync ===
         return CompletableFuture.supplyAsync(() -> {
             SearchRequest searchRequest = SearchRequest.builder()
                     .query(query)
                     .topK(topK)
                     .similarityThreshold(similarityThreshold)
                     .build();
-
             List<Document> similarDocuments = vectorSearchService.search(searchRequest);
-
             return rerankingService
                     .map(service -> {
                         log.debug("Выполняется переранжирование для {} документов.", similarDocuments.size());
                         return service.rerank(similarDocuments, query);
                     })
                     .orElse(similarDocuments);
-        }, taskExecutor); // <-- Указываем наш executor
+        }, taskExecutor);
     }
 
     private CompletableFuture<RagQueryResponse> generateAnswer(List<Document> documents, String query) {
@@ -93,5 +91,22 @@ public class RagOrchestrationService {
             log.info("Сгенерирован ответ на запрос '{}'. Использованные источники: {}", query, sourceCitations);
             return new RagQueryResponse(generatedAnswer, sourceCitations);
         });
+    }
+
+    /**
+     * Генерирует ответ от LLM в виде потока.
+     */
+    private Flux<String> generateAnswerStream(List<Document> documents, String query) {
+        String context = contextAssemblerService.assembleContext(documents);
+
+        if (context.isEmpty()) {
+            log.warn("Контекст пуст для потокового запроса: '{}'", query);
+            return Flux.just("Извините, я не смог найти релевантную информацию в базе знаний по вашему вопросу.");
+        }
+
+        String promptString = promptService.createRagPrompt(Map.of("context", context, "question", query));
+        Prompt prompt = new Prompt(promptString);
+
+        return resilientOllamaClient.streamChat(prompt);
     }
 }
