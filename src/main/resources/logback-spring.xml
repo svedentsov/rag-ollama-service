@@ -11,7 +11,7 @@
 
     <!-- Аппендер для вывода логов в консоль -->
     <appender name="Console" class="ch.qos.logback.core.ConsoleAppender">
-        <layout class="ch.qos.logback.classic.PatternLayout">
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
             <!--
                 Паттерн для вывода:
                 %d{ISO8601}     - дата и время в формате ISO 8601
@@ -23,7 +23,7 @@
                 %n%throwable    - перенос строки и stack trace, если есть
             -->
             <Pattern>%d{ISO8601} %highlight(%-5level) [%15.15t] %cyan(%C{1}): [rid:%X{requestId}] %masked%n%throwable</Pattern>
-        </layout>
+        </encoder>
     </appender>
 
     <!-- Аппендер для записи логов в файл с ротацией -->

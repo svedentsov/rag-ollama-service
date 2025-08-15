@@ -43,7 +43,7 @@
 
 1.  **Клонируйте репозиторий:**
     ```bash
-    git clone <URL_РЕПОЗИТОРИЯ>
+    git clone https://github.com/svedentsov/rag-ollama-service.git
     cd rag-ollama-service
     ```
 

@@ -15,12 +15,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * REST-контроллер для управления документами в векторном хранилище.
- * <p>
- * Предоставляет API для загрузки и индексации текстовых документов,
- * которые будут использоваться в RAG-сценариях.
- */
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/v1/documents")
 @RequiredArgsConstructor
@@ -29,25 +25,16 @@ public class DocumentController {
 
     private final DocumentService documentService;
 
-    /**
-     * Принимает текстовый документ, обрабатывает и сохраняет его в векторное хранилище.
-     * <p>
-     * Процесс включает разбиение текста на чанки, создание для каждого чанка
-     * векторного представления (эмбеддинга) и сохранение в базе данных PgVector.
-     *
-     * @param documentRequest DTO с исходным именем и текстом документа.
-     * @return {@link ResponseEntity} со статусом 201 (CREATED) и {@link DocumentResponse},
-     * содержащим ID документа и количество созданных чанков.
-     */
     @PostMapping
     @Operation(
-            summary = "Загрузить и проиндексировать документ",
-            description = "Принимает текст документа, разбивает его на чанки, создает эмбеддинги и сохраняет их в векторное хранилище.",
+            summary = "Поставить документ в очередь на индексацию",
+            description = "Принимает документ и ставит его в очередь на фоновую обработку. Возвращает ID задачи.",
             responses = {
-                    @ApiResponse(responseCode = "201", description = "Документ успешно обработан и сохранен"),
-                    @ApiResponse(responseCode = "400", description = "Некорректный запрос (например, пустой текст документа)")})
-    public ResponseEntity<DocumentResponse> uploadDocument(@Valid @RequestBody DocumentRequest documentRequest) {
-        DocumentResponse response = documentService.processAndStoreDocument(documentRequest);
-        return new ResponseEntity<>(response, HttpStatus.CREATED);
+                    @ApiResponse(responseCode = "202", description = "Документ принят в обработку"),
+                    @ApiResponse(responseCode = "400", description = "Некорректный запрос")})
+    public ResponseEntity<DocumentResponse> scheduleDocumentUpload(@Valid @RequestBody DocumentRequest documentRequest) {
+        UUID jobId = documentService.scheduleDocumentIngestion(documentRequest);
+        DocumentResponse response = new DocumentResponse(jobId.toString(), 0);
+        return new ResponseEntity<>(response, HttpStatus.ACCEPTED);
     }
 }

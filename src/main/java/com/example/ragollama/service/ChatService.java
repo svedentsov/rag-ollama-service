@@ -2,92 +2,58 @@ package com.example.ragollama.service;
 
 import com.example.ragollama.dto.ChatRequest;
 import com.example.ragollama.dto.ChatResponse;
-import com.example.ragollama.entity.ChatMessage;
 import com.example.ragollama.entity.MessageRole;
-import com.example.ragollama.repository.ChatMessageRepository;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
-/**
- * Сервис для управления логикой простого чата с AI.
- * <p>
- * Отвечает за обработку запросов, взаимодействие с LLM,
- * защиту от prompt injection и сохранение истории диалога в базу данных.
- */
 @Service
-@RequiredArgsConstructor
 public class ChatService {
 
     private static final Logger log = LoggerFactory.getLogger(ChatService.class);
 
-    private final ChatClient chatClient;
-    private final ChatMessageRepository chatMessageRepository;
+    private final ResilientOllamaClient resilientOllamaClient;
+    private final ChatHistoryService chatHistoryService;
     private final PromptGuardService promptGuardService;
+    private final AsyncTaskExecutor taskExecutor;
+    private final int maxHistoryMessages;
 
-    /**
-     * Обрабатывает запрос пользователя в чат.
-     * <p>
-     * Процесс обработки включает:
-     * 1. Проверку на prompt injection.
-     * 2. Определение ID сессии (использование существующего или создание нового).
-     * 3. Сохранение сообщения пользователя в БД.
-     * 4. Отправку запроса к LLM через {@link ChatClient}.
-     * 5. Сохранение ответа AI в БД.
-     * 6. Формирование и возврат ответа клиенту.
-     *
-     * @param request DTO с сообщением пользователя и ID сессии.
-     * @return {@link ChatResponse} с ответом AI и ID сессии.
-     */
-    @Transactional
-    public ChatResponse processChatRequest(ChatRequest request) {
-        // 1. Проверка на вредоносный ввод
-        promptGuardService.checkForInjection(request.message());
-
-        // 2. Управление сессией
-        UUID sessionId = request.sessionId() != null ? request.sessionId() : UUID.randomUUID();
-        log.info("Обработка запроса в чат для сессии ID: {}", sessionId);
-
-        // 3. Сохранение сообщения пользователя
-        saveMessage(sessionId, MessageRole.USER, request.message());
-
-        // 4. Взаимодействие с LLM
-        Prompt prompt = new Prompt(request.message());
-        String aiResponseContent = chatClient.prompt(prompt)
-                .call()
-                .content();
-        log.debug("Ответ AI для сессии {}: {}", sessionId, aiResponseContent);
-
-        // 5. Сохранение ответа AI
-        saveMessage(sessionId, MessageRole.ASSISTANT, aiResponseContent);
-
-        // 6. Возврат результата
-        return new ChatResponse(aiResponseContent, sessionId);
+    public ChatService(ResilientOllamaClient resilientOllamaClient,
+                       ChatHistoryService chatHistoryService,
+                       PromptGuardService promptGuardService,
+                       AsyncTaskExecutor taskExecutor, // Эта зависимость теперь будет найдена
+                       @Value("${app.chat.history.max-messages}") int maxHistoryMessages) {
+        this.resilientOllamaClient = resilientOllamaClient;
+        this.chatHistoryService = chatHistoryService;
+        this.promptGuardService = promptGuardService;
+        this.taskExecutor = taskExecutor;
+        this.maxHistoryMessages = maxHistoryMessages;
     }
 
-    /**
-     * Приватный метод для сохранения сообщения в базу данных.
-     *
-     * @param sessionId ID текущей сессии.
-     * @param role      Роль отправителя (USER или ASSISTANT).
-     * @param content   Текст сообщения.
-     */
-    private void saveMessage(UUID sessionId, MessageRole role, String content) {
-        ChatMessage message = ChatMessage.builder()
-                .sessionId(sessionId)
-                .role(role)
-                .content(content)
-                .createdAt(LocalDateTime.now())
-                .build();
-        chatMessageRepository.save(message);
-        log.debug("Сохранено сообщение для сессии {}: Role={}, Content='{}...'", sessionId, role,
-                content.substring(0, Math.min(content.length(), 50)));
+    public CompletableFuture<ChatResponse> processChatRequestAsync(ChatRequest request) {
+        promptGuardService.checkForInjection(request.message());
+        final UUID sessionId = request.sessionId() != null ? request.sessionId() : UUID.randomUUID();
+        log.info("Обработка запроса в чат для сессии ID: {}. Глубина истории: {}", sessionId, maxHistoryMessages);
+
+        chatHistoryService.saveMessage(sessionId, MessageRole.USER, request.message());
+
+        List<Message> chatHistory = chatHistoryService.getLastNMessages(sessionId, maxHistoryMessages);
+
+        Prompt prompt = new Prompt(chatHistory);
+
+        return resilientOllamaClient.callChat(prompt)
+                .thenApplyAsync(aiResponseContent -> {
+                    log.debug("Получен ответ AI для сессии {}: '{}'", sessionId, aiResponseContent);
+                    chatHistoryService.saveMessage(sessionId, MessageRole.ASSISTANT, aiResponseContent);
+                    return new ChatResponse(aiResponseContent, sessionId);
+                }, taskExecutor);
     }
 }

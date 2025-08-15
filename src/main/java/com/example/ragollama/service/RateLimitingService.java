@@ -2,7 +2,6 @@ package com.example.ragollama.service;
 
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
-import io.github.bucket4j.Refill;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -67,8 +66,11 @@ public class RateLimitingService {
      * @return Новый экземпляр {@link Bucket}.
      */
     private Bucket createBucket(Limit limit) {
-        Refill refill = Refill.greedy(limit.getCapacity(), Duration.ofMinutes(limit.getRefillPeriodMinutes()));
-        Bandwidth bandwidth = Bandwidth.classic(limit.getCapacity(), refill);
+        Bandwidth bandwidth = Bandwidth.builder()
+                .capacity(limit.getCapacity())
+                .refillGreedy(limit.getCapacity(), Duration.ofMinutes(limit.getRefillPeriodMinutes()))
+                .build();
+
         return Bucket.builder().addLimit(bandwidth).build();
     }
 

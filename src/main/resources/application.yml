@@ -16,6 +16,14 @@ spring:
   lifecycle:
     # Таймаут для корректного завершения работы приложения
     timeout-per-shutdown-phase: 30s
+
+  # Настройки Web MVC
+  mvc:
+    async:
+      # Таймаут для асинхронных запросов (@Async, CompletableFuture в контроллерах).
+      # Должен быть больше, чем самый долгий таймаут в Resilience4j (120s).
+      request-timeout: 130s
+
   # Настройки пулов потоков для асинхронных задач
   task:
     execution:
@@ -54,7 +62,9 @@ spring:
 
   # --- Настройки кэширования (Caffeine) ---
   cache:
-    cache-names: vector_search_results # Имя кэша для результатов RAG-запросов
+    cache-names:
+      - vector_search_results # Кэш для результатов RAG-запросов
+      - token_counts # Кэш для подсчета токенов
     caffeine:
       # Настройки кэша: макс. 500 записей, время жизни записи 10 минут
       spec: maximumSize=500,expireAfterWrite=10m
@@ -122,27 +132,27 @@ springdoc:
 resilience4j:
   circuitbreaker:
     instances:
-      ollamaApi:
-        register-health-indicator: true # Интеграция с Actuator Health
-        sliding-window-size: 10 # Количество вызовов для анализа
-        minimum-number-of-calls: 5 # Минимальное кол-во вызовов для срабатывания
-        permitted-number-of-calls-in-half-open-state: 3 # Попыток в полуоткрытом состоянии
+      ollama: # Единственная, правильно названная конфигурация для Ollama
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 3
+        permitted-number-of-calls-in-half-open-state: 2
         automatic-transition-from-open-to-half-open-enabled: true
-        wait-duration-in-open-state: 5s # Время в открытом состоянии
-        failure-rate-threshold: 50 # Порог ошибок в % для размыкания цепи
+        wait-duration-in-open-state: 15s
+        failure-rate-threshold: 60
         event-consumer-buffer-size: 10
   retry:
     instances:
-      ollamaApi:
-        max-attempts: 3 # Максимальное число попыток (1 + 2 повтора)
-        wait-duration: 2s # Пауза между попытками
-        # Повторять только при сетевых ошибках или таймаутах
-        retry-on-exception: "org.springframework.web.client.ResourceAccessException, java.util.concurrent.TimeoutException"
+      ollama:
+        max-attempts: 2
+        wait-duration: 5s
+        # Важно: указываем исключения, при которых нужно делать повтор
+        retry-on-exception: "org.springframework.web.reactive.function.client.WebClientRequestException, org.springframework.web.client.ResourceAccessException, java.util.concurrent.TimeoutException"
   timelimiter:
     instances:
-      ollamaApi:
-        timeout-duration: 30s # Общий таймаут на выполнение асинхронного метода
-        cancel-running-future: true # Прерывать выполнение, если таймаут истек
+      ollama:
+        timeout-duration: 120s # 2 минуты таймаут для генерации
+        cancel-running-future: true
 
 # ===================================================================
 # Кастомные настройки приложения
@@ -163,3 +173,21 @@ app:
       - endpoint: "/api/v1/chat"
         capacity: 20
         refill-period-minutes: 1
+  tokenization:
+    # Модель кодирования для токенизатора.
+    # "o200k_base" используется для Llama 3, Mistral.
+    # Для моделей OpenAI (GPT-4, GPT-3.5) следует использовать "cl100k_base".
+    encoding-model: "o200k_base"
+  context:
+    # Максимальное количество токенов, выделяемое под контекст из документов.
+    # Оставляем запас для системного промпта, вопроса пользователя и генерации ответа.
+    # Llama-3 имеет окно 8k, поэтому 4k - безопасный лимит.
+    max-tokens: 4096
+  chat:
+    history:
+      # Количество последних сообщений, загружаемых для поддержания контекста
+      max-messages: 10
+  ingestion:
+    scheduler:
+      # Задержка между запусками планировщика индексации документов
+      delay-ms: 10000 # 10 секунд

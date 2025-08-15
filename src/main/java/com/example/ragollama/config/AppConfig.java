@@ -1,50 +1,57 @@
 package com.example.ragollama.config;
 
-import org.springframework.boot.web.client.RestTemplateBuilder;
+import io.netty.channel.ChannelOption;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.client.ClientHttpRequestFactory;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.core.task.AsyncTaskExecutor;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
 
-import java.time.Duration;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
-/**
- * Общая конфигурация приложения.
- * <p>
- * Содержит бины, которые используются в различных частях приложения,
- * например, настроенный HTTP-клиент.
- */
 @Configuration
 public class AppConfig {
 
-    /**
-     * Конфигурирует и создает бин {@link RestTemplate} с заданными таймаутами.
-     * <p>
-     * Spring AI для Ollama использует {@code RestTemplate} "под капотом".
-     * Вместо устаревших методов setConnectTimeout/setReadTimeout на builder'е,
-     * мы настраиваем таймауты напрямую через ClientHttpRequestFactory, что является
-     * современным подходом.
-     *
-     * @param builder Стандартный {@link RestTemplateBuilder}, предоставляемый Spring Boot.
-     * @return Сконфигурированный экземпляр {@link RestTemplate}.
-     */
     @Bean
-    public RestTemplate restTemplate(RestTemplateBuilder builder) {
-        return builder
-                // Применяем кастомную фабрику с настроенными таймаутами
-                .requestFactory(this::clientHttpRequestFactory)
+    public WebClient webClient() {
+        // ИСПРАВЛЕНИЕ ДЛЯ SSE: Убираем таймауты, несовместимые со стримингом.
+        HttpClient httpClient = HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000);
+
+        return WebClient.builder()
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .build();
     }
 
     /**
-     * Создает и настраивает фабрику для HTTP-запросов с таймаутами.
-     * @return Сконфигурированный ClientHttpRequestFactory.
+     * ИСПРАВЛЕНИЕ ДЛЯ ЗАПУСКА: Создает единый пул потоков для всех асинхронных задач.
+     * Возвращает конкретный тип AsyncTaskExecutor, который требуется сервисам.
+     *
+     * @return Сконфигурированный и управляемый Spring'ом {@link AsyncTaskExecutor}.
      */
-    private ClientHttpRequestFactory clientHttpRequestFactory() {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(Duration.ofSeconds(10)); // Таймаут на установку соединения
-        factory.setReadTimeout(Duration.ofMinutes(2));   // Таймаут на ожидание ответа
-        return factory;
+    @Bean
+    public AsyncTaskExecutor applicationTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(10);
+        executor.setQueueCapacity(25);
+        executor.setThreadNamePrefix("app-task-exec-");
+        // Добавляем декоратор для проброса MDC в логи
+        executor.setTaskDecorator(new MdcTaskDecorator());
+        executor.initialize();
+        return executor;
+    }
+
+    @Bean(name = "resilience4jScheduler", destroyMethod = "shutdown")
+    public ScheduledExecutorService resilience4jScheduler() {
+        return Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread thread = new Thread(r);
+            thread.setName("resilience-scheduler");
+            thread.setDaemon(true);
+            return thread;
+        });
     }
 }
