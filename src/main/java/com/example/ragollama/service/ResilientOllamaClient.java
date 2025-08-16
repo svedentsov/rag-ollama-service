@@ -13,21 +13,15 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.function.Supplier;
 
 /**
  * Отказоустойчивый клиент для взаимодействия с Ollama API.
- * <p>
- * Этот компонент является "оберткой" над стандартным {@link ChatClient} из Spring AI,
- * добавляя слои отказоустойчивости с помощью Resilience4j (Circuit Breaker, Retry, TimeLimiter).
- * Его единственная ответственность — обеспечить надежное взаимодействие с LLM.
  */
 @Component
 @RequiredArgsConstructor
@@ -35,13 +29,9 @@ public class ResilientOllamaClient {
 
     private final ChatClient chatClient;
     private final MetricService metricService;
-
     private final CircuitBreakerRegistry circuitBreakerRegistry;
     private final RetryRegistry retryRegistry;
     private final TimeLimiterRegistry timeLimiterRegistry;
-
-    @Qualifier("resilience4jScheduler")
-    private final ScheduledExecutorService scheduler;
 
     private static final String OLLAMA_CONFIG_NAME = "ollama";
 
@@ -57,16 +47,15 @@ public class ResilientOllamaClient {
     }
 
     /**
-     * Выполняет не-стриминговый вызов к LLM с применением политик отказоустойчивости.
-     *
-     * @param prompt Промпт для LLM.
-     * @return CompletableFuture со строковым ответом от модели.
+     * Неблокирующий (реактивный) вызов, возвращающий CompletableFuture<String>.
+     * Оборачиваем блокирующий call().content() в Mono.fromCallable и выполняем его на boundedElastic.
      */
     public CompletableFuture<String> callChat(Prompt prompt) {
-        Supplier<CompletableFuture<String>> supplier = () -> CompletableFuture.supplyAsync(
-                () -> metricService.recordTimer("llm.requests",
-                        () -> chatClient.prompt(prompt).call().content()));
-        return executeWithResilience(supplier);
+        Mono<String> mono = Mono.defer(() ->
+                Mono.fromCallable(() -> chatClient.prompt(prompt).call().content())
+                        .subscribeOn(Schedulers.boundedElastic()));
+        Mono<String> resilient = applyResilience(mono);
+        return metricService.recordTimer("llm.requests", () -> resilient.toFuture());
     }
 
     /**
@@ -74,30 +63,35 @@ public class ResilientOllamaClient {
      *
      * @param prompt Промпт для LLM.
      * @return {@link Flux}, эммитящий токены ответа по мере их генерации и защищенный
-     *         механизмами Retry, CircuitBreaker и TimeLimiter.
+     * механизмами Retry, CircuitBreaker и TimeLimiter.
      */
     public Flux<String> streamChat(Prompt prompt) {
-        return chatClient.prompt(prompt)
-                .stream()
-                .content()
-                .transformDeferred(RetryOperator.of(retry))
-                .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
-                .transformDeferred(TimeLimiterOperator.of(timeLimiter));
+        Flux<String> flux = Flux.defer(() -> chatClient.prompt(prompt).stream().content());
+        Flux<String> resilientFlux = applyResilience(flux);
+        return metricService.recordTimer("llm.requests.stream", () -> resilientFlux);
     }
 
     /**
-     * Приватный helper-метод для "оборачивания" асинхронной операции всеми
-     * настроенными паттернами отказоустойчивости.
+     * Применяет операторы Resilience4j к Flux.
      */
-    private <T> CompletableFuture<T> executeWithResilience(Supplier<CompletableFuture<T>> supplier) {
-        Supplier<CompletionStage<T>> timeLimitedSupplier = () ->
-                timeLimiter.executeCompletionStage(this.scheduler, supplier);
+    private <T> Flux<T> applyResilience(Flux<T> publisher) {
+        return publisher
+                .transformDeferred(RetryOperator.of(retry))
+                .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
+                .transformDeferred(TimeLimiterOperator.of(timeLimiter))
+                .onErrorMap(ex -> {
+                    // можно логировать/замерять ошибки здесь
+                    return ex;
+                });
+    }
 
-        Supplier<CompletionStage<T>> circuitSupplier = () ->
-                circuitBreaker.executeCompletionStage(timeLimitedSupplier);
-
-        CompletionStage<T> resultStage = retry.executeCompletionStage(this.scheduler, circuitSupplier);
-
-        return resultStage.toCompletableFuture();
+    /**
+     * Применяет операторы Resilience4j к Mono.
+     */
+    private <T> Mono<T> applyResilience(Mono<T> publisher) {
+        return publisher
+                .transformDeferred(RetryOperator.of(retry))
+                .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
+                .transformDeferred(TimeLimiterOperator.of(timeLimiter));
     }
 }

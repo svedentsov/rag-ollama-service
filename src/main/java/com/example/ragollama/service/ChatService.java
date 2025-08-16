@@ -4,8 +4,8 @@ import com.example.ragollama.config.properties.AppProperties;
 import com.example.ragollama.dto.ChatRequest;
 import com.example.ragollama.dto.ChatResponse;
 import com.example.ragollama.entity.MessageRole;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.core.task.AsyncTaskExecutor;
@@ -16,28 +16,21 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Сервис для обработки бизнес-логики чата.
+ * Отвечает за взаимодействие с LLM, управление историей диалога
+ * и проверку пользовательского ввода на безопасность.
+ */
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class ChatService {
-
-    private static final Logger log = LoggerFactory.getLogger(ChatService.class);
 
     private final ResilientOllamaClient resilientOllamaClient;
     private final ChatHistoryService chatHistoryService;
     private final PromptGuardService promptGuardService;
     private final AsyncTaskExecutor taskExecutor;
-    private final int maxHistoryMessages;
-
-    public ChatService(ResilientOllamaClient resilientOllamaClient,
-                       ChatHistoryService chatHistoryService,
-                       PromptGuardService promptGuardService,
-                       AsyncTaskExecutor taskExecutor,
-                       AppProperties appProperties) { // Внедряем AppProperties
-        this.resilientOllamaClient = resilientOllamaClient;
-        this.chatHistoryService = chatHistoryService;
-        this.promptGuardService = promptGuardService;
-        this.taskExecutor = taskExecutor;
-        this.maxHistoryMessages = appProperties.chat().history().maxMessages(); // Получаем свойство из объекта
-    }
+    private final AppProperties appProperties;
 
     /**
      * Обрабатывает чат-запрос асинхронно, возвращая полный ответ.
@@ -48,13 +41,11 @@ public class ChatService {
     public CompletableFuture<ChatResponse> processChatRequestAsync(ChatRequest request) {
         promptGuardService.checkForInjection(request.message());
         final UUID sessionId = request.sessionId() != null ? request.sessionId() : UUID.randomUUID();
-        log.info("Обработка запроса в чат для сессии ID: {}. Глубина истории: {}", sessionId, maxHistoryMessages);
-
+        final int maxHistory = appProperties.chat().history().maxMessages();
+        log.info("Обработка запроса в чат для сессии ID: {}. Глубина истории: {}", sessionId, maxHistory);
         chatHistoryService.saveMessage(sessionId, MessageRole.USER, request.message());
-
-        List<Message> chatHistory = chatHistoryService.getLastNMessages(sessionId, maxHistoryMessages);
+        List<Message> chatHistory = chatHistoryService.getLastNMessages(sessionId, maxHistory);
         Prompt prompt = new Prompt(chatHistory);
-
         return resilientOllamaClient.callChat(prompt)
                 .thenApplyAsync(aiResponseContent -> {
                     log.debug("Получен ответ AI для сессии {}: '{}'", sessionId, aiResponseContent);
@@ -72,23 +63,19 @@ public class ChatService {
     public Flux<String> processChatRequestStream(ChatRequest request) {
         promptGuardService.checkForInjection(request.message());
         final UUID sessionId = request.sessionId() != null ? request.sessionId() : UUID.randomUUID();
+        final int maxHistory = appProperties.chat().history().maxMessages();
         log.info("Обработка потокового запроса в чат для сессии ID: {}", sessionId);
-
         chatHistoryService.saveMessage(sessionId, MessageRole.USER, request.message());
-
-        List<Message> chatHistory = chatHistoryService.getLastNMessages(sessionId, maxHistoryMessages);
+        List<Message> chatHistory = chatHistoryService.getLastNMessages(sessionId, maxHistory);
         Prompt prompt = new Prompt(chatHistory);
-
-        // Используем doOn* операторы для выполнения side-effects (сохранения в БД)
-        // без блокировки потока.
         return resilientOllamaClient.streamChat(prompt)
                 .doOnNext(chunk -> log.trace("Сессия {}: получен чанк '{}'", sessionId, chunk))
-                .collectList() // Собираем все чанки в один список
+                .collectList()
                 .doOnSuccess(chunks -> {
                     String fullResponse = String.join("", chunks);
                     chatHistoryService.saveMessage(sessionId, MessageRole.ASSISTANT, fullResponse);
                     log.debug("Полный потоковый ответ для сессии {} сохранен.", sessionId);
                 })
-                .flatMapMany(Flux::fromIterable); // Превращаем обратно в поток чанков
+                .flatMapMany(Flux::fromIterable);
     }
 }
