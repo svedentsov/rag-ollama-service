@@ -13,15 +13,16 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Сервис, отвечающий исключительно за этап генерации ответа в RAG-конвейере.
- * Принимает на вход полностью подготовленный промпт и список документов-источников,
- * взаимодействует с LLM через отказоустойчивый клиент и формирует финальный DTO-ответ.
- * Добавлена обработка ошибок для изоляции сбоев на этапе генерации.
+ * Принимает на вход подготовленный промпт и список документов-источников.
+ * Содержит логику для обработки случая, когда релевантные документы не найдены.
+ * Взаимодействует с LLM через отказоустойчивый клиент и формирует финальный DTO-ответ.
  */
 @Service
 @Slf4j
 public class GenerationService {
 
     private final ResilientOllamaClient resilientOllamaClient;
+    private static final String NO_CONTEXT_ANSWER = "Извините, я не смог найти релевантную информацию в базе знаний по вашему вопросу.";
 
     /**
      * Конструктор для внедрения зависимостей.
@@ -33,13 +34,21 @@ public class GenerationService {
     }
 
     /**
-     * Генерирует полный ответ от LLM асинхронно с обработкой ошибок.
+     * Генерирует полный ответ от LLM асинхронно.
+     * *
+     * Если список документов пуст, возвращает стандартный ответ-заглушку.
+     * В противном случае вызывает LLM и формирует ответ с цитатами.
      *
      * @param prompt    Собранный и готовый к отправке промпт.
-     * @param documents Список документов, использованных для контекста.
+     * @param documents Список документов, использованных для контекста. Может быть пустым.
      * @return {@link CompletableFuture} с финальным {@link RagQueryResponse}.
      */
     public CompletableFuture<RagQueryResponse> generate(Prompt prompt, List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            log.warn("На этап Generation не передано документов. Возвращается ответ-заглушка.");
+            return CompletableFuture.completedFuture(new RagQueryResponse(NO_CONTEXT_ANSWER, List.of()));
+        }
+
         return resilientOllamaClient.callChat(prompt)
                 .thenApply(generatedAnswer -> {
                     List<String> sourceCitations = extractCitations(documents);
@@ -52,12 +61,21 @@ public class GenerationService {
     }
 
     /**
-     * Генерирует ответ от LLM в виде потока (stream) с обработкой ошибок.
+     * Генерирует ответ от LLM в виде потока (stream).
+     * *
+     * Если список документов пуст, возвращает поток с одним элементом - стандартным ответом-заглушкой.
+     * В противном случае, стримит ответ от LLM.
      *
-     * @param prompt Собранный и готовый к отправке промпт.
+     * @param prompt    Собранный и готовый к отправке промпт.
+     * @param documents Список документов-источников. Может быть пустым.
      * @return {@link Flux} с частями (токенами) сгенерированного ответа.
      */
-    public Flux<String> generateStream(Prompt prompt) {
+    public Flux<String> generateStream(Prompt prompt, List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            log.warn("В потоковом запросе на этап Generation не передано документов. Возвращается ответ-заглушка.");
+            return Flux.just(NO_CONTEXT_ANSWER);
+        }
+
         return resilientOllamaClient.streamChat(prompt)
                 .doOnError(ex -> log.error("Ошибка в потоке генерации ответа LLM", ex))
                 .onErrorMap(ex -> new GenerationException("Ошибка в потоке генерации ответа.", ex));

@@ -8,10 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,10 +17,14 @@ import reactor.core.publisher.Flux;
 
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Контроллер для прямого взаимодействия с LLM (чат).
+ * Предоставляет эндпоинты для синхронной (асинхронный ответ) и потоковой
+ * коммуникации с чат-сервисом.
+ */
 @RestController
 @RequestMapping("/api/v1/chat")
 @RequiredArgsConstructor
-@Slf4j
 @Tag(name = "Chat Controller", description = "API для прямого взаимодействия с LLM")
 public class ChatController {
 
@@ -31,9 +32,12 @@ public class ChatController {
 
     /**
      * Отправляет сообщение в чат и получает полный ответ после его генерации.
+     * Метод работает асинхронно, не блокируя поток веб-сервера. Spring MVC
+     * самостоятельно обработает результат {@link CompletableFuture} после его завершения.
+     * Обработка исключений делегирована глобальному обработчику {@link com.example.ragollama.exception.GlobalExceptionHandler}.
      *
      * @param chatRequest DTO с сообщением и ID сессии.
-     * @return CompletableFuture с полным ответом от LLM.
+     * @return {@link CompletableFuture} с полным ответом от LLM в виде {@link ChatResponse}.
      */
     @PostMapping
     @Operation(
@@ -43,14 +47,9 @@ public class ChatController {
                     @ApiResponse(responseCode = "200", description = "Успешный ответ от AI"),
                     @ApiResponse(responseCode = "400", description = "Некорректный запрос (например, пустое сообщение)"),
                     @ApiResponse(responseCode = "422", description = "Обнаружена попытка Prompt Injection"),
-                    @ApiResponse(responseCode = "500", description = "Внутренняя ошибка сервера")})
-    public CompletableFuture<ResponseEntity<ChatResponse>> chat(@Valid @RequestBody ChatRequest chatRequest) {
-        return chatService.processChatRequestAsync(chatRequest)
-                .thenApply(ResponseEntity::ok)
-                .exceptionally(ex -> {
-                    log.error("Ошибка при асинхронной обработке чат-запроса", ex);
-                    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-                });
+                    @ApiResponse(responseCode = "503", description = "Сервис генерации недоступен")})
+    public CompletableFuture<ChatResponse> chat(@Valid @RequestBody ChatRequest chatRequest) {
+        return chatService.processChatRequestAsync(chatRequest);
     }
 
     /**
@@ -66,8 +65,7 @@ public class ChatController {
             responses = {
                     @ApiResponse(responseCode = "200", description = "Поток успешно открыт"),
                     @ApiResponse(responseCode = "400", description = "Некорректный запрос"),
-                    @ApiResponse(responseCode = "422", description = "Обнаружена попытка Prompt Injection")
-            })
+                    @ApiResponse(responseCode = "422", description = "Обнаружена попытка Prompt Injection")})
     public Flux<String> chatStream(@Valid @RequestBody ChatRequest chatRequest) {
         return chatService.processChatRequestStream(chatRequest);
     }

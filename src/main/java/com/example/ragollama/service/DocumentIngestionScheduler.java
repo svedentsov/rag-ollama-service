@@ -1,8 +1,6 @@
 package com.example.ragollama.service;
 
 import com.example.ragollama.entity.DocumentJob;
-import com.example.ragollama.entity.JobStatus;
-import com.example.ragollama.repository.DocumentJobRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -12,72 +10,82 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.UUID;
 
+/**
+ * Планировщик, отвечающий за запуск процесса индексации документов.
+ * Этот класс больше не управляет состоянием задач напрямую и не является транзакционным.
+ * Его единственная задача - периодически запрашивать новую задачу у {@link DocumentJobService},
+ * выполнять ресурсоемкую обработку, а затем делегировать обновление статуса обратно
+ * в {@link DocumentJobService}.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class DocumentIngestionScheduler {
 
-    private final DocumentJobRepository jobRepository;
+    private final DocumentJobService documentJobService;
     private final VectorStore vectorStore;
     private final TokenTextSplitter tokenTextSplitter;
 
+    /**
+     * Периодически запускает процесс обработки ожидающих документов.
+     * Метод сначала атомарно "захватывает" одну задачу через {@link DocumentJobService},
+     * затем выполняет индексацию, и в конце обновляет статус задачи.
+     * Аннотация {@code @CacheEvict} обеспечивает сброс кэша результатов поиска
+     * после успешной индексации нового документа.
+     */
     @Scheduled(fixedDelayString = "${app.ingestion.scheduler.delay-ms:10000}")
-    @Transactional
-    @CacheEvict(value = "vector_search_results", allEntries = true)
-    public void processPendingDocuments() {
-        // === ИЗМЕНЕНИЕ ЗДЕСЬ ===
-        // Теперь мы получаем Optional, а не List
-        Optional<DocumentJob> pendingJobOptional = jobRepository.findFirstByStatusOrderByCreatedAt(JobStatus.PENDING);
-
-        // Проверяем, есть ли задача в Optional. Если нет - выходим.
-        if (pendingJobOptional.isEmpty()) {
-            return; // Нет работы
-        }
-
-        // Извлекаем задачу из Optional
-        DocumentJob job = pendingJobOptional.get();
-
-        // Устанавливаем MDC для сквозной трассировки в логах этой фоновой задачи
-        try {
-            // Генерируем уникальный ID для этой сессии обработки на основе ID задачи
-            MDC.put("requestId", "ingestion-" + job.getId().toString().substring(0, 8));
-
-            log.info("Начинается обработка документа. Job ID: {}, Source: {}", job.getId(), job.getSourceName());
-
-            job.setStatus(JobStatus.PROCESSING);
-            jobRepository.save(job);
-
-            try {
-                // Создаем уникальный ID для всего документа
-                String documentId = job.getId().toString();
-                Document document = new Document(
-                        job.getTextContent(),
-                        Map.of("source", job.getSourceName(), "documentId", documentId)
-                );
-
-                List<Document> chunks = tokenTextSplitter.apply(List.of(document));
-                log.info("Документ '{}' (Job ID: {}) разделен на {} чанков.", job.getSourceName(), job.getId(), chunks.size());
-
-                vectorStore.add(chunks);
-                log.info("Успешно добавлено {} чанков в VectorStore для Job ID: {}", chunks.size(), job.getId());
-
-                job.setStatus(JobStatus.COMPLETED);
+    @CacheEvict(value = "vector_search_results", allEntries = true, condition = "#result == true")
+    public boolean processPendingDocument() {
+        // Шаг 1: Атомарно "захватываем" задачу. Это короткая, изолированная транзакция.
+        return documentJobService.claimNextPendingJob().map(job -> {
+            // Устанавливаем MDC для сквозной трассировки в логах этой фоновой задачи
+            try (MDC.MDCCloseable mdc = MDC.putCloseable("requestId", "ingestion-" + job.getId().toString().substring(0, 8))) {
+                processJob(job);
+                return true; // Возвращаем true для срабатывания CacheEvict
             } catch (Exception e) {
-                log.error("Ошибка при обработке документа. Job ID: {}", job.getId(), e);
-                job.setStatus(JobStatus.FAILED);
-                job.setErrorMessage(e.getMessage());
-            } finally {
-                jobRepository.save(job);
+                // Глобальный перехватчик на случай непредвиденных ошибок в processJob
+                log.error("Критическая ошибка при обработке задачи {}. Отмечаем как FAILED.", job.getId(), e);
+                documentJobService.markAsFailed(job.getId(), e.getMessage());
+                return false;
             }
-        } finally {
-            // Обязательно очищаем MDC после завершения
-            MDC.clear();
+        }).orElse(false); // Возвращаем false, если не было задач для обработки
+    }
+
+    /**
+     * Выполняет основную логику обработки одной задачи.
+     * Этот метод выполняется вне транзакции к реляционной БД.
+     *
+     * @param job Задача для обработки.
+     */
+    private void processJob(DocumentJob job) {
+        UUID jobId = job.getId();
+        log.info("Начинается обработка документа. Job ID: {}, Source: {}", jobId, job.getSourceName());
+
+        try {
+            // Шаг 2: Выполняем ресурсоемкие операции (не в транзакции).
+            Document document = new Document(
+                    job.getTextContent(),
+                    Map.of("source", job.getSourceName(), "documentId", jobId.toString())
+            );
+
+            List<Document> chunks = tokenTextSplitter.apply(List.of(document));
+            log.info("Документ '{}' (Job ID: {}) разделен на {} чанков.", job.getSourceName(), jobId, chunks.size());
+
+            vectorStore.add(chunks);
+            log.info("Успешно добавлено {} чанков в VectorStore для Job ID: {}", chunks.size(), jobId);
+
+            // Шаг 3: Обновляем статус в короткой, изолированной транзакции.
+            documentJobService.markAsCompleted(jobId);
+
+        } catch (Exception e) {
+            log.error("Ошибка при обработке документа. Job ID: {}", jobId, e);
+            // Шаг 3 (альтернативный): Обновляем статус в короткой, изолированной транзакции.
+            documentJobService.markAsFailed(jobId, e.getMessage());
         }
     }
 }

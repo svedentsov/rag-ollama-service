@@ -8,10 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,7 +17,12 @@ import reactor.core.publisher.Flux;
 
 import java.util.concurrent.CompletableFuture;
 
-@Slf4j
+/**
+ * Контроллер для выполнения RAG (Retrieval-Augmented Generation) запросов.
+ * Предоставляет эндпоинты для выполнения RAG-запросов, которые обогащают
+ * знания LLM данными из векторной базы. Поддерживает как асинхронный
+ * ответ с полным результатом, так и потоковую передачу данных.
+ */
 @RestController
 @RequestMapping("/api/v1/rag")
 @RequiredArgsConstructor
@@ -31,9 +33,13 @@ public class RagController {
 
     /**
      * Выполняет RAG-запрос и возвращает полный ответ после его генерации.
+     * Метод работает асинхронно, не блокируя поток веб-сервера. Spring MVC
+     * самостоятельно обработает результат {@link CompletableFuture} после его завершения.
+     * Обработка всех возможных исключений (включая кастомные) делегирована
+     * глобальному обработчику {@link com.example.ragollama.exception.GlobalExceptionHandler}.
      *
      * @param ragQueryRequest DTO с запросом и параметрами поиска.
-     * @return CompletableFuture с полным ответом.
+     * @return {@link CompletableFuture} с полным ответом {@link RagQueryResponse}.
      */
     @PostMapping("/query")
     @Operation(
@@ -43,14 +49,9 @@ public class RagController {
                     @ApiResponse(responseCode = "200", description = "Успешный ответ от AI"),
                     @ApiResponse(responseCode = "400", description = "Некорректный запрос"),
                     @ApiResponse(responseCode = "422", description = "Обнаружена попытка Prompt Injection"),
-                    @ApiResponse(responseCode = "500", description = "Внутренняя ошибка сервера при обработке запроса")})
-    public CompletableFuture<ResponseEntity<RagQueryResponse>> queryRag(@Valid @RequestBody RagQueryRequest ragQueryRequest) {
-        return ragService.queryAsync(ragQueryRequest)
-                .thenApply(ResponseEntity::ok)
-                .exceptionally(ex -> {
-                    log.error("Произошла ошибка при асинхронной обработке RAG-запроса: '{}'", ragQueryRequest.query(), ex);
-                    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-                });
+                    @ApiResponse(responseCode = "503", description = "Один из сервисов RAG-конвейера (Retrieval или Generation) недоступен")})
+    public CompletableFuture<RagQueryResponse> queryRag(@Valid @RequestBody RagQueryRequest ragQueryRequest) {
+        return ragService.queryAsync(ragQueryRequest);
     }
 
     /**
