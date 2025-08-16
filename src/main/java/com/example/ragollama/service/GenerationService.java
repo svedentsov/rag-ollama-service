@@ -1,12 +1,14 @@
 package com.example.ragollama.service;
 
 import com.example.ragollama.dto.RagQueryResponse;
+import com.example.ragollama.dto.StreamingResponsePart;
 import com.example.ragollama.exception.GenerationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -35,9 +37,6 @@ public class GenerationService {
 
     /**
      * Генерирует полный ответ от LLM асинхронно.
-     * *
-     * Если список документов пуст, возвращает стандартный ответ-заглушку.
-     * В противном случае вызывает LLM и формирует ответ с цитатами.
      *
      * @param prompt    Собранный и готовый к отправке промпт.
      * @param documents Список документов, использованных для контекста. Может быть пустым.
@@ -61,24 +60,43 @@ public class GenerationService {
     }
 
     /**
-     * Генерирует ответ от LLM в виде потока (stream).
-     * *
-     * Если список документов пуст, возвращает поток с одним элементом - стандартным ответом-заглушкой.
-     * В противном случае, стримит ответ от LLM.
+     * Генерирует ответ от LLM в виде структурированного потока (SSE).
+     * <p>
+     * Поток состоит из событий {@link StreamingResponsePart}:
+     * <ul>
+     *   <li>Сначала идут события {@code Content} с частями текста.</li>
+     *   <li>Затем одно событие {@code Sources} со списком источников.</li>
+     *   <li>В конце одно событие {@code Done} для сигнализации об успехе.</li>
+     *   <li>В случае ошибки, поток прерывается и отправляется событие {@code Error}.</li>
+     * </ul>
      *
      * @param prompt    Собранный и готовый к отправке промпт.
-     * @param documents Список документов-источников. Может быть пустым.
-     * @return {@link Flux} с частями (токенами) сгенерированного ответа.
+     * @param documents Список документов-источников.
+     * @return {@link Flux} со структурированными частями ответа {@link StreamingResponsePart}.
      */
-    public Flux<String> generateStream(Prompt prompt, List<Document> documents) {
+    public Flux<StreamingResponsePart> generateStructuredStream(Prompt prompt, List<Document> documents) {
         if (documents == null || documents.isEmpty()) {
-            log.warn("В потоковом запросе на этап Generation не передано документов. Возвращается ответ-заглушка.");
-            return Flux.just(NO_CONTEXT_ANSWER);
+            log.warn("В потоковом запросе на этап Generation не передано документов.");
+            return Flux.just(
+                    new StreamingResponsePart.Content(NO_CONTEXT_ANSWER),
+                    new StreamingResponsePart.Done("Завершено без контекста")
+            );
         }
 
-        return resilientOllamaClient.streamChat(prompt)
+        Flux<StreamingResponsePart> contentStream = resilientOllamaClient.streamChat(prompt)
+                .map(StreamingResponsePart.Content::new);
+
+        Mono<StreamingResponsePart> sourcesPart = Mono.fromSupplier(() ->
+                new StreamingResponsePart.Sources(extractCitations(documents))
+        );
+        Mono<StreamingResponsePart> donePart = Mono.just(new StreamingResponsePart.Done("Успешно завершено"));
+
+        return Flux.concat(contentStream, sourcesPart, donePart)
                 .doOnError(ex -> log.error("Ошибка в потоке генерации ответа LLM", ex))
-                .onErrorMap(ex -> new GenerationException("Ошибка в потоке генерации ответа.", ex));
+                .onErrorResume(ex -> {
+                    String errorMessage = "Ошибка при генерации ответа: " + ex.getMessage();
+                    return Flux.just(new StreamingResponsePart.Error(errorMessage));
+                });
     }
 
     /**

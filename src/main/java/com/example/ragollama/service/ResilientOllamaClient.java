@@ -22,6 +22,10 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Отказоустойчивый клиент для взаимодействия с Ollama API.
+ * Инкапсулирует логику вызовов к LLM, оборачивая их в паттерны
+ * отказоустойчивости (Retry, Circuit Breaker, TimeLimiter) из библиотеки Resilience4j.
+ * Предоставляет методы для асинхронного (возвращает CompletableFuture) и потокового
+ * взаимодействия с моделью, корректно изолируя блокирующие операции.
  */
 @Component
 @RequiredArgsConstructor
@@ -35,63 +39,71 @@ public class ResilientOllamaClient {
 
     private static final String OLLAMA_CONFIG_NAME = "ollama";
 
-    private CircuitBreaker circuitBreaker;
+    private CircuitBreaker circuitbreaker;
     private Retry retry;
     private TimeLimiter timeLimiter;
 
+    /**
+     * Инициализирует компоненты Resilience4j после создания бина.
+     * Загружает конфигурации из application.yml по имени 'ollama'.
+     */
     @PostConstruct
     public void init() {
-        this.circuitBreaker = circuitBreakerRegistry.circuitBreaker(OLLAMA_CONFIG_NAME);
+        this.circuitbreaker = circuitBreakerRegistry.circuitBreaker(OLLAMA_CONFIG_NAME);
         this.retry = retryRegistry.retry(OLLAMA_CONFIG_NAME);
         this.timeLimiter = timeLimiterRegistry.timeLimiter(OLLAMA_CONFIG_NAME);
     }
 
     /**
-     * Неблокирующий (реактивный) вызов, возвращающий CompletableFuture<String>.
-     * Оборачиваем блокирующий call().content() в Mono.fromCallable и выполняем его на boundedElastic.
+     * Асинхронно вызывает чат-модель для получения полного ответа.
+     * <p>
+     * Метод корректно обрабатывает блокирующий вызов Spring AI API,
+     * перенося его выполнение в специализированный пул потоков,
+     * чтобы не блокировать основной пул.
+     * Вызов защищен политиками Resilience4j и обернут в таймер для сбора метрик.
+     *
+     * @param prompt Промпт для отправки в модель.
+     * @return {@link CompletableFuture}, который будет завершен строковым ответом от LLM.
      */
     public CompletableFuture<String> callChat(Prompt prompt) {
-        Mono<String> mono = Mono.defer(() ->
-                Mono.fromCallable(() -> chatClient.prompt(prompt).call().content())
-                        .subscribeOn(Schedulers.boundedElastic()));
-        Mono<String> resilient = applyResilience(mono);
-        return metricService.recordTimer("llm.requests", () -> resilient.toFuture());
+        // ШАГ 1: Оборачиваем БЛОКИРУЮЩИЙ вызов `.call().content()` в `Mono.fromCallable`.
+        // Это откладывает его выполнение до момента подписки.
+        Mono<String> responseMono = Mono.fromCallable(() -> chatClient.prompt(prompt).call().content())
+                // ШАГ 2: Переключаем выполнение блокирующей операции на специальный
+                // пул потоков `boundedElastic`, предназначенный для I/O-задач.
+                .subscribeOn(Schedulers.boundedElastic());
+        Mono<String> resilientMono = applyResilienceToMono(responseMono);
+        return metricService.recordTimer(
+                "llm.requests",
+                resilientMono::toFuture);
     }
 
     /**
-     * Выполняет стриминговый вызов к LLM с применением политик отказоустойчивости в реактивном стиле.
+     * Вызывает чат-модель для получения потокового ответа (SSE).
+     * Поток защищен политиками Resilience4j и обернут в таймер для сбора метрик.
      *
-     * @param prompt Промпт для LLM.
-     * @return {@link Flux}, эммитящий токены ответа по мере их генерации и защищенный
-     * механизмами Retry, CircuitBreaker и TimeLimiter.
+     * @param prompt Промпт для отправки в модель.
+     * @return {@link Flux}, который эмитит части (токены) ответа от LLM по мере их генерации.
      */
     public Flux<String> streamChat(Prompt prompt) {
-        Flux<String> flux = Flux.defer(() -> chatClient.prompt(prompt).stream().content());
-        Flux<String> resilientFlux = applyResilience(flux);
-        return metricService.recordTimer("llm.requests.stream", () -> resilientFlux);
+        Flux<String> responseFlux = chatClient.prompt(prompt).stream().content();
+        Flux<String> resilientFlux = applyResilienceToFlux(responseFlux);
+        return metricService.recordTimer(
+                "llm.requests.stream",
+                () -> resilientFlux);
     }
 
-    /**
-     * Применяет операторы Resilience4j к Flux.
-     */
-    private <T> Flux<T> applyResilience(Flux<T> publisher) {
+    private <T> Flux<T> applyResilienceToFlux(Flux<T> publisher) {
         return publisher
                 .transformDeferred(RetryOperator.of(retry))
-                .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
-                .transformDeferred(TimeLimiterOperator.of(timeLimiter))
-                .onErrorMap(ex -> {
-                    // можно логировать/замерять ошибки здесь
-                    return ex;
-                });
+                .transformDeferred(CircuitBreakerOperator.of(circuitbreaker))
+                .transformDeferred(TimeLimiterOperator.of(timeLimiter));
     }
 
-    /**
-     * Применяет операторы Resilience4j к Mono.
-     */
-    private <T> Mono<T> applyResilience(Mono<T> publisher) {
+    private <T> Mono<T> applyResilienceToMono(Mono<T> publisher) {
         return publisher
                 .transformDeferred(RetryOperator.of(retry))
-                .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
+                .transformDeferred(CircuitBreakerOperator.of(circuitbreaker))
                 .transformDeferred(TimeLimiterOperator.of(timeLimiter));
     }
 }

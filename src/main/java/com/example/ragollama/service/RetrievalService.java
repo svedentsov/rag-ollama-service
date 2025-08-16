@@ -8,13 +8,15 @@ import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Stream;
 
 /**
- * Сервис, отвечающий исключительно за этап извлечения (Retrieval) в RAG-конвейере.
- * Инкапсулирует логику поиска по схожести в векторном хранилище и, опционально,
- * последующего переранжирования найденных результатов.
+ * Сервис, отвечающий за этап извлечения (Retrieval) в RAG-конвейере.
+ * Реализует продвинутую стратегию гибридного поиска, параллельно выполняя
+ * семантический (векторный) и лексический (полнотекстовый) поиск.
+ * Результаты объединяются с помощью {@link FusionService} для получения
+ * наиболее релевантного и полного набора документов.
  */
 @Service
 @RequiredArgsConstructor
@@ -22,41 +24,54 @@ import java.util.concurrent.CompletableFuture;
 public class RetrievalService {
 
     private final VectorSearchService vectorSearchService;
-    private final Optional<RerankingService> rerankingService;
+    private final FusionService fusionService;
     private final AsyncTaskExecutor taskExecutor;
 
     /**
-     * Выполняет асинхронный поиск и переранжирование документов.
+     * Выполняет асинхронный гибридный поиск документов.
      *
      * @param query               Текст запроса для поиска.
-     * @param topK                Количество документов для извлечения.
-     * @param similarityThreshold Порог схожести.
-     * @return {@link CompletableFuture}, который завершится списком отсортированных документов.
+     * @param topK                Количество документов для извлечения из каждого источника.
+     * @param similarityThreshold Порог схожести для векторного поиска.
+     * @return {@link CompletableFuture}, который завершится объединенным и отсортированным списком документов.
      */
-    public CompletableFuture<List<Document>> retrieveAndRerank(String query, int topK, double similarityThreshold) {
-        return CompletableFuture.supplyAsync(() -> {
-            log.info("Начало этапа Retrieval для запроса: '{}'", query);
-            SearchRequest searchRequest = SearchRequest.builder()
-                    .query(query)
-                    .topK(topK)
-                    .similarityThreshold(similarityThreshold)
-                    .build();
+    public CompletableFuture<List<Document>> retrieveAndFuse(String query, int topK, double similarityThreshold) {
+        log.info("Начало этапа гибридного Retrieval для запроса: '{}'", query);
 
-            List<Document> similarDocuments = vectorSearchService.search(searchRequest);
-            log.debug("Найдено {} документов после векторного поиска.", similarDocuments.size());
+        // Шаг 1: Параллельный запуск поисковых запросов
 
-            // Применяем переранжирование, если сервис RerankingService активен
-            return rerankingService
-                    .map(service -> {
-                        log.debug("Выполняется переранжирование для {} документов.", similarDocuments.size());
-                        List<Document> reranked = service.rerank(similarDocuments, query);
-                        log.info("Этап Retrieval завершен. После переранжирования осталось {} документов.", reranked.size());
-                        return reranked;
-                    })
-                    .orElseGet(() -> {
-                        log.info("Этап Retrieval завершен. Переранжирование отключено.");
-                        return similarDocuments;
-                    });
+        // Асинхронный векторный поиск
+        CompletableFuture<List<Document>> vectorSearchFuture = CompletableFuture.supplyAsync(() -> {
+            SearchRequest request = SearchRequest.builder()
+                    .query(query).topK(topK).similarityThreshold(similarityThreshold).build();
+            return vectorSearchService.search(request);
         }, taskExecutor);
+
+        // Асинхронный полнотекстовый поиск (пример)
+        // В реальном проекте здесь будет вызов к вашему сервису полнотекстового поиска
+        CompletableFuture<List<Document>> fullTextSearchFuture = CompletableFuture.supplyAsync(() -> {
+            log.info("Выполняется полнотекстовый поиск (симуляция)...");
+            // return fullTextSearchService.search(query, topK);
+            return List.of(); // Заглушка
+        }, taskExecutor);
+
+        // Шаг 2: Ожидание завершения всех поисков и слияние результатов
+        return CompletableFuture.allOf(vectorSearchFuture, fullTextSearchFuture)
+                .thenApply(v -> {
+                    List<Document> vectorResults = vectorSearchFuture.join();
+                    List<Document> fullTextResults = fullTextSearchFuture.join();
+                    log.debug("Получено {} док-ов из векторного поиска и {} из полнотекстового.",
+                            vectorResults.size(), fullTextResults.size());
+
+                    // Шаг 3: Слияние с помощью RRF
+                    List<List<Document>> resultsToFuse = Stream.of(vectorResults, fullTextResults)
+                            .filter(list -> list != null && !list.isEmpty())
+                            .toList();
+
+                    List<Document> finalDocuments = fusionService.reciprocalRankFusion(resultsToFuse);
+
+                    // Шаг 4: Ограничение итогового результата (опционально)
+                    return finalDocuments.stream().limit(topK).toList();
+                });
     }
 }

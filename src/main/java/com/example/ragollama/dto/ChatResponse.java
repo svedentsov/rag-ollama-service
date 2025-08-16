@@ -5,8 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.UUID;
 
 /**
- * DTO (Data Transfer Object) для ответа от чата.
- * <p>
+ * DTO для ответа от чата.
  * Содержит информацию, возвращаемую пользователю после обработки его запроса в чате.
  *
  * @param responseMessage Ответ, сгенерированный языковой моделью (LLM).

@@ -8,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
@@ -29,7 +28,6 @@ public class ChatService {
     private final ResilientOllamaClient resilientOllamaClient;
     private final ChatHistoryService chatHistoryService;
     private final PromptGuardService promptGuardService;
-    private final AsyncTaskExecutor taskExecutor;
     private final AppProperties appProperties;
 
     /**
@@ -47,11 +45,11 @@ public class ChatService {
         List<Message> chatHistory = chatHistoryService.getLastNMessages(sessionId, maxHistory);
         Prompt prompt = new Prompt(chatHistory);
         return resilientOllamaClient.callChat(prompt)
-                .thenApplyAsync(aiResponseContent -> {
+                .thenApply(aiResponseContent -> {
                     log.debug("Получен ответ AI для сессии {}: '{}'", sessionId, aiResponseContent);
                     chatHistoryService.saveMessage(sessionId, MessageRole.ASSISTANT, aiResponseContent);
                     return new ChatResponse(aiResponseContent, sessionId);
-                }, taskExecutor);
+                });
     }
 
     /**
