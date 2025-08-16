@@ -11,17 +11,15 @@ import java.time.Duration;
 
 /**
  * Главный класс для всех кастомных настроек приложения, загружаемых из application.yml с префиксом "app".
- * <p>
- * Использование {@link ConfigurationProperties} позволяет централизовать конфигурацию,
- * обеспечить типобезопасность, валидацию при старте и упростить код сервисов.
  *
- * @param prompt       Настройки, связанные с шаблонами промптов.
- * @param reranking    Настройки для опционального сервиса переранжирования.
- * @param tokenization Настройки токенизатора.
- * @param context      Настройки сборки контекста для RAG.
- * @param chat         Настройки для функционала чата.
- * @param ingestion    Настройки для процесса фоновой индексации документов.
- * @param httpClient   Настройки для HTTP-клиентов, таких как WebClient.
+ * @param prompt          Настройки, связанные с шаблонами промптов.
+ * @param reranking       Настройки для опционального сервиса переранжирования.
+ * @param tokenization    Настройки токенизатора.
+ * @param context         Настройки сборки контекста для RAG.
+ * @param chat            Настройки для функционала чата.
+ * @param ingestion       Настройки для процесса фоновой индексации документов.
+ * @param httpClient      Настройки для HTTP-клиентов, таких как WebClient.
+ * @param taskExecutor    Настройки для основного пула асинхронных задач.
  */
 @Validated
 @ConfigurationProperties(prefix = "app")
@@ -32,7 +30,8 @@ public record AppProperties(
         @NotNull Context context,
         @NotNull Chat chat,
         @NotNull Ingestion ingestion,
-        @NotNull HttpClient httpClient // <--- НОВЫЙ РАЗДЕЛ
+        @NotNull HttpClient httpClient,
+        @NotNull TaskExecutor taskExecutor
 ) {
     /** Настройки, связанные с шаблонами промптов. */
     public record Prompt(@NotBlank String ragTemplatePath) {}
@@ -66,5 +65,22 @@ public record AppProperties(
             @NotNull Duration connectTimeout,
             @NotNull Duration responseTimeout,
             @NotNull Duration readWriteTimeout
+    ) {}
+
+    /**
+     * Настройки для основного пула асинхронных задач приложения.
+     * Позволяет гибко настраивать параллелизм и производительность.
+     *
+     * @param corePoolSize Базовое количество потоков в пуле.
+     * @param maxPoolSize  Максимальное количество потоков, до которого пул может расшириться.
+     * @param queueCapacity Размер очереди для задач, ожидающих выполнения.
+     * @param threadNamePrefix Префикс для имен потоков, полезно для отладки и профилирования.
+     */
+    @Validated
+    public record TaskExecutor(
+            @Min(1) int corePoolSize,
+            @Min(1) int maxPoolSize,
+            @Min(0) int queueCapacity,
+            @NotBlank String threadNamePrefix
     ) {}
 }

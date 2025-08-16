@@ -7,6 +7,7 @@ import io.netty.handler.timeout.WriteTimeoutHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -19,8 +20,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Основной конфигурационный класс приложения.
- * Определяет ключевые бины, такие как {@link WebClient}, пулы потоков
- * и другие общие компоненты инфраструктуры.
+ * Определяет ключевые бины, такие как строитель {@link WebClient.Builder},
+ * пулы потоков и другие общие компоненты инфраструктуры.
  */
 @Configuration
 @RequiredArgsConstructor
@@ -29,16 +30,17 @@ public class AppConfig {
     private final AppProperties appProperties;
 
     /**
-     * Создает и настраивает бин {@link WebClient} для HTTP-взаимодействий.
-     * Эта конфигурация является production-ready, так как включает все необходимые
-     * таймауты для обеспечения отказоустойчивости. Значения таймаутов
-     * управляются централизованно через {@link AppProperties}, что позволяет
-     * гибко настраивать их для различных окружений без изменения кода.
+     * Создает и настраивает главный бин {@link WebClient.Builder} для всех HTTP-взаимодействий.
+     * Этот метод не создает конечный {@link WebClient}, а настраивает и возвращает
+     * {@link WebClient.Builder}, который затем может быть внедрен в другие компоненты
+     * (например, в конфигурацию Spring AI) для создания экземпляров WebClient с единой, централизованной конфигурацией.
+     * Конфигурация является production-ready, так как включает все необходимые таймауты для обеспечения отказоустойчивости.
      *
-     * @return Сконфигурированный, отказоустойчивый экземпляр {@link WebClient}.
+     * @return Сконфигурированный и готовый к использованию {@link WebClient.Builder}.
      */
     @Bean
-    public WebClient webClient() {
+    @Primary
+    public WebClient.Builder webClientBuilder() {
         final var httpClientProps = appProperties.httpClient();
         HttpClient httpClient = HttpClient.create()
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, (int) httpClientProps.connectTimeout().toMillis())
@@ -47,23 +49,24 @@ public class AppConfig {
                         .addHandlerLast(new ReadTimeoutHandler(httpClientProps.readWriteTimeout().toSeconds(), TimeUnit.SECONDS))
                         .addHandlerLast(new WriteTimeoutHandler(httpClientProps.readWriteTimeout().toSeconds(), TimeUnit.SECONDS)));
         return WebClient.builder()
-                .clientConnector(new ReactorClientHttpConnector(httpClient))
-                .build();
+                .clientConnector(new ReactorClientHttpConnector(httpClient));
     }
 
     /**
      * Создает единый пул потоков для всех асинхронных задач.
-     * Возвращает конкретный тип AsyncTaskExecutor, который требуется сервисам.
+     * Конфигурация пула полностью управляется через {@link AppProperties},
+     * что позволяет гибко настраивать его без изменения кода.
      *
      * @return Сконфигурированный и управляемый Spring'ом {@link AsyncTaskExecutor}.
      */
     @Bean
     public AsyncTaskExecutor applicationTaskExecutor() {
+        final var executorProps = appProperties.taskExecutor();
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(4);
-        executor.setMaxPoolSize(10);
-        executor.setQueueCapacity(25);
-        executor.setThreadNamePrefix("app-task-exec-");
+        executor.setCorePoolSize(executorProps.corePoolSize());
+        executor.setMaxPoolSize(executorProps.maxPoolSize());
+        executor.setQueueCapacity(executorProps.queueCapacity());
+        executor.setThreadNamePrefix(executorProps.threadNamePrefix());
         executor.setTaskDecorator(new MdcTaskDecorator());
         executor.initialize();
         return executor;

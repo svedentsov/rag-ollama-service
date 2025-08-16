@@ -3,6 +3,7 @@ package com.example.ragollama.service;
 import com.example.ragollama.dto.RagQueryResponse;
 import com.example.ragollama.dto.StreamingResponsePart;
 import com.example.ragollama.exception.GenerationException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
@@ -15,25 +16,16 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Сервис, отвечающий исключительно за этап генерации ответа в RAG-конвейере.
- * Принимает на вход подготовленный промпт и список документов-источников.
- * Содержит логику для обработки случая, когда релевантные документы не найдены.
- * Взаимодействует с LLM через отказоустойчивый клиент и формирует финальный DTO-ответ.
+ * Взаимодействует с LLM через отказоустойчивый {@link LlmClient} и формирует
+ * финальный DTO-ответ, включая обработку случая отсутствия контекста.
  */
-@Service
 @Slf4j
+@Service
+@RequiredArgsConstructor
 public class GenerationService {
 
-    private final ResilientOllamaClient resilientOllamaClient;
+    private final LlmClient llmClient;
     private static final String NO_CONTEXT_ANSWER = "Извините, я не смог найти релевантную информацию в базе знаний по вашему вопросу.";
-
-    /**
-     * Конструктор для внедрения зависимостей.
-     *
-     * @param resilientOllamaClient Отказоустойчивый клиент для вызова LLM.
-     */
-    public GenerationService(ResilientOllamaClient resilientOllamaClient) {
-        this.resilientOllamaClient = resilientOllamaClient;
-    }
 
     /**
      * Генерирует полный ответ от LLM асинхронно.
@@ -41,14 +33,14 @@ public class GenerationService {
      * @param prompt    Собранный и готовый к отправке промпт.
      * @param documents Список документов, использованных для контекста. Может быть пустым.
      * @return {@link CompletableFuture} с финальным {@link RagQueryResponse}.
+     * @throws GenerationException в случае ошибки взаимодействия с LLM.
      */
     public CompletableFuture<RagQueryResponse> generate(Prompt prompt, List<Document> documents) {
         if (documents == null || documents.isEmpty()) {
             log.warn("На этап Generation не передано документов. Возвращается ответ-заглушка.");
             return CompletableFuture.completedFuture(new RagQueryResponse(NO_CONTEXT_ANSWER, List.of()));
         }
-
-        return resilientOllamaClient.callChat(prompt)
+        return llmClient.callChat(prompt)
                 .thenApply(generatedAnswer -> {
                     List<String> sourceCitations = extractCitations(documents);
                     return new RagQueryResponse(generatedAnswer, sourceCitations);
@@ -61,14 +53,6 @@ public class GenerationService {
 
     /**
      * Генерирует ответ от LLM в виде структурированного потока (SSE).
-     * <p>
-     * Поток состоит из событий {@link StreamingResponsePart}:
-     * <ul>
-     *   <li>Сначала идут события {@code Content} с частями текста.</li>
-     *   <li>Затем одно событие {@code Sources} со списком источников.</li>
-     *   <li>В конце одно событие {@code Done} для сигнализации об успехе.</li>
-     *   <li>В случае ошибки, поток прерывается и отправляется событие {@code Error}.</li>
-     * </ul>
      *
      * @param prompt    Собранный и готовый к отправке промпт.
      * @param documents Список документов-источников.
@@ -82,15 +66,11 @@ public class GenerationService {
                     new StreamingResponsePart.Done("Завершено без контекста")
             );
         }
-
-        Flux<StreamingResponsePart> contentStream = resilientOllamaClient.streamChat(prompt)
+        Flux<StreamingResponsePart> contentStream = llmClient.streamChat(prompt)
                 .map(StreamingResponsePart.Content::new);
-
         Mono<StreamingResponsePart> sourcesPart = Mono.fromSupplier(() ->
-                new StreamingResponsePart.Sources(extractCitations(documents))
-        );
+                new StreamingResponsePart.Sources(extractCitations(documents)));
         Mono<StreamingResponsePart> donePart = Mono.just(new StreamingResponsePart.Done("Успешно завершено"));
-
         return Flux.concat(contentStream, sourcesPart, donePart)
                 .doOnError(ex -> log.error("Ошибка в потоке генерации ответа LLM", ex))
                 .onErrorResume(ex -> {

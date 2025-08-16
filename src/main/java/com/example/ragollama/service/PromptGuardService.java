@@ -10,7 +10,6 @@ import java.util.regex.Pattern;
 
 /**
  * Сервис для защиты от атак типа "Prompt Injection".
- * <p>
  * Этот сервис предоставляет базовые механизмы для обнаружения и предотвращения
  * попыток злонамеренного воздействия на языковую модель через пользовательский ввод
  * путем поиска заранее определенных вредоносных паттернов.
@@ -41,7 +40,6 @@ public class PromptGuardService {
 
     /**
      * Проверяет входной промпт на наличие потенциальных угроз.
-     * <p>
      * Метод итерируется по списку известных вредоносных паттернов и, в случае
      * совпадения, выбрасывает исключение {@link PromptInjectionException}.
      *
@@ -52,7 +50,6 @@ public class PromptGuardService {
         if (prompt == null || prompt.isBlank()) {
             return;
         }
-
         for (Pattern pattern : INJECTION_PATTERNS) {
             if (pattern.matcher(prompt).find()) {
                 log.warn("Обнаружена потенциальная атака 'Prompt Injection'. Паттерн: '{}', Промпт: '{}'", pattern.pattern(), prompt);

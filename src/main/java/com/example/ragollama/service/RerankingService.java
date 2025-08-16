@@ -9,8 +9,8 @@ import org.springframework.stereotype.Service;
 import java.util.Arrays;
 import java.util.List;
 
-@Service
 @Slf4j
+@Service
 @ConditionalOnProperty(name = "app.reranking.enabled", havingValue = "true")
 public class RerankingService {
 
@@ -29,7 +29,6 @@ public class RerankingService {
 
     /**
      * Выполняет переранжирование списка документов.
-     * <p>
      * Реализует простую стратегию: повышает релевантность документов,
      * если их текст содержит ключевые слова из оригинального запроса.
      * Новая оценка схожести сохраняется в метаданных документа.

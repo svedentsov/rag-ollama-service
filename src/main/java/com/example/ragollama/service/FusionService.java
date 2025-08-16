@@ -36,7 +36,6 @@ public class FusionService {
         if (documentLists == null || documentLists.isEmpty()) {
             return List.of();
         }
-
         // Шаг 1: Группируем все документы по их ID и вычисляем RRF-оценку для каждого.
         Map<String, RrfScore> scores = documentLists.stream()
                 .flatMap(list -> {
@@ -50,8 +49,7 @@ public class FusionService {
                         (score1, score2) -> { // Функция слияния для дубликатов
                             score1.add(score2.score());
                             return score1;
-                        }
-                ));
+                        }));
 
         // Шаг 2: Сортируем документы по убыванию их итоговой RRF-оценки.
         List<Document> finalDocs = scores.values().stream()

@@ -1,45 +1,62 @@
 package com.example.ragollama.config;
 
+import com.example.ragollama.service.LlmClient;
+import com.example.ragollama.service.MetricService;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.retry.RetryRegistry;
+import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Конфигурационный класс для бинов, связанных с Spring AI.
- * <p>
- * Этот класс централизует создание и настройку компонентов,
- * необходимых для работы с искусственным интеллектом, таких как
- * клиенты для чатов и инструменты для обработки текста.
+ * Конфигурационный класс для централизованного создания и настройки бинов, связанных с AI.
+ * Эта версия класса полностью полагается на автоконфигурацию Spring AI для
+ * создания низкоуровневых компонентов (таких как OllamaChatModel). Мы лишь
+ * внедряем готовый {@link ChatClient.Builder} для построения нашего
+ * отказоустойчивого фасада {@link LlmClient}.
+ * Такой подход значительно упрощает код, повышает его надежность и соответствие "the Spring Boot way".
  */
 @Configuration
 public class AiConfig {
 
     /**
-     * Создает и настраивает основной бин {@link ChatClient} для всего приложения.
-     * <p>
-     * Spring AI автоматически предоставляет бин {@link ChatClient.Builder}, который
-     * уже сконфигурирован для работы с Ollama (согласно `application.yml`).
-     * Мы используем этот builder для создания конкретного экземпляра {@code ChatClient},
-     * который затем может быть внедрен в сервисы для взаимодействия с LLM.
+     * Создает и предоставляет единственный, отказоустойчивый бин {@link LlmClient}.
+     * Этот метод получает от Spring уже полностью сконфигурированный
+     * {@link ChatClient.Builder} и использует его для создания "сырого" клиента,
+     * который затем оборачивается в наш отказоустойчивый фасад.
      *
-     * @param builder Автоматически внедряемый {@link ChatClient.Builder} от Spring AI.
-     * @return Сконфигурированный и готовый к использованию бин {@link ChatClient}.
+     * @param chatClientBuilder      Автоматически сконфигурированный строитель ChatClient.
+     * @param metricService          Сервис для сбора метрик.
+     * @param circuitBreakerRegistry Реестр Circuit Breaker'ов.
+     * @param retryRegistry          Реестр политик Retry.
+     * @param timeLimiterRegistry    Реестр TimeLimiter'ов.
+     * @return Единственный экземпляр {@link LlmClient} для использования в приложении.
      */
     @Bean
-    public ChatClient chatClient(ChatClient.Builder builder) {
-        return builder.build();
+    public LlmClient llmClient(
+            ChatClient.Builder chatClientBuilder,
+            MetricService metricService,
+            CircuitBreakerRegistry circuitBreakerRegistry,
+            RetryRegistry retryRegistry,
+            TimeLimiterRegistry timeLimiterRegistry
+    ) {
+        ChatClient internalChatClient = chatClientBuilder.build();
+        return new LlmClient(
+                internalChatClient,
+                metricService,
+                circuitBreakerRegistry,
+                retryRegistry,
+                timeLimiterRegistry
+        );
     }
 
     /**
-     * Создает бин {@link TokenTextSplitter}.
-     * <p>
-     * Этот сплиттер используется для разбиения больших текстовых документов на более
-     * мелкие фрагменты (чанки) перед их векторизацией и сохранением в векторное хранилище.
-     * Создание его в качестве бина позволяет легко внедрять и переиспользовать
-     * его в различных сервисах, например, в {@code DocumentService}.
+     * Создает бин {@link TokenTextSplitter} для разбиения текста на чанки.
+     * Этот компонент является утилитарным и может быть публичным.
      *
-     * @return Новый экземпляр {@link TokenTextSplitter} с настройками по умолчанию.
+     * @return Экземпляр {@link TokenTextSplitter}.
      */
     @Bean
     public TokenTextSplitter tokenTextSplitter() {

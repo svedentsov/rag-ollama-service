@@ -18,7 +18,6 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebMvcConfig implements WebMvcConfigurer {
 
     private final RateLimitInterceptor rateLimitInterceptor;
-    // Внедряем наш единый пул потоков
     private final AsyncTaskExecutor applicationTaskExecutor;
 
     @Override

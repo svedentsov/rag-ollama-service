@@ -14,16 +14,15 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Сервис для управления ограничением частоты запросов (rate limiting).
- * <p>
  * Использует библиотеку Bucket4j. Конфигурация лимитов загружается
  * из {@code application.yml} с префиксом {@code app.rate-limiting}.
  * Реализация хранит "ведра" (buckets) в памяти ({@link ConcurrentHashMap}),
  * что подходит для одного инстанса приложения.
  */
-@Service
-@ConfigurationProperties(prefix = "app.rate-limiting")
 @Getter
 @Setter
+@Service
+@ConfigurationProperties(prefix = "app.rate-limiting")
 public class RateLimitingService {
 
     /**

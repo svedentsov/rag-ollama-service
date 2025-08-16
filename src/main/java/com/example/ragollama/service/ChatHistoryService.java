@@ -42,22 +42,21 @@ public class ChatHistoryService {
 
     /**
      * Загружает N последних сообщений для указанной сессии.
-     * <p>
      * Результат преобразуется в список объектов {@link Message}, совместимых со Spring AI.
      *
-     * @param sessionId  ID сессии чата.
-     * @param lastN      Количество последних сообщений для загрузки.
+     * @param sessionId ID сессии чата.
+     * @param lastN     Количество последних сообщений для загрузки.
      * @return Список сообщений, отсортированных от старых к новым.
      */
     @Transactional(readOnly = true)
     public List<Message> getLastNMessages(UUID sessionId, int lastN) {
         // Используем PageRequest для эффективного LIMIT-запроса в БД
         PageRequest pageRequest = PageRequest.of(0, lastN, Sort.by(Sort.Direction.DESC, "createdAt"));
-        
+
         List<ChatMessage> recentMessages = chatMessageRepository.findBySessionId(sessionId, pageRequest);
 
         log.debug("Загружено {} сообщений для сессии {}", recentMessages.size(), sessionId);
-        
+
         // Преобразуем сущности БД в DTO Spring AI и разворачиваем в правильный хронологический порядок
         return recentMessages.stream()
                 .map(this::toSpringAiMessage)

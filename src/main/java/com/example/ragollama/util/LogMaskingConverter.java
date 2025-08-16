@@ -8,7 +8,6 @@ import java.util.regex.Pattern;
 
 /**
  * Кастомный конвертер для Logback, который маскирует конфиденциальные данные в логах.
- * <p>
  * Этот конвертер находит в лог-сообщениях паттерны, соответствующие
  * конфиденциальным данным (например, поля "password"), и заменяет их значения
  * на маску (например, "********"). Используется в {@code logback-spring.xml}.
@@ -18,12 +17,10 @@ public class LogMaskingConverter extends ClassicConverter {
     // Паттерн для поиска полей типа "password": "someValue"
     private static final Pattern SENSITIVE_DATA_PATTERN = Pattern.compile(
             "(\"password\"\\s*:\\s*\")([^\"]*)(\")",
-            Pattern.CASE_INSENSITIVE
-    );
+            Pattern.CASE_INSENSITIVE);
 
     @Override
     public String convert(ILoggingEvent event) {
-        // Получаем отформатированное сообщение и применяем маскирование
         return mask(event.getFormattedMessage());
     }
 

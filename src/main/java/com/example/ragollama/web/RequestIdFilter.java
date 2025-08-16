@@ -12,7 +12,6 @@ import java.util.UUID;
 
 /**
  * Сервлет-фильтр для добавления уникального ID к каждому HTTP-запросу.
- * <p>
  * Этот ID используется для сквозной трассировки запросов в логах.
  * Он добавляется в MDC (Mapped Diagnostic Context) Logback и в заголовок ответа.
  */
@@ -30,12 +29,10 @@ public class RequestIdFilter extends OncePerRequestFilter {
                 // Если ID нет, генерируем новый
                 requestId = UUID.randomUUID().toString();
             }
-
             // Кладем ID в MDC, чтобы он был доступен в паттерне логгирования (%X{requestId})
             MDC.put(MDC_KEY, requestId);
             // Добавляем ID в заголовок ответа, чтобы клиент тоже его видел
             response.setHeader(REQUEST_ID_HEADER, requestId);
-
             // Передаем управление дальше по цепочке фильтров
             filterChain.doFilter(request, response);
         } finally {

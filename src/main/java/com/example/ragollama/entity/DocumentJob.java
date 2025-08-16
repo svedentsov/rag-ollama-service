@@ -2,10 +2,7 @@ package com.example.ragollama.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -14,20 +11,22 @@ import java.util.UUID;
 
 /**
  * Сущность JPA, представляющая задачу на обработку (индексацию) документа.
- * <p>
  * Каждая запись в таблице {@code document_jobs} соответствует одному запросу
  * на загрузку документа и отслеживает его состояние в процессе фоновой обработки.
  */
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@ToString(exclude = {"textContent", "errorMessage"}) // Исключаем большие текстовые поля
+@EqualsAndHashCode(of = "id") // Реализуем equals/hashCode только по ID
 @Entity
 @Table(name = "document_jobs")
 public class DocumentJob {
 
     /**
-     * Уникальный идентификатор задачи (Job ID).
+     * Уникальный идентификатор задачи. Является основой для equals и hashCode.
      */
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -53,7 +52,7 @@ public class DocumentJob {
      * Полное текстовое содержимое документа, ожидающего обработки.
      */
     @NotNull
-    @Lob // Large Object, указывает, что поле может хранить большой объем текста.
+    @Lob
     @Column(name = "text_content", nullable = false, columnDefinition = "TEXT")
     private String textContent;
 
@@ -65,16 +64,33 @@ public class DocumentJob {
     private String errorMessage;
 
     /**
-     * Временная метка создания задачи. Автоматически устанавливается Hibernate.
+     * Временная метка создания задачи.
      */
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
     /**
-     * Временная метка последнего обновления задачи. Автоматически обновляется Hibernate.
+     * Временная метка последнего обновления задачи.
      */
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
+
+    /**
+     * Переводит задачу в статус COMPLETED.
+     */
+    public void markAsCompleted() {
+        this.status = JobStatus.COMPLETED;
+        this.errorMessage = null;
+    }
+
+    /**
+     * Переводит задачу в статус FAILED и сохраняет сообщение об ошибке.
+     * @param reason Причина сбоя.
+     */
+    public void markAsFailed(String reason) {
+        this.status = JobStatus.FAILED;
+        this.errorMessage = reason;
+    }
 }

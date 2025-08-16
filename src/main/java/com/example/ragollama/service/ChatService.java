@@ -17,15 +17,15 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Сервис для обработки бизнес-логики чата.
- * Отвечает за взаимодействие с LLM, управление историей диалога
- * и проверку пользовательского ввода на безопасность.
+ * Отвечает за взаимодействие с LLM через безопасный {@link LlmClient},
+ * управление историей диалога и проверку пользовательского ввода на безопасность.
  */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class ChatService {
 
-    private final ResilientOllamaClient resilientOllamaClient;
+    private final LlmClient llmClient;
     private final ChatHistoryService chatHistoryService;
     private final PromptGuardService promptGuardService;
     private final AppProperties appProperties;
@@ -44,7 +44,7 @@ public class ChatService {
         chatHistoryService.saveMessage(sessionId, MessageRole.USER, request.message());
         List<Message> chatHistory = chatHistoryService.getLastNMessages(sessionId, maxHistory);
         Prompt prompt = new Prompt(chatHistory);
-        return resilientOllamaClient.callChat(prompt)
+        return llmClient.callChat(prompt)
                 .thenApply(aiResponseContent -> {
                     log.debug("Получен ответ AI для сессии {}: '{}'", sessionId, aiResponseContent);
                     chatHistoryService.saveMessage(sessionId, MessageRole.ASSISTANT, aiResponseContent);
@@ -53,7 +53,9 @@ public class ChatService {
     }
 
     /**
-     * Обрабатывает чат-запрос в потоковом режиме.
+     * Обрабатывает чат-запрос в истинно потоковом режиме.
+     * Полный текст ответа собирается и сохраняется в историю только после
+     * успешного завершения потока.
      *
      * @param request DTO с запросом.
      * @return Реактивный поток {@link Flux} с частями ответа.
@@ -66,14 +68,21 @@ public class ChatService {
         chatHistoryService.saveMessage(sessionId, MessageRole.USER, request.message());
         List<Message> chatHistory = chatHistoryService.getLastNMessages(sessionId, maxHistory);
         Prompt prompt = new Prompt(chatHistory);
-        return resilientOllamaClient.streamChat(prompt)
-                .doOnNext(chunk -> log.trace("Сессия {}: получен чанк '{}'", sessionId, chunk))
-                .collectList()
-                .doOnSuccess(chunks -> {
-                    String fullResponse = String.join("", chunks);
-                    chatHistoryService.saveMessage(sessionId, MessageRole.ASSISTANT, fullResponse);
-                    log.debug("Полный потоковый ответ для сессии {} сохранен.", sessionId);
+        final StringBuilder fullResponseBuilder = new StringBuilder();
+        return llmClient.streamChat(prompt)
+                .doOnNext(chunk -> {
+                    log.trace("Сессия {}: получен чанк '{}'", sessionId, chunk);
+                    fullResponseBuilder.append(chunk);
                 })
-                .flatMapMany(Flux::fromIterable);
+                .doOnComplete(() -> {
+                    String fullResponse = fullResponseBuilder.toString();
+                    if (!fullResponse.isBlank()) {
+                        chatHistoryService.saveMessage(sessionId, MessageRole.ASSISTANT, fullResponse);
+                        log.debug("Полный потоковый ответ для сессии {} сохранен.", sessionId);
+                    } else {
+                        log.warn("Потоковый ответ для сессии {} был пустым. История не сохранена.", sessionId);
+                    }
+                })
+                .doOnError(error -> log.error("Ошибка в потоке чата для сессии {}:", sessionId, error));
     }
 }

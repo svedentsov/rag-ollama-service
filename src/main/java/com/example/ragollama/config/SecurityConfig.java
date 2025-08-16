@@ -11,9 +11,7 @@ import static org.springframework.security.config.http.SessionCreationPolicy.STA
 
 /**
  * Конфигурация безопасности Spring Security.
- * <p>
- * Этот класс настраивает правила доступа к HTTP-эндпоинтам,
- * управляет сессиями и защитой от CSRF.
+ * Этот класс настраивает правила доступа к HTTP-эндпоинтам, управляет сессиями и защитой от CSRF.
  */
 @Configuration
 @EnableWebSecurity
@@ -43,8 +41,6 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(req -> req
-                        // Для демонстрационных целей разрешаем доступ ко всем эндпоинтам.
-                        // В реальном приложении здесь будут более строгие правила.
                         .requestMatchers("/**").permitAll()
                         .anyRequest().authenticated()
                 )

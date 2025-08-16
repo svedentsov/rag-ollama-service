@@ -2,45 +2,42 @@ package com.example.ragollama.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
  * Сущность JPA, представляющая одно сообщение в истории чата.
- * <p>
  * Каждая запись в таблице {@code chat_messages} соответствует одному
  * сообщению от пользователя или ассистента в рамках определенной сессии.
  */
-@Data
+@Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@ToString(exclude = "content") // Исключаем большое текстовое поле из toString()
+@EqualsAndHashCode(of = "id") // Реализуем equals/hashCode только по ID
 @Entity
 @Table(name = "chat_messages")
 public class ChatMessage {
 
     /**
-     * Уникальный идентификатор сообщения.
+     * Уникальный идентификатор сообщения. Является основой для equals и hashCode.
      */
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     /**
-     * Идентификатор сессии чата, к которой относится сообщение.
-     * Позволяет группировать сообщения одного диалога.
+     * Идентификатор сессии чата. Неизменяем после создания.
      */
     @NotNull
     @Column(name = "session_id", nullable = false, updatable = false)
     private UUID sessionId;
 
     /**
-     * Роль отправителя сообщения (пользователь или ассистент).
+     * Роль отправителя сообщения. Неизменяема после создания.
      *
      * @see MessageRole
      */
@@ -50,15 +47,15 @@ public class ChatMessage {
     private MessageRole role;
 
     /**
-     * Текстовое содержимое сообщения.
+     * Текстовое содержимое сообщения. Неизменяемо после создания.
      */
     @NotNull
-    @Lob // Large Object, указывает, что поле может хранить большой объем текста.
+    @Lob
     @Column(name = "content", nullable = false, updatable = false, columnDefinition = "TEXT")
     private String content;
 
     /**
-     * Временная метка создания сообщения.
+     * Временная метка создания сообщения. Неизменяема после создания.
      */
     @NotNull
     @Column(name = "created_at", nullable = false, updatable = false)
