@@ -46,20 +46,26 @@ public class DocumentJobService {
 
     /**
      * Помечает задачу как успешно завершенную.
+     * Выполняется в новой, изолированной транзакции.
      *
      * @param jobId ID задачи для обновления.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markAsCompleted(UUID jobId) {
         jobRepository.findById(jobId).ifPresent(job -> {
-            job.setStatus(JobStatus.COMPLETED);
-            jobRepository.save(job);
-            log.info("Задача {} успешно завершена.", jobId);
+            if (job.getStatus() == JobStatus.PROCESSING) {
+                job.setStatus(JobStatus.COMPLETED);
+                jobRepository.save(job);
+                log.info("Задача {} успешно завершена.", jobId);
+            } else {
+                log.warn("Попытка завершить задачу {} с некорректным статусом: {}", jobId, job.getStatus());
+            }
         });
     }
 
     /**
      * Помечает задачу как проваленную, сохраняя сообщение об ошибке.
+     * Выполняется в новой, изолированной транзакции.
      *
      * @param jobId   ID задачи для обновления.
      * @param message Сообщение об ошибке.
@@ -67,10 +73,14 @@ public class DocumentJobService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markAsFailed(UUID jobId, String message) {
         jobRepository.findById(jobId).ifPresent(job -> {
-            job.setStatus(JobStatus.FAILED);
-            job.setErrorMessage(message);
-            jobRepository.save(job);
-            log.error("Задача {} провалена. Причина: {}", jobId, message);
+            if (job.getStatus() == JobStatus.PROCESSING) {
+                job.setStatus(JobStatus.FAILED);
+                job.setErrorMessage(message);
+                jobRepository.save(job);
+                log.error("Задача {} провалена. Причина: {}", jobId, message);
+            } else {
+                log.warn("Попытка пометить задачу {} как проваленную с некорректным статусом: {}", jobId, job.getStatus());
+            }
         });
     }
 }
