@@ -17,8 +17,11 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Сервис для обработки бизнес-логики чата.
- * Отвечает за взаимодействие с LLM через безопасный {@link LlmClient},
- * управление историей диалога и проверку пользовательского ввода на безопасность.
+ * Эта версия устраняет дублирование кода путем вынесения общей логики
+ * подготовки (валидация, управление сессией, загрузка истории)
+ * в приватный метод {@link #prepareChatContext(ChatRequest)}.
+ * Публичные методы теперь отвечают только за свою основную задачу:
+ * либо получить полный ответ, либо организовать потоковую передачу.
  */
 @Service
 @Slf4j
@@ -31,58 +34,77 @@ public class ChatService {
     private final AppProperties appProperties;
 
     /**
+     * Внутренний record для передачи подготовленного контекста между методами.
+     *
+     * @param prompt    Готовый к отправке промпт с историей сообщений.
+     * @param sessionId Идентификатор текущей сессии чата.
+     */
+    private record ChatContext(Prompt prompt, UUID sessionId) {}
+
+    /**
      * Обрабатывает чат-запрос асинхронно, возвращая полный ответ.
      *
-     * @param request DTO с запросом.
-     * @return CompletableFuture с финальным ответом.
+     * @param request DTO с запросом от пользователя.
+     * @return {@link CompletableFuture} с финальным {@link ChatResponse}.
      */
     public CompletableFuture<ChatResponse> processChatRequestAsync(ChatRequest request) {
-        promptGuardService.checkForInjection(request.message());
-        final UUID sessionId = request.sessionId() != null ? request.sessionId() : UUID.randomUUID();
-        final int maxHistory = appProperties.chat().history().maxMessages();
-        log.info("Обработка запроса в чат для сессии ID: {}. Глубина истории: {}", sessionId, maxHistory);
-        chatHistoryService.saveMessage(sessionId, MessageRole.USER, request.message());
-        List<Message> chatHistory = chatHistoryService.getLastNMessages(sessionId, maxHistory);
-        Prompt prompt = new Prompt(chatHistory);
-        return llmClient.callChat(prompt)
+        ChatContext context = prepareChatContext(request);
+        log.info("Обработка асинхронного запроса в чат для сессии ID: {}", context.sessionId());
+
+        return llmClient.callChat(context.prompt())
                 .thenApply(aiResponseContent -> {
-                    log.debug("Получен ответ AI для сессии {}: '{}'", sessionId, aiResponseContent);
-                    chatHistoryService.saveMessage(sessionId, MessageRole.ASSISTANT, aiResponseContent);
-                    return new ChatResponse(aiResponseContent, sessionId);
+                    log.debug("Получен полный ответ AI для сессии {}.", context.sessionId());
+                    chatHistoryService.saveMessage(context.sessionId(), MessageRole.ASSISTANT, aiResponseContent);
+                    return new ChatResponse(aiResponseContent, context.sessionId());
                 });
     }
 
     /**
-     * Обрабатывает чат-запрос в истинно потоковом режиме.
-     * Полный текст ответа собирается и сохраняется в историю только после
-     * успешного завершения потока.
+     * Обрабатывает чат-запрос в потоковом режиме (Server-Sent Events).
      *
-     * @param request DTO с запросом.
-     * @return Реактивный поток {@link Flux} с частями ответа.
+     * @param request DTO с запросом от пользователя.
+     * @return Реактивный поток {@link Flux}, передающий части ответа по мере их генерации.
      */
     public Flux<String> processChatRequestStream(ChatRequest request) {
-        promptGuardService.checkForInjection(request.message());
-        final UUID sessionId = request.sessionId() != null ? request.sessionId() : UUID.randomUUID();
-        final int maxHistory = appProperties.chat().history().maxMessages();
-        log.info("Обработка потокового запроса в чат для сессии ID: {}", sessionId);
-        chatHistoryService.saveMessage(sessionId, MessageRole.USER, request.message());
-        List<Message> chatHistory = chatHistoryService.getLastNMessages(sessionId, maxHistory);
-        Prompt prompt = new Prompt(chatHistory);
+        ChatContext context = prepareChatContext(request);
+        log.info("Обработка потокового запроса в чат для сессии ID: {}", context.sessionId());
+
         final StringBuilder fullResponseBuilder = new StringBuilder();
-        return llmClient.streamChat(prompt)
+        return llmClient.streamChat(context.prompt())
                 .doOnNext(chunk -> {
-                    log.trace("Сессия {}: получен чанк '{}'", sessionId, chunk);
+                    log.trace("Сессия {}: получен чанк.", context.sessionId());
                     fullResponseBuilder.append(chunk);
                 })
                 .doOnComplete(() -> {
                     String fullResponse = fullResponseBuilder.toString();
                     if (!fullResponse.isBlank()) {
-                        chatHistoryService.saveMessage(sessionId, MessageRole.ASSISTANT, fullResponse);
-                        log.debug("Полный потоковый ответ для сессии {} сохранен.", sessionId);
+                        chatHistoryService.saveMessage(context.sessionId(), MessageRole.ASSISTANT, fullResponse);
+                        log.debug("Полный потоковый ответ для сессии {} сохранен.", context.sessionId());
                     } else {
-                        log.warn("Потоковый ответ для сессии {} был пустым. История не сохранена.", sessionId);
+                        log.warn("Потоковый ответ для сессии {} был пустым. История не сохранена.", context.sessionId());
                     }
                 })
-                .doOnError(error -> log.error("Ошибка в потоке чата для сессии {}:", sessionId, error));
+                .doOnError(error -> log.error("Ошибка в потоке чата для сессии {}:", context.sessionId(), error));
+    }
+
+    /**
+     * Подготавливает контекст для чата: валидирует ввод, управляет сессией,
+     * сохраняет сообщение пользователя и формирует финальный промпт с историей.
+     *
+     * @param request DTO с запросом от пользователя.
+     * @return Объект {@link ChatContext}, содержащий промпт и ID сессии.
+     */
+    private ChatContext prepareChatContext(ChatRequest request) {
+        promptGuardService.checkForInjection(request.message());
+
+        final UUID sessionId = (request.sessionId() != null) ? request.sessionId() : UUID.randomUUID();
+        final int maxHistory = appProperties.chat().history().maxMessages();
+
+        chatHistoryService.saveMessage(sessionId, MessageRole.USER, request.message());
+
+        List<Message> chatHistory = chatHistoryService.getLastNMessages(sessionId, maxHistory);
+        Prompt prompt = new Prompt(chatHistory);
+
+        return new ChatContext(prompt, sessionId);
     }
 }
