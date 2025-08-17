@@ -3,6 +3,7 @@ package com.example.ragollama.service;
 import com.example.ragollama.dto.RagQueryResponse;
 import com.example.ragollama.dto.StreamingResponsePart;
 import com.example.ragollama.exception.GenerationException;
+import com.example.ragollama.service.generation.NoContextStrategy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -12,12 +13,11 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Сервис, отвечающий исключительно за этап генерации ответа в RAG-конвейере.
- * Взаимодействует с LLM через отказоустойчивый {@link LlmClient} и формирует
- * финальный DTO-ответ, включая обработку случая отсутствия контекста.
+ * Сервис, отвечающий за этап генерации ответа в RAG-конвейере.
  */
 @Slf4j
 @Service
@@ -25,25 +25,17 @@ import java.util.concurrent.CompletableFuture;
 public class GenerationService {
 
     private final LlmClient llmClient;
-    private static final String NO_CONTEXT_ANSWER = "Извините, я не смог найти релевантную информацию в базе знаний по вашему вопросу.";
+    private final NoContextStrategy noContextStrategy;
 
-    /**
-     * Генерирует полный ответ от LLM асинхронно.
-     *
-     * @param prompt    Собранный и готовый к отправке промпт.
-     * @param documents Список документов, использованных для контекста. Может быть пустым.
-     * @return {@link CompletableFuture} с финальным {@link RagQueryResponse}.
-     * @throws GenerationException в случае ошибки взаимодействия с LLM.
-     */
-    public CompletableFuture<RagQueryResponse> generate(Prompt prompt, List<Document> documents) {
+    public CompletableFuture<RagQueryResponse> generate(Prompt prompt, List<Document> documents, UUID sessionId) {
         if (documents == null || documents.isEmpty()) {
-            log.warn("На этап Generation не передано документов. Возвращается ответ-заглушка.");
-            return CompletableFuture.completedFuture(new RagQueryResponse(NO_CONTEXT_ANSWER, List.of()));
+            log.warn("На этап Generation не передано документов. Применяется стратегия '{}'.", noContextStrategy.getClass().getSimpleName());
+            return noContextStrategy.handle(prompt, sessionId).toFuture();
         }
         return llmClient.callChat(prompt)
                 .thenApply(generatedAnswer -> {
                     List<String> sourceCitations = extractCitations(documents);
-                    return new RagQueryResponse(generatedAnswer, sourceCitations);
+                    return new RagQueryResponse(generatedAnswer, sourceCitations, sessionId);
                 })
                 .exceptionally(ex -> {
                     log.error("Ошибка на этапе генерации ответа LLM", ex);
@@ -51,27 +43,26 @@ public class GenerationService {
                 });
     }
 
-    /**
-     * Генерирует ответ от LLM в виде структурированного потока (SSE).
-     *
-     * @param prompt    Собранный и готовый к отправке промпт.
-     * @param documents Список документов-источников.
-     * @return {@link Flux} со структурированными частями ответа {@link StreamingResponsePart}.
-     */
-    public Flux<StreamingResponsePart> generateStructuredStream(Prompt prompt, List<Document> documents) {
+    public Flux<StreamingResponsePart> generateStructuredStream(Prompt prompt, List<Document> documents, UUID sessionId) {
         if (documents == null || documents.isEmpty()) {
             log.warn("В потоковом запросе на этап Generation не передано документов.");
-            return Flux.just(
-                    new StreamingResponsePart.Content(NO_CONTEXT_ANSWER),
-                    new StreamingResponsePart.Done("Завершено без контекста")
-            );
+            return noContextStrategy.handle(prompt, sessionId)
+                    .flatMapMany(response -> Flux.just(
+                            new StreamingResponsePart.Content(response.answer()),
+                            new StreamingResponsePart.Done("Завершено без контекста")
+                    ));
         }
+
         Flux<StreamingResponsePart> contentStream = llmClient.streamChat(prompt)
                 .map(StreamingResponsePart.Content::new);
+
         Mono<StreamingResponsePart> sourcesPart = Mono.fromSupplier(() ->
                 new StreamingResponsePart.Sources(extractCitations(documents)));
+
         Mono<StreamingResponsePart> donePart = Mono.just(new StreamingResponsePart.Done("Успешно завершено"));
-        return Flux.concat(contentStream, sourcesPart, donePart)
+
+        Mono<StreamingResponsePart> doneWithSessionPart = Mono.just(new StreamingResponsePart.Done("Успешно завершено. SessionID: " + sessionId));
+        return Flux.concat(contentStream, sourcesPart, doneWithSessionPart)
                 .doOnError(ex -> log.error("Ошибка в потоке генерации ответа LLM", ex))
                 .onErrorResume(ex -> {
                     String errorMessage = "Ошибка при генерации ответа: " + ex.getMessage();

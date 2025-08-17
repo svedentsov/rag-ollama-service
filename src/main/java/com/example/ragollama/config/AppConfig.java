@@ -4,6 +4,7 @@ import com.example.ragollama.config.properties.AppProperties;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,6 +13,7 @@ import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Hooks;
 import reactor.netty.http.client.HttpClient;
 
 import java.util.concurrent.Executors;
@@ -20,14 +22,30 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Основной конфигурационный класс приложения.
- * Определяет ключевые бины, такие как строитель {@link WebClient.Builder},
- * пулы потоков и другие общие компоненты инфраструктуры.
+ * <p>
+ * В этой версии конфигурация дополнена автоматической передачей контекста
+ * (например, MDC) в асинхронные потоки Project Reactor с помощью библиотеки
+ * `micrometer-context-propagation`. Это обеспечивает сквозную трассировку
+ * запросов в логах без необходимости ручной настройки декораторов.
  */
 @Configuration
 @RequiredArgsConstructor
 public class AppConfig {
 
     private final AppProperties appProperties;
+
+    /**
+     * Инициализирует глобальный хук Project Reactor для автоматического
+     * проброса контекста (MDC) во все реактивные цепочки.
+     * <p>
+     * Этот метод вызывается один раз при старте приложения и делает
+     * контекст доступным во всех операторах, таких как map, flatMap,
+     * doOnNext и т.д., даже при переключении потоков.
+     */
+    @PostConstruct
+    void initializeReactorContext() {
+        Hooks.enableAutomaticContextPropagation();
+    }
 
     /**
      * Создает и настраивает главный бин {@link WebClient.Builder} для всех HTTP-взаимодействий.
@@ -56,8 +74,12 @@ public class AppConfig {
      * Создает единый пул потоков для всех асинхронных задач.
      * Конфигурация пула полностью управляется через {@link AppProperties},
      * что позволяет гибко настраивать его без изменения кода.
+     * <p>
+     * <b>Примечание:</b> Ручной {@code MdcTaskDecorator} больше не нужен,
+     * так как библиотека {@code micrometer-context-propagation} автоматически
+     * оборачивает все бины типа {@code TaskExecutor} для проброса контекста.
      *
-     * @return Сконфигурированный и управляемый Spring'ом {@link AsyncTaskExecutor}.
+     * @return Сконфигурированный и управляемый Spring'om {@link AsyncTaskExecutor}.
      */
     @Bean
     public AsyncTaskExecutor applicationTaskExecutor() {
@@ -67,7 +89,6 @@ public class AppConfig {
         executor.setMaxPoolSize(executorProps.maxPoolSize());
         executor.setQueueCapacity(executorProps.queueCapacity());
         executor.setThreadNamePrefix(executorProps.threadNamePrefix());
-        executor.setTaskDecorator(new MdcTaskDecorator());
         executor.initialize();
         return executor;
     }

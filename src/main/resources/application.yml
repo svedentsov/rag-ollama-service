@@ -117,6 +117,8 @@ resilience4j:
         minimum-number-of-calls: 3 # Мин. вызовов для срабатывания.
         failure-rate-threshold: 60 # % ошибок для размыкания цепи.
         wait-duration-in-open-state: 15s # Время в "разомкнутом" состоянии.
+        record-exceptions: # Считать DataAccessException как сбой
+          - org.springframework.dao.DataAccessException
   retry:
     instances:
       ollama:
@@ -124,6 +126,13 @@ resilience4j:
         wait-duration: 5s                # Пауза между попытками.
         # Повторять только при явных сетевых ошибках или таймаутах, а не при 5xx ответах.
         retry-on-exception: "org.springframework.web.reactive.function.client.WebClientRequestException, org.springframework.web.client.ResourceAccessException, java.util.concurrent.TimeoutException"
+      database: # Новая конфигурация для БД
+        max-attempts: 3
+        wait-duration: 200ms # Короткая задержка для быстрых операций с БД
+        retry-exceptions: # Повторять только при транзиентных ошибках
+          - org.springframework.dao.TransientDataAccessException
+          - java.util.concurrent.TimeoutException
+          - java.sql.SQLTransientException
   timelimiter:
     instances:
       ollama:
@@ -174,3 +183,27 @@ app:
     max-pool-size: 16
     queue-capacity: 100
     thread-name-prefix: "app-async-"
+  # Настройки для векторного хранилища (pgvector)
+  vector-store:
+    # Параметры HNSW-индекса для тюнинга производительности и точности.
+    # Изменять с осторожностью, требуется профилирование.
+    index:
+      # Количество соседей на слой графа.
+      # Trade-off: выше значение -> лучше точность, медленнее индексация.
+      m: 32
+      # Глубина поиска при построении индекса.
+      # Trade-off: выше значение -> лучше качество индекса, значительно медленнее индексация.
+      ef-construction: 128
+      # Глубина поиска во время запроса.
+      # Trade-off: выше значение -> лучше точность (recall), выше задержка (latency).
+      ef-search: 64
+  rag:
+    # Стратегия поведения, если поиск не нашел документов.
+    # "fixed" - вернуть стандартный ответ (быстро, безопасно).
+    # "delegate" - (потребует реализации) попросить LLM ответить из общих знаний.
+    no-context-strategy: fixed
+    # Стратегия упорядочивания документов для контекста.
+    # "passthrough" - по релевантности (по умолчанию).
+    # "sandwich" - для борьбы с "Lost in the Middle".
+    # "recency" - приоритет свежим документам (требует 'timestamp' в метаданных).
+    arrangement-strategy: sandwich # Выберите нужную стратегию здесь

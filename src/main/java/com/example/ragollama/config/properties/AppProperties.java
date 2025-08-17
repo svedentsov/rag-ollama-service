@@ -20,6 +20,7 @@ import java.time.Duration;
  * @param ingestion       Настройки для процесса фоновой индексации документов.
  * @param httpClient      Настройки для HTTP-клиентов, таких как WebClient.
  * @param taskExecutor    Настройки для основного пула асинхронных задач.
+ * @param vectorStore     Настройки для векторного хранилища, включая параметры индекса.
  */
 @Validated
 @ConfigurationProperties(prefix = "app")
@@ -31,7 +32,8 @@ public record AppProperties(
         @NotNull Chat chat,
         @NotNull Ingestion ingestion,
         @NotNull HttpClient httpClient,
-        @NotNull TaskExecutor taskExecutor
+        @NotNull TaskExecutor taskExecutor,
+        @NotNull VectorStoreProperties vectorStore
 ) {
     /** Настройки, связанные с шаблонами промптов. */
     public record Prompt(@NotBlank String ragTemplatePath) {}
@@ -83,4 +85,25 @@ public record AppProperties(
             @Min(0) int queueCapacity,
             @NotBlank String threadNamePrefix
     ) {}
+
+    /**
+     * Настройки, специфичные для векторного хранилища.
+     * @param index Параметры для тюнинга HNSW-индекса в pgvector.
+     */
+    @Validated
+    public record VectorStoreProperties(@NotNull Index index) {
+        /**
+         * Параметры для HNSW-индекса, влияющие на баланс скорости и точности поиска.
+         *
+         * @param m              Количество соседей на каждом слое графа. Увеличение улучшает точность, но замедляет индексацию.
+         * @param efConstruction Глубина поиска при построении индекса. Увеличение улучшает качество индекса, но сильно замедляет индексацию.
+         * @param efSearch       Глубина поиска во время запроса. Ключевой параметр для тюнинга: увеличение повышает точность (recall), но увеличивает задержку.
+         */
+        @Validated
+        public record Index(
+                @Min(4) @Max(128) int m,
+                @Min(8) @Max(1024) int efConstruction,
+                @Min(4) @Max(1024) int efSearch
+        ) {}
+    }
 }

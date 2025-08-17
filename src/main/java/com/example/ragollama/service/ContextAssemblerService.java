@@ -1,6 +1,7 @@
 package com.example.ragollama.service;
 
 import com.example.ragollama.config.properties.AppProperties;
+import com.example.ragollama.rag.strategy.ContextArrangementStrategy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Service;
@@ -10,63 +11,72 @@ import java.util.StringJoiner;
 
 /**
  * Сервис для интеллектуальной сборки контекста для RAG-промпта.
- * Его основная задача - собрать строку контекста из списка документов,
- * убедившись, что итоговый размер не превышает заданный лимит по токенам.
- * Использует {@link TokenizationService} для точного подсчета, что
- * предотвращает переполнение контекстного окна LLM и обеспечивает
- * максимальное использование доступного пространства.
+ * <p>
+ * Эта версия использует паттерн "Стратегия" для переупорядочивания
+ * документов и реализует механизм "умного" отсечения (precision truncation).
+ * Если последний релевантный документ не помещается целиком, сервис попытается
+ * включить его начало, обрезанное точно по оставшемуся лимиту токенов.
  */
 @Service
 @Slf4j
 public class ContextAssemblerService {
 
     private final TokenizationService tokenizationService;
+    private final ContextArrangementStrategy arrangementStrategy;
     private final int maxContextTokens;
 
-    /**
-     * Конструктор, который получает настройки из централизованного бина AppProperties.
-     *
-     * @param tokenizationService Сервис для подсчета токенов.
-     * @param appProperties       Централизованный объект с настройками приложения.
-     */
-    public ContextAssemblerService(TokenizationService tokenizationService, AppProperties appProperties) {
+    // Минимальное количество токенов, которое имеет смысл добавлять при отсечении.
+    // Предотвращает добавление бессмысленных обрывков из 1-2 слов.
+    private static final int MIN_TRUNCATION_TOKENS = 20;
+
+    public ContextAssemblerService(
+            TokenizationService tokenizationService,
+            ContextArrangementStrategy arrangementStrategy,
+            AppProperties appProperties) {
         this.tokenizationService = tokenizationService;
+        this.arrangementStrategy = arrangementStrategy;
         this.maxContextTokens = appProperties.context().maxTokens();
-        log.info("ContextAssemblerService инициализирован с лимитом в {} токенов.", maxContextTokens);
+        log.info("ContextAssemblerService инициализирован с лимитом в {} токенов и умным отсечением.", maxContextTokens);
     }
 
-    /**
-     * Собирает контекст из списка документов, точно соблюдая лимит по токенам.
-     * Итеративно проходит по документам (которые должны быть предварительно
-     * отсортированы по релевантности) и добавляет их содержимое в контекст,
-     * пока не будет достигнут предел по токенам.
-     *
-     * @param documents Список документов-кандидатов для включения в контекст.
-     * @return Финальная строка контекста, готовая для вставки в промпт.
-     */
     public String assembleContext(List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return "";
+        }
+
+        List<Document> arrangedDocs = arrangementStrategy.arrange(documents);
+
         StringJoiner contextJoiner = new StringJoiner("\n---\n");
         int currentTokenCount = 0;
         int documentCount = 0;
 
-        // Токены для разделителя "\n---\n"
         final int separatorTokens = tokenizationService.countTokens("\n---\n");
 
-        for (Document doc : documents) {
-            int documentTokens = tokenizationService.countTokens(doc.getText());
-            int potentialTotalTokens = currentTokenCount + documentTokens;
-            if (documentCount > 0) { // Добавляем токены разделителя для всех, кроме первого документа
-                potentialTotalTokens += separatorTokens;
-            }
+        for (Document doc : arrangedDocs) {
+            String docText = doc.getText();
+            int documentTokens = tokenizationService.countTokens(docText);
 
-            if (potentialTotalTokens <= maxContextTokens) {
-                contextJoiner.add(doc.getText());
-                currentTokenCount = potentialTotalTokens;
+            int requiredTokens = documentTokens + (documentCount > 0 ? separatorTokens : 0);
+
+            if (currentTokenCount + requiredTokens <= maxContextTokens) {
+                // Документ помещается целиком
+                contextJoiner.add(docText);
+                currentTokenCount += requiredTokens;
                 documentCount++;
             } else {
+                // Документ не помещается целиком, пытаемся добавить его часть
+                int remainingTokens = maxContextTokens - currentTokenCount - (documentCount > 0 ? separatorTokens : 0);
+                if (remainingTokens >= MIN_TRUNCATION_TOKENS) {
+                    String truncatedText = tokenizationService.truncate(docText, remainingTokens);
+                    contextJoiner.add(truncatedText);
+                    currentTokenCount += tokenizationService.countTokens(truncatedText) + (documentCount > 0 ? separatorTokens : 0);
+                    documentCount++;
+                    log.debug("Последний документ был усечен, чтобы поместиться в контекст. Добавлено ~{} токенов.", remainingTokens);
+                }
+                // Если места осталось слишком мало, просто прекращаем сборку
                 log.debug("Достигнут лимит контекста ({}/{} токенов). Добавлено {} из {} документов. Пропускаем остальные.",
-                        currentTokenCount, maxContextTokens, documentCount, documents.size());
-                break; // Прерываем цикл, так как лимит достигнут
+                        currentTokenCount, maxContextTokens, arrangedDocs.size());
+                break;
             }
         }
 

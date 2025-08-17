@@ -5,6 +5,7 @@ import com.knuddels.jtokkit.Encodings;
 import com.knuddels.jtokkit.api.Encoding;
 import com.knuddels.jtokkit.api.EncodingRegistry;
 import com.knuddels.jtokkit.api.EncodingType;
+import com.knuddels.jtokkit.api.IntArrayList;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -13,11 +14,9 @@ import org.springframework.stereotype.Service;
 import java.util.Optional;
 
 /**
- * Сервис для подсчета токенов в тексте.
- * Инкапсулирует работу с библиотекой jtokkit и предоставляет простой
- * интерфейс для подсчета токенов. Выделен в отдельный сервис для
- * следования принципу единственной ответственности и возможности
- * переиспользования в других частях приложения.
+ * Сервис для подсчета и манипуляции токенами в тексте.
+ * Инкапсулирует работу с высокопроизводительной библиотекой jtokkit,
+ * корректно обрабатывая ее специфичные типы данных, такие как {@link IntArrayList}.
  */
 @Slf4j
 @Service
@@ -26,11 +25,6 @@ public class TokenizationService {
     private final String encodingModel;
     private Encoding encoding;
 
-    /**
-     * Конструктор, использующий централизованный бин конфигурации.
-     *
-     * @param appProperties Объект с настройками приложения.
-     */
     public TokenizationService(AppProperties appProperties) {
         this.encodingModel = appProperties.tokenization().encodingModel();
     }
@@ -60,9 +54,6 @@ public class TokenizationService {
 
     /**
      * Подсчитывает количество токенов в заданной строке.
-     * Результат кэшируется, так как токенизация одного и того же текста
-     * всегда дает одинаковый результат. Это может быть полезно, если
-     * одни и те же чанки документов часто попадают в контекст.
      *
      * @param text Текст для токенизации.
      * @return Количество токенов.
@@ -76,5 +67,40 @@ public class TokenizationService {
             throw new IllegalStateException("TokenizationService не инициализирован: encoding == null");
         }
         return encoding.countTokens(text);
+    }
+
+    /**
+     * Обрезает текст до заданного лимита токенов.
+     * <p>
+     * Этот метод корректно работает с токенами, используя нативный для
+     * jtokkit тип {@link IntArrayList} для максимальной производительности.
+     * Он кодирует текст, берет необходимое количество токенов и декодирует
+     * их обратно в строку.
+     *
+     * @param text      Исходный текст.
+     * @param maxTokens Максимальное количество токенов в результирующей строке.
+     * @return Обрезанная строка.
+     */
+    public String truncate(String text, int maxTokens) {
+        if (text == null || text.isEmpty() || maxTokens <= 0) {
+            return "";
+        }
+        if (encoding == null) {
+            throw new IllegalStateException("TokenizationService не инициализирован: encoding == null");
+        }
+
+        // Используем IntArrayList
+        IntArrayList tokens = encoding.encode(text);
+        if (tokens.size() <= maxTokens) {
+            return text;
+        }
+
+        // Создаем новый IntArrayList из подсписка
+        IntArrayList truncatedTokens = new IntArrayList(maxTokens);
+        for (int i = 0; i < maxTokens; i++) {
+            truncatedTokens.add(tokens.get(i));
+        }
+
+        return encoding.decode(truncatedTokens);
     }
 }

@@ -1,6 +1,7 @@
 package com.example.ragollama.service;
 
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.springframework.stereotype.Service;
@@ -10,7 +11,9 @@ import java.util.function.Supplier;
 /**
  * Сервис для централизованного управления метриками Micrometer.
  * Предоставляет удобные методы для инкремента счетчиков и измерения времени выполнения
- * операций, что упрощает сбор данных для мониторинга и observability.
+ * операций. Эта версия расширена для сбора специфичных для RAG-конвейера метрик,
+ * таких как количество найденных документов и частота "пустых" ответов от поиска,
+ * что критически важно для мониторинга качества системы.
  */
 @Service
 public class MetricService {
@@ -18,12 +21,12 @@ public class MetricService {
     private final MeterRegistry meterRegistry;
     private final Counter cacheHitCounter;
     private final Counter cacheMissCounter;
+    private final Counter emptyRetrievalCounter;
+    private final Counter successfulRetrievalCounter;
+    private final DistributionSummary retrievedDocumentsSummary;
 
     /**
      * Конструктор, который инициализирует реестр метрик и создает основные счетчики.
-     * <p>
-     * Счетчики создаются один раз при старте приложения, что является
-     * более эффективным подходом, чем их создание "на лету".
      *
      * @param meterRegistry Реестр метрик, предоставляемый Spring Boot Actuator.
      */
@@ -33,9 +36,25 @@ public class MetricService {
                 .tag("result", "hit")
                 .description("Количество попаданий в кэш")
                 .register(meterRegistry);
+
         this.cacheMissCounter = Counter.builder("cache.requests")
                 .tag("result", "miss")
                 .description("Количество промахов кэша")
+                .register(meterRegistry);
+
+        this.emptyRetrievalCounter = Counter.builder("rag.retrieval.results")
+                .tag("status", "empty")
+                .description("Количество RAG-запросов, для которых поиск не нашел ни одного документа.")
+                .register(meterRegistry);
+
+        this.successfulRetrievalCounter = Counter.builder("rag.retrieval.results")
+                .tag("status", "found")
+                .description("Количество RAG-запросов, для которых поиск нашел хотя бы один документ.")
+                .register(meterRegistry);
+
+        this.retrievedDocumentsSummary = DistributionSummary.builder("rag.retrieval.documents.count")
+                .description("Распределение количества документов, найденных на этапе Retrieval.")
+                .baseUnit("documents")
                 .register(meterRegistry);
     }
 
@@ -81,5 +100,19 @@ public class MetricService {
                 .description("Общее количество ошибок API по коду статуса")
                 .register(meterRegistry)
                 .increment();
+    }
+
+    /**
+     * Записывает метрики, связанные с результатом этапа извлечения (Retrieval).
+     *
+     * @param count количество найденных документов.
+     */
+    public void recordRetrievedDocumentsCount(int count) {
+        if (count == 0) {
+            emptyRetrievalCounter.increment();
+        } else {
+            successfulRetrievalCounter.increment();
+        }
+        retrievedDocumentsSummary.record(count);
     }
 }
