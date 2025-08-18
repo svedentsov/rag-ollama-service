@@ -1,6 +1,6 @@
 package com.example.ragollama;
 
-import com.example.ragollama.config.properties.AppProperties;
+import com.example.ragollama.shared.config.properties.AppProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

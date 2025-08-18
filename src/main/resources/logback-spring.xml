@@ -7,7 +7,7 @@
     <springProperty scope="context" name="appName" source="spring.application.name"/>
 
     <!-- Регистрируем наш кастомный конвертер для маскирования данных -->
-    <conversionRule conversionWord="masked" converterClass="com.example.ragollama.util.LogMaskingConverter" />
+    <conversionRule conversionWord="masked" converterClass="com.example.ragollama.shared.util.LogMaskingConverter" />
 
     <!-- Аппендер для вывода логов в консоль -->
     <appender name="Console" class="ch.qos.logback.core.ConsoleAppender">
