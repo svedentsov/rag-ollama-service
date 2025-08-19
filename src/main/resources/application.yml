@@ -207,3 +207,10 @@ app:
     # "sandwich" - для борьбы с "Lost in the Middle".
     # "recency" - приоритет свежим документам (требует 'timestamp' в метаданных).
     arrangement-strategy: sandwich # Выберите нужную стратегию здесь
+    retrieval:
+      hybrid:
+        vector-search:
+          top-k: 5
+          similarity-threshold: 0.7
+        fts:
+          top-k: 10
