@@ -79,7 +79,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info, prometheus, metrics # Эндпоинты, доступные по HTTP.
+        include: health, info, prometheus, metrics, rageval # Эндпоинты, доступные по HTTP.
   endpoint:
     health:
       show-details: when_authorized # Показывать детали для health-чеков.
@@ -214,3 +214,8 @@ app:
           similarity-threshold: 0.7
         fts:
           top-k: 10
+    summarizer: # Настройки для агента-суммаризатора
+      enabled: true # Включаем/выключаем агент
+      # Здесь можно указать более быструю и дешевую модель для суммаризации,
+      # если она отличается от основной. Spring AI подхватит это.
+      # model: "llama3:8b-instruct-q5_K_M"
