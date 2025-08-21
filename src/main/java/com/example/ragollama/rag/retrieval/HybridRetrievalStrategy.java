@@ -1,5 +1,6 @@
 package com.example.ragollama.rag.retrieval;
 
+import com.example.ragollama.monitoring.KnowledgeGapService;
 import com.example.ragollama.rag.domain.reranking.RerankingService;
 import com.example.ragollama.rag.domain.retrieval.DocumentFtsRepository;
 import com.example.ragollama.rag.domain.retrieval.FusionService;
@@ -25,6 +26,10 @@ import java.util.stream.Collectors;
  * трансформированному запросу. Если найдено достаточно документов,
  * процесс завершается. В противном случае, запускается дополнительный
  * поиск по расширенному набору запросов для повышения полноты (recall).
+ * <p>
+ * Если в итоге не найдено ни одного релевантного документа, стратегия
+ * асинхронно логирует исходный запрос как "пробел в знаниях" для
+ * последующего анализа.
  */
 @Slf4j
 @Service
@@ -38,6 +43,7 @@ public class HybridRetrievalStrategy {
     private final RetrievalProperties retrievalProperties;
     private final AsyncTaskExecutor applicationTaskExecutor;
     private final MetricService metricService;
+    private final KnowledgeGapService knowledgeGapService;
 
     /**
      * Асинхронно извлекает и ранжирует документы.
@@ -49,6 +55,7 @@ public class HybridRetrievalStrategy {
      */
     public Mono<List<Document>> retrieve(List<String> enhancedQueries, String originalQuery) {
         if (enhancedQueries == null || enhancedQueries.isEmpty()) {
+            knowledgeGapService.recordGap(originalQuery);
             return Mono.just(List.of());
         }
 
@@ -87,6 +94,10 @@ public class HybridRetrievalStrategy {
                 .doOnSuccess(finalList -> {
                     log.info("Гибридный поиск завершен. Финальный список содержит {} документов.", finalList.size());
                     metricService.recordRetrievedDocumentsCount(finalList.size());
+                    // Асинхронная запись пробела в знаниях, если ничего не найдено
+                    if (finalList.isEmpty()) {
+                        knowledgeGapService.recordGap(originalQuery);
+                    }
                 });
     }
 

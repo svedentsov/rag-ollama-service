@@ -79,7 +79,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info, prometheus, metrics, rageval # Эндпоинты, доступные по HTTP.
+        include: health, info, prometheus, metrics, rageval
   endpoint:
     health:
       show-details: when_authorized # Показывать детали для health-чеков.
@@ -219,9 +219,8 @@ app:
     # "delegate" - (потребует реализации) попросить LLM ответить из общих знаний.
     no-context-strategy: fixed
     arrangement-strategy: sandwich
-    summarizer: # Настройки для Summarizer Agent
-      enabled: true # Включает/выключает агент контекстной суммаризации
-
+    summarizer:
+      enabled: false
     retrieval:
       hybrid:
         # Порог для адаптивной стратегии извлечения.
@@ -233,3 +232,14 @@ app:
           similarity-threshold: 0.7
         fts:
           top-k: 10
+
+  # Настройки для автоматической оценки качества
+  evaluation:
+    # F1-Score - гармоническое среднее между точностью (precision) и полнотой (recall).
+    # Это ключевая метрика качества поиска. Если она упадет ниже этого значения,
+    # в логах появится ошибка.
+    f1-score-threshold: 0.85
+    scheduler:
+      enabled: true
+      # Запускать каждый день в 3:00 ночи
+      cron: "0 0 3 * * ?"

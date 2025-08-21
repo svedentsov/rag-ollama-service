@@ -1,5 +1,6 @@
 package com.example.ragollama;
 
+import com.example.ragollama.evaluation.EvaluationProperties;
 import com.example.ragollama.rag.domain.reranking.RerankingProperties;
 import com.example.ragollama.rag.retrieval.RetrievalProperties;
 import com.example.ragollama.shared.config.properties.AppProperties;
@@ -14,7 +15,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableCaching
 @EnableAsync
 @EnableScheduling
-@EnableConfigurationProperties({AppProperties.class, RetrievalProperties.class, RerankingProperties.class})
+@EnableConfigurationProperties({AppProperties.class, RetrievalProperties.class, RerankingProperties.class, EvaluationProperties.class})
 public class RagOllamaApplication {
     /**
      * Точка входа в приложение.

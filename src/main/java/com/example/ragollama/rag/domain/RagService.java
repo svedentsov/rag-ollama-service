@@ -2,6 +2,7 @@ package com.example.ragollama.rag.domain;
 
 import com.example.ragollama.chat.domain.ChatHistoryService;
 import com.example.ragollama.chat.domain.model.MessageRole;
+import com.example.ragollama.monitoring.GroundingService;
 import com.example.ragollama.rag.agent.QueryProcessingPipeline;
 import com.example.ragollama.rag.api.dto.RagQueryRequest;
 import com.example.ragollama.rag.api.dto.RagQueryResponse;
@@ -43,6 +44,8 @@ public class RagService {
     private final MetricService metricService;
     private final ChatHistoryService chatHistoryService;
     private final AppProperties appProperties;
+    private final GroundingService groundingService;
+    private final ContextAssemblerService contextAssemblerService;
 
     /**
      * Внутренний record для передачи подготовленного контекста по RAG-конвейеру.
@@ -63,9 +66,17 @@ public class RagService {
     public CompletableFuture<RagQueryResponse> queryAsync(RagQueryRequest request) {
         return metricService.recordTimer("rag.requests.async",
                 () -> prepareRagFlow(request)
-                        .flatMap(context -> Mono.fromFuture(
-                                generationService.generate(context.prompt(), context.documents(), context.sessionId())
-                        ))
+                        .flatMap(context -> {
+                            // Сохраняем контекст для последующей проверки
+                            String contextString = contextAssemblerService.assembleContext(context.documents());
+                            return Mono.fromFuture(generationService.generate(context.prompt(), context.documents(), context.sessionId()))
+                                    .doOnSuccess(response -> {
+                                        // Асинхронный "fire-and-forget" вызов для проверки
+                                        if (Math.random() < 0.1) { // Проверяем 10% запросов
+                                            groundingService.verify(contextString, response.answer());
+                                        }
+                                    });
+                        })
                         .doOnSuccess(response -> saveAssistantMessage(response.sessionId(), response.answer()))
                         .toFuture()
         );

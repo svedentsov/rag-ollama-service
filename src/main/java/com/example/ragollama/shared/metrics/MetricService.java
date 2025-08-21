@@ -10,10 +10,10 @@ import java.util.function.Supplier;
 
 /**
  * Сервис для централизованного управления метриками Micrometer.
+ * <p>
  * Предоставляет удобные методы для инкремента счетчиков и измерения времени выполнения
- * операций. Эта версия расширена для сбора специфичных для RAG-конвейера метрик,
- * таких как количество найденных документов и частота "пустых" ответов от поиска,
- * что критически важно для мониторинга качества системы.
+ * операций. Включает метрики для RAG-конвейера, такие как количество найденных
+ * документов и результаты проверки "обоснованности" (grounding) ответов.
  */
 @Service
 public class MetricService {
@@ -24,9 +24,11 @@ public class MetricService {
     private final Counter emptyRetrievalCounter;
     private final Counter successfulRetrievalCounter;
     private final DistributionSummary retrievedDocumentsSummary;
+    private final Counter groundedCounter;
+    private final Counter ungroundedCounter;
 
     /**
-     * Конструктор, который инициализирует реестр метрик и создает основные счетчики.
+     * Конструктор, который инициализирует реестр метрик и создает все необходимые счетчики.
      *
      * @param meterRegistry Реестр метрик, предоставляемый Spring Boot Actuator.
      */
@@ -55,6 +57,16 @@ public class MetricService {
         this.retrievedDocumentsSummary = DistributionSummary.builder("rag.retrieval.documents.count")
                 .description("Распределение количества документов, найденных на этапе Retrieval.")
                 .baseUnit("documents")
+                .register(meterRegistry);
+
+        this.groundedCounter = Counter.builder("rag.grounding.checks")
+                .tag("result", "grounded")
+                .description("Количество ответов, которые были успешно верифицированы как основанные на контексте.")
+                .register(meterRegistry);
+
+        this.ungroundedCounter = Counter.builder("rag.grounding.checks")
+                .tag("result", "ungrounded")
+                .description("Количество ответов, которые не прошли проверку на 'обоснованность' (потенциальные галлюцинации).")
                 .register(meterRegistry);
     }
 
@@ -114,5 +126,18 @@ public class MetricService {
             successfulRetrievalCounter.increment();
         }
         retrievedDocumentsSummary.record(count);
+    }
+
+    /**
+     * Записывает результат проверки "обоснованности" (grounding) ответа.
+     *
+     * @param isGrounded {@code true}, если ответ основан на контексте, иначе {@code false}.
+     */
+    public void recordGroundingResult(boolean isGrounded) {
+        if (isGrounded) {
+            groundedCounter.increment();
+        } else {
+            ungroundedCounter.increment();
+        }
     }
 }
