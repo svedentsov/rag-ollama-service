@@ -11,12 +11,16 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
  * Сервис, отвечающий за этап обогащения (Augmentation) в RAG-конвейере.
+ * <p>
+ * Этот сервис применяет цепочку всех доступных "советников" ({@link RagAdvisor})
+ * для модификации и обогащения RAG-контекста перед финальной сборкой промпта.
+ * Все ресурсоемкие операции, такие как суммаризация, были вынесены
+ * в конвейер индексации, поэтому все советники считаются быстрыми.
  */
 @Service
 @Slf4j
@@ -26,36 +30,56 @@ public class AugmentationService {
     private final ContextAssemblerService contextAssemblerService;
     private final PromptService promptService;
 
+    /**
+     * Конструктор для внедрения зависимостей.
+     *
+     * @param advisors                Список всех бинов-советников, автоматически внедряемых Spring.
+     * @param contextAssemblerService Сервис для сборки контекста из документов.
+     * @param promptService           Сервис для создания промптов из шаблонов.
+     */
     public AugmentationService(List<RagAdvisor> advisors, ContextAssemblerService contextAssemblerService, PromptService promptService) {
         this.advisors = advisors;
         this.contextAssemblerService = contextAssemblerService;
         this.promptService = promptService;
-        log.info("AugmentationService инициализирован с {} асинхронными советниками.", advisors.size());
+        log.info("AugmentationService инициализирован с {} советниками.", advisors.size());
     }
 
-    public Mono<Prompt> augment(List<Document> documents, String query) {
-        return augment(documents, query, Collections.emptyList());
-    }
-
+    /**
+     * Выполняет обогащение, последовательно применяя все доступные советники.
+     *
+     * @param documents   Извлеченные документы.
+     * @param query       Запрос пользователя.
+     * @param chatHistory История чата.
+     * @return {@link Mono} с полностью готовым промптом.
+     */
     public Mono<Prompt> augment(List<Document> documents, String query, List<Message> chatHistory) {
         RagContext initialContext = new RagContext(query);
         initialContext.setDocuments(documents);
-        Mono<RagContext> initialContextMono = Mono.just(initialContext);
+
+        // Применяем цепочку всех советников
         Mono<RagContext> finalContextMono = Flux.fromIterable(advisors)
-                .reduce(initialContextMono, (contextMono, advisor) -> contextMono.flatMap(advisor::advise))
+                .reduce(Mono.just(initialContext), (contextMono, advisor) -> contextMono.flatMap(advisor::advise))
                 .flatMap(mono -> mono);
+
         return finalContextMono.map(finalContext -> {
             String contextString = contextAssemblerService.assembleContext(finalContext.getDocuments());
             finalContext.getPromptModel().put("context", contextString);
             finalContext.getPromptModel().put("question", query);
             String historyString = formatHistory(chatHistory);
             finalContext.getPromptModel().put("history", historyString);
+
             String promptString = promptService.createRagPrompt(finalContext.getPromptModel());
-            log.debug("Этап Augmentation успешно завершен. История чата добавлена.");
+            log.debug("Этап Augmentation успешно завершен. Использовано {} советников.", advisors.size());
             return new Prompt(promptString);
         });
     }
 
+    /**
+     * Форматирует историю сообщений в строку для подстановки в промпт.
+     *
+     * @param chatHistory Список сообщений из Spring AI.
+     * @return Отформатированная строка истории.
+     */
     private String formatHistory(List<Message> chatHistory) {
         if (chatHistory == null || chatHistory.isEmpty()) {
             return "Нет истории.";

@@ -145,9 +145,17 @@ resilience4j:
 app:
   prompt:
     rag-template-path: "prompts/rag-prompt.tmpl" # Путь к шаблону промпта для RAG
+
+  # Гибкая конфигурация Reranker Agent
   reranking:
-    enabled: true
-    keyword-match-boost: 0.1
+    enabled: true # Глобальный переключатель для всего сервиса переранжирования
+    # Конфигурация для отдельных стратегий. Позволяет включать/выключать
+    # и настраивать каждую стратегию независимо (принцип OCP).
+    strategies:
+      keyword-boost:
+        enabled: true
+        boost-factor: 0.1 # Коэффициент усиления за каждое совпавшее слово
+
   rate-limiting:
     enabled: true
     limits:
@@ -157,26 +165,32 @@ app:
       - endpoint: "/api/v1/chat"
         capacity: 20
         refill-period-minutes: 1
+
   tokenization:
     # "o200k_base" - для Llama 3, Mistral.
     # "cl100k_base" - для моделей OpenAI (GPT-4, GPT-3.5).
     encoding-model: "o200k_base"
+
   context:
     # Макс. кол-во токенов под контекст. Оставляем запас для системного промпта,
     # вопроса пользователя и генерации ответа. Для Llama-3 (8k) 4k - безопасный лимит.
     max-tokens: 4096
+
   chat:
     history:
       # Количество последних сообщений для поддержания контекста.
       max-messages: 10
+
   ingestion:
     scheduler:
       delay-ms: 10000 # 10 секунд между проверками очереди.
     batch-size: 10 # Кол-во документов, обрабатываемых за один раз.
+
   http-client:
     connect-timeout: 10s # Таймаут на установку TCP-соединения
     response-timeout: 120s # Общий таймаут на получение ответа (включая установку соединения)
     read-write-timeout: 120s # Таймаут на чтение/запись отдельных пакетов данных
+
   task-executor:
     # Настройки основного пула потоков для @Async задач.
     core-pool-size: 4
@@ -197,25 +211,25 @@ app:
       # Глубина поиска во время запроса.
       # Trade-off: выше значение -> лучше точность (recall), выше задержка (latency).
       ef-search: 64
+
+  # Настройки RAG-конвейера
   rag:
     # Стратегия поведения, если поиск не нашел документов.
     # "fixed" - вернуть стандартный ответ (быстро, безопасно).
     # "delegate" - (потребует реализации) попросить LLM ответить из общих знаний.
     no-context-strategy: fixed
-    # Стратегия упорядочивания документов для контекста.
-    # "passthrough" - по релевантности (по умолчанию).
-    # "sandwich" - для борьбы с "Lost in the Middle".
-    # "recency" - приоритет свежим документам (требует 'timestamp' в метаданных).
-    arrangement-strategy: sandwich # Выберите нужную стратегию здесь
+    arrangement-strategy: sandwich
+    summarizer: # Настройки для Summarizer Agent
+      enabled: true # Включает/выключает агент контекстной суммаризации
+
     retrieval:
       hybrid:
+        # Порог для адаптивной стратегии извлечения.
+        # Если после первого поиска найдено меньше этого числа документов,
+        # запускается вторая (расширенная) волна поиска.
+        expansion-min-docs-threshold: 3
         vector-search:
           top-k: 5
           similarity-threshold: 0.7
         fts:
           top-k: 10
-    summarizer: # Настройки для агента-суммаризатора
-      enabled: true # Включаем/выключаем агент
-      # Здесь можно указать более быструю и дешевую модель для суммаризации,
-      # если она отличается от основной. Spring AI подхватит это.
-      # model: "llama3:8b-instruct-q5_K_M"

@@ -1,0 +1,1 @@
+ALTER TABLE vector_store ADD COLUMN IF NOT EXISTS summary TEXT;

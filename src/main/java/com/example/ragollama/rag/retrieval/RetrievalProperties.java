@@ -9,8 +9,9 @@ import org.springframework.validation.annotation.Validated;
 
 /**
  * Типобезопасная конфигурация для стратегий извлечения (Retrieval).
+ * <p>
  * Позволяет гибко настраивать параметры гибридного поиска через {@code application.yml}
- * без необходимости изменять код.
+ * без необходимости изменять код. Включает параметр для управления адаптивной стратегией.
  *
  * @param hybrid Настройки для гибридной стратегии поиска.
  */
@@ -20,16 +21,25 @@ public record RetrievalProperties(Hybrid hybrid) {
     /**
      * Настройки для гибридной стратегии, сочетающей векторный и полнотекстовый поиск.
      *
-     * @param vectorSearch Настройки для векторного (семантического) поиска.
-     * @param fts          Настройки для полнотекстового (FTS, лексического) поиска.
+     * @param vectorSearch              Настройки для векторного (семантического) поиска.
+     * @param fts                       Настройки для полнотекстового (FTS, лексического) поиска.
+     * @param expansionMinDocsThreshold Порог для адаптивной стратегии. Если после первого (точного)
+     *                                  поиска найдено меньше этого числа документов, запускается
+     *                                  вторая волна поиска по расширенным запросам.
      */
-    public record Hybrid(VectorSearch vectorSearch, Fts fts) {
+    public record Hybrid(
+            VectorSearch vectorSearch,
+            Fts fts,
+            @Min(1) @Max(10) int expansionMinDocsThreshold
+    ) {
         /**
          * @param topK                Количество наиболее релевантных документов для извлечения.
          * @param similarityThreshold Минимальный порог схожести (0.0 до 1.0).
          */
-        public record VectorSearch(@Min(1) @Max(20) int topK,
-                                   @DecimalMin("0.0") @DecimalMax("1.0") double similarityThreshold) {
+        public record VectorSearch(
+                @Min(1) @Max(20) int topK,
+                @DecimalMin("0.0") @DecimalMax("1.0") double similarityThreshold
+        ) {
         }
 
         /**

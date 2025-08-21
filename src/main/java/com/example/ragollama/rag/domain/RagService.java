@@ -25,11 +25,10 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Сервис-оркестратор RAG-конвейера, построенный на единой реактивной модели.
+ * <p>
  * Класс реализует паттерн "Фасад", являясь единой точкой входа для RAG-логики.
  * Он делегирует выполнение каждого этапа конвейера специализированным,
- * инкапсулированным компонентам, таким как {@link QueryProcessingPipeline} и
- * {@link HybridRetrievalStrategy}. Это делает архитектуру модульной, тестируемой
- * и соответствующей принципам SOLID.
+ * инкапсулированным компонентам.
  */
 @Slf4j
 @Service
@@ -46,9 +45,14 @@ public class RagService {
     private final AppProperties appProperties;
 
     /**
-     * Контекстный объект для передачи данных по RAG-конвейеру.
+     * Внутренний record для передачи подготовленного контекста по RAG-конвейеру.
+     *
+     * @param sessionId Идентификатор сессии.
+     * @param documents Список извлеченных и релевантных документов.
+     * @param prompt    Финальный промпт, готовый для отправки в LLM.
      */
-    private record RagFlowContext(UUID sessionId, List<Document> documents, Prompt prompt) {}
+    private record RagFlowContext(UUID sessionId, List<Document> documents, Prompt prompt) {
+    }
 
     /**
      * Выполняет RAG-запрос и возвращает полный ответ после его генерации.
@@ -63,12 +67,13 @@ public class RagService {
                                 generationService.generate(context.prompt(), context.documents(), context.sessionId())
                         ))
                         .doOnSuccess(response -> saveAssistantMessage(response.sessionId(), response.answer()))
-                        .toFuture() // В самом конце конвертируем Mono в CompletableFuture для контроллера
+                        .toFuture()
         );
     }
 
     /**
      * Выполняет RAG-запрос и возвращает ответ в виде потока (SSE).
+     * Корректно обрабатывает ошибки внутри потока, преобразуя их в событие {@link StreamingResponsePart.Error}.
      *
      * @param request DTO с запросом от пользователя.
      * @return Реактивный поток {@link Flux} со структурированными событиями.
@@ -91,6 +96,10 @@ public class RagService {
                                         }
                                     });
                         })
+                        .onErrorResume(e -> {
+                            log.error("Ошибка в потоке RAG для запроса '{}': {}", request.query(), e.getMessage());
+                            return Flux.just(new StreamingResponsePart.Error("Произошла внутренняя ошибка при обработке вашего запроса."));
+                        })
         );
     }
 
@@ -105,29 +114,18 @@ public class RagService {
                 .then(Mono.defer(() -> {
                     final UUID sessionId = getOrCreateSessionId(request.sessionId());
                     saveUserMessage(sessionId, request.query());
-                    return retrieveDocuments(request)
-                            .flatMap(rerankedDocuments ->
-                                    createPromptWithHistory(rerankedDocuments, request.query(), sessionId)
-                                            .map(prompt -> new RagFlowContext(sessionId, rerankedDocuments, prompt))
-                            );
+
+                    return queryProcessingPipeline.process(request.query())
+                            .flatMap(enhancedQueries -> retrievalStrategy.retrieve(enhancedQueries, request.query()))
+                            .flatMap(rerankedDocuments -> {
+                                Mono<Prompt> promptMono = createPromptWithHistory(rerankedDocuments, request.query(), sessionId);
+                                return promptMono.map(prompt -> new RagFlowContext(sessionId, rerankedDocuments, prompt));
+                            });
                 }))
                 .onErrorResume(e -> {
-                    log.error("Критическая ошибка в RAG-конвейере для запроса '{}'", request.query(), e);
+                    log.error("Критическая ошибка на этапе подготовки RAG-конвейера для запроса '{}'", request.query(), e);
                     return Mono.error(e);
                 });
-    }
-
-    /**
-     * Выполняет этап извлечения (Retrieval) в RAG-конвейере.
-     *
-     * @param request DTO с оригинальным запросом.
-     * @return {@link Mono} с финальным списком релевантных документов.
-     */
-    private Mono<List<Document>> retrieveDocuments(RagQueryRequest request) {
-        // queryProcessingPipeline.process возвращает Mono, используем flatMap
-        return queryProcessingPipeline.process(request.query())
-                .flatMap(queries -> retrievalStrategy.retrieve(queries, request.query()))
-                .doOnNext(documents -> metricService.recordRetrievedDocumentsCount(documents.size()));
     }
 
     /**
@@ -139,14 +137,12 @@ public class RagService {
      * @return {@link Mono}, который по завершении будет содержать готовый {@link Prompt}.
      */
     private Mono<Prompt> createPromptWithHistory(List<Document> documents, String query, UUID sessionId) {
-        // Используем Mono.fromFuture для моста между CompletableFuture и Mono
         return Mono.fromFuture(() -> getChatHistoryAsync(sessionId))
                 .flatMap(chatHistory -> augmentationService.augment(documents, query, chatHistory));
     }
 
     private CompletableFuture<List<Message>> getChatHistoryAsync(UUID sessionId) {
         int maxHistory = appProperties.chat().history().maxMessages();
-        // Вызываем правильный асинхронный метод
         return chatHistoryService.getLastNMessagesAsync(sessionId, maxHistory);
     }
 
@@ -155,11 +151,10 @@ public class RagService {
     }
 
     private void saveUserMessage(UUID sessionId, String query) {
-        // Вызываем асинхронный метод и обрабатываем возможную ошибку, не блокируя поток
         chatHistoryService.saveMessageAsync(sessionId, MessageRole.USER, query)
                 .exceptionally(e -> {
                     log.warn("Не удалось сохранить сообщение пользователя для сессии {}: {}", sessionId, e.getMessage());
-                    return null; // Возвращаем null, чтобы завершить exceptionally блок
+                    return null;
                 });
     }
 
