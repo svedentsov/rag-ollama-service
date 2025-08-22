@@ -9,6 +9,7 @@ import com.example.ragollama.shared.security.PromptGuardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -18,10 +19,12 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Сервис для обработки бизнес-логики чата, полностью перестроенный на
- * асинхронную модель с использованием {@link CompletableFuture}.
- * Эта версия устраняет блокировки I/O, делегируя все операции с базой данных
- * асинхронному {@link ChatHistoryService}. Это обеспечивает максимальную
- * производительность и отзывчивость API.
+ * явную асинхронную модель с использованием {@link CompletableFuture} и {@link AsyncTaskExecutor}.
+ * <p>
+ * Этот сервис является оркестратором, который явно делегирует блокирующие
+ * I/O-операции (взаимодействие с {@link ChatHistoryService}) на выделенный
+ * пул потоков, предотвращая блокировку основных потоков приложения.
+ * Это обеспечивает максимальную производительность и отзывчивость API.
  */
 @Service
 @Slf4j
@@ -32,6 +35,7 @@ public class ChatService {
     private final ChatHistoryService chatHistoryService;
     private final PromptGuardService promptGuardService;
     private final AppProperties appProperties;
+    private final AsyncTaskExecutor applicationTaskExecutor;
 
     /**
      * Внутренний record для передачи подготовленного контекста между методами.
@@ -52,8 +56,11 @@ public class ChatService {
                     return llmClient.callChat(context.prompt())
                             .thenCompose(aiResponseContent -> {
                                 log.debug("Получен полный ответ AI для сессии {}.", context.sessionId());
-                                return chatHistoryService.saveMessageAsync(context.sessionId(), MessageRole.ASSISTANT, aiResponseContent)
-                                        .thenApply(v -> new ChatResponse(aiResponseContent, context.sessionId()));
+                                // Асинхронно сохраняем ответ ассистента в БД
+                                return CompletableFuture.runAsync(
+                                        () -> chatHistoryService.saveMessage(context.sessionId(), MessageRole.ASSISTANT, aiResponseContent),
+                                        applicationTaskExecutor
+                                ).thenApply(v -> new ChatResponse(aiResponseContent, context.sessionId()));
                             });
                 });
     }
@@ -77,8 +84,11 @@ public class ChatService {
                             .doOnComplete(() -> {
                                 String fullResponse = fullResponseBuilder.toString();
                                 if (!fullResponse.isBlank()) {
-                                    chatHistoryService.saveMessageAsync(context.sessionId(), MessageRole.ASSISTANT, fullResponse)
-                                            .thenRun(() -> log.debug("Полный потоковый ответ для сессии {} сохранен.", context.sessionId()));
+                                    // Асинхронный "fire-and-forget" вызов для сохранения истории
+                                    CompletableFuture.runAsync(
+                                            () -> chatHistoryService.saveMessage(context.sessionId(), MessageRole.ASSISTANT, fullResponse),
+                                            applicationTaskExecutor
+                                    ).thenRun(() -> log.debug("Полный потоковый ответ для сессии {} сохранен.", context.sessionId()));
                                 } else {
                                     log.warn("Потоковый ответ для сессии {} был пустым. История не сохранена.", context.sessionId());
                                 }
@@ -103,8 +113,16 @@ public class ChatService {
         }
         final UUID sessionId = (request.sessionId() != null) ? request.sessionId() : UUID.randomUUID();
         final int maxHistory = appProperties.chat().history().maxMessages();
-        return chatHistoryService.saveMessageAsync(sessionId, MessageRole.USER, request.message())
-                .thenCompose(v -> chatHistoryService.getLastNMessagesAsync(sessionId, maxHistory))
+
+        // Шаг 1: Асинхронно сохраняем сообщение пользователя в БД.
+        return CompletableFuture.runAsync(
+                        () -> chatHistoryService.saveMessage(sessionId, MessageRole.USER, request.message()),
+                        applicationTaskExecutor)
+                // Шаг 2: После сохранения, асинхронно загружаем историю сообщений.
+                .thenCompose(v -> CompletableFuture.supplyAsync(
+                        () -> chatHistoryService.getLastNMessages(sessionId, maxHistory),
+                        applicationTaskExecutor))
+                // Шаг 3: Когда история загружена, создаем промпт и контекст.
                 .thenApply(chatHistory -> {
                     Prompt prompt = new Prompt(chatHistory);
                     return new ChatContext(prompt, sessionId);

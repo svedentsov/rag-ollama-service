@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -29,7 +30,9 @@ import java.util.concurrent.CompletableFuture;
  * <p>
  * Класс реализует паттерн "Фасад", являясь единой точкой входа для RAG-логики.
  * Он делегирует выполнение каждого этапа конвейера специализированным,
- * инкапсулированным компонентам.
+ * инкапсулированным компонентам. Взаимодействие с блокирующими зависимостями,
+ * такими как {@link ChatHistoryService}, выполняется асинхронно на выделенном
+ * пуле потоков.
  */
 @Slf4j
 @Service
@@ -46,6 +49,7 @@ public class RagService {
     private final AppProperties appProperties;
     private final GroundingService groundingService;
     private final ContextAssemblerService contextAssemblerService;
+    private final AsyncTaskExecutor applicationTaskExecutor;
 
     /**
      * Внутренний record для передачи подготовленного контекста по RAG-конвейеру.
@@ -84,6 +88,7 @@ public class RagService {
 
     /**
      * Выполняет RAG-запрос и возвращает ответ в виде потока (SSE).
+     * <p>
      * Корректно обрабатывает ошибки внутри потока, преобразуя их в событие {@link StreamingResponsePart.Error}.
      *
      * @param request DTO с запросом от пользователя.
@@ -148,32 +153,64 @@ public class RagService {
      * @return {@link Mono}, который по завершении будет содержать готовый {@link Prompt}.
      */
     private Mono<Prompt> createPromptWithHistory(List<Document> documents, String query, UUID sessionId) {
-        return Mono.fromFuture(() -> getChatHistoryAsync(sessionId))
+        return Mono.fromFuture(getChatHistoryAsync(sessionId))
                 .flatMap(chatHistory -> augmentationService.augment(documents, query, chatHistory));
     }
 
+    /**
+     * Асинхронно получает историю чата из {@link ChatHistoryService},
+     * выполняя блокирующий вызов на выделенном пуле потоков.
+     *
+     * @param sessionId ID сессии чата.
+     * @return {@link CompletableFuture} со списком сообщений.
+     */
     private CompletableFuture<List<Message>> getChatHistoryAsync(UUID sessionId) {
         int maxHistory = appProperties.chat().history().maxMessages();
-        return chatHistoryService.getLastNMessagesAsync(sessionId, maxHistory);
+        return CompletableFuture.supplyAsync(
+                () -> chatHistoryService.getLastNMessages(sessionId, maxHistory),
+                applicationTaskExecutor
+        );
     }
 
+    /**
+     * Возвращает существующий ID сессии или создает новый, если он не предоставлен.
+     *
+     * @param sessionId Опциональный ID сессии из запроса.
+     * @return Не-null UUID сессии.
+     */
     private UUID getOrCreateSessionId(UUID sessionId) {
         return (sessionId != null) ? sessionId : UUID.randomUUID();
     }
 
+    /**
+     * Асинхронно сохраняет сообщение пользователя в истории чата.
+     *
+     * @param sessionId ID сессии.
+     * @param query     Текст сообщения пользователя.
+     */
     private void saveUserMessage(UUID sessionId, String query) {
-        chatHistoryService.saveMessageAsync(sessionId, MessageRole.USER, query)
-                .exceptionally(e -> {
-                    log.warn("Не удалось сохранить сообщение пользователя для сессии {}: {}", sessionId, e.getMessage());
-                    return null;
-                });
+        CompletableFuture.runAsync(
+                () -> chatHistoryService.saveMessage(sessionId, MessageRole.USER, query),
+                applicationTaskExecutor
+        ).exceptionally(e -> {
+            log.warn("Не удалось сохранить сообщение пользователя для сессии {}: {}", sessionId, e.getMessage());
+            return null;
+        });
     }
 
+    /**
+     * Асинхронно сохраняет сообщение ассистента в истории чата.
+     *
+     * @param sessionId ID сессии.
+     * @param answer    Текст сообщения, сгенерированного AI.
+     */
     private void saveAssistantMessage(UUID sessionId, String answer) {
-        chatHistoryService.saveMessageAsync(sessionId, MessageRole.ASSISTANT, answer)
-                .exceptionally(e -> {
-                    log.warn("Не удалось сохранить сообщение ассистента для сессии {}: {}", sessionId, e.getMessage());
-                    return null;
-                });
+        CompletableFuture.runAsync(
+                () -> chatHistoryService.saveMessage(sessionId, MessageRole.ASSISTANT, answer),
+                applicationTaskExecutor
+        ).exceptionally(e -> {
+            log.warn("Не удалось сохранить сообщение ассистента для сессии {}: {}", sessionId, e.getMessage());
+            return null;
+        });
     }
 }

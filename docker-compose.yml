@@ -30,7 +30,7 @@ services:
     # Проверка состояния. Docker будет считать сервис "здоровым",
     # если команда pg_isready успешно выполняется.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d ragdb"]
+      test: [ "CMD-SHELL", "pg_isready -U user -d ragdb" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -53,11 +53,39 @@ services:
     restart: unless-stopped
     # Проверка состояния. Проверяем, что API Ollama отвечает.
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      test: [ "CMD", "curl", "-f", "http://localhost:11434/api/tags" ]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
+    networks:
+      - rag-net
+
+  # Сервис RabbitMQ для управления очередями событий
+  rabbitmq:
+    # Используем образ с плагином management для веб-интерфейса
+    image: rabbitmq:3.13-management
+    container_name: rag-rabbitmq
+    ports:
+      # Порт для подключения клиентов (наше Spring приложение)
+      - "5672:5672"
+      # Порт для веб-интерфейса управления
+      - "15672:15672"
+    # Том для сохранения состояния RabbitMQ
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    # Настройки по умолчанию (можно переопределить)
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    restart: unless-stopped
+    healthcheck:
+      # Проверяем, что брокер доступен и работает
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - rag-net
 
@@ -66,6 +94,8 @@ volumes:
   postgres-data:
     driver: local
   ollama-data:
+    driver: local
+  rabbitmq-data:
     driver: local
 
 # Определение сетей

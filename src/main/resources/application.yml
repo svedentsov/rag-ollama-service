@@ -15,10 +15,9 @@ spring:
     timeout-per-shutdown-phase: 30s # Таймаут для корректного завершения работы приложения (graceful shutdown)
   mvc:
     async:
-      # Таймаут для асинхронных запросов в контроллерах.
-      # ВАЖНО: Должен быть немного больше, чем таймаут в Resilience4j (timelimiter),
-      # чтобы дать механизму отказоустойчивости сработать первым.
-      request-timeout: 130s
+      # Таймаут для асинхронных запросов в контроллерах (CompletableFuture).
+      # САМЫЙ ВНЕШНИЙ УРОВЕНЬ: должен быть больше всех вложенных таймаутов.
+      request-timeout: 190s
 
   # --- Database & Persistence ---
   datasource:
@@ -57,10 +56,16 @@ spring:
       # нужно было бы использовать имя сервиса: `http://rag-ollama:11434`.
       base-url: http://localhost:11434
       chat:
+        # Теперь это конфигурация ПО УМОЛЧАНИЮ
         options:
-          model: llama3 # Модель для генерации текста.
-          temperature: 0.7 # "Креативность" модели (0.0 - строго, >1.0 - очень креативно).
-          max-tokens: 2048 # Максимальное количество токенов в ответе.
+          model: llama3
+          temperature: 0.7
+        # Определяем профили для разных моделей
+        profiles:
+          llava-chat:
+            options:
+              model: llava
+              temperature: 0.4 # Для анализа точность важнее креативности
       embedding:
         options:
           # Модель для создания векторных представлений (эмбеддингов).
@@ -71,6 +76,13 @@ spring:
         index-type: HNSW # Тип индекса для быстрого поиска (Hierarchical Navigable Small World).
         distance-type: COSINE_DISTANCE # Метрика для измерения схожести векторов.
         dimensions: 1024 # Размерность вектора (зависит от embedding-модели).
+
+  # --- RabbitMQ Configuration ---
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
 
 # ===================================================================
 # Observability (Monitoring & Metrics)
@@ -119,6 +131,7 @@ resilience4j:
         wait-duration-in-open-state: 15s # Время в "разомкнутом" состоянии.
         record-exceptions: # Считать DataAccessException как сбой
           - org.springframework.dao.DataAccessException
+          - java.util.concurrent.TimeoutException
   retry:
     instances:
       ollama:
@@ -136,7 +149,8 @@ resilience4j:
   timelimiter:
     instances:
       ollama:
-        timeout-duration: 120s           # Макс. время ожидания ответа от LLM.
+        # САМЫЙ ВНУТРЕННИЙ УРОВЕНЬ: Максимальное время ожидания ответа от LLM.
+        timeout-duration: 180s
         cancel-running-future: true
 
 # ===================================================================
@@ -187,9 +201,10 @@ app:
     batch-size: 10 # Кол-во документов, обрабатываемых за один раз.
 
   http-client:
+    # СРЕДНИЙ УРОВЕНЬ: таймауты WebClient, должны быть чуть больше, чем TimeLimiter
     connect-timeout: 10s # Таймаут на установку TCP-соединения
-    response-timeout: 120s # Общий таймаут на получение ответа (включая установку соединения)
-    read-write-timeout: 120s # Таймаут на чтение/запись отдельных пакетов данных
+    response-timeout: 185s # Общий таймаут на получение ответа
+    read-write-timeout: 185s # Таймаут на чтение/запись данных
 
   task-executor:
     # Настройки основного пула потоков для @Async задач.
@@ -243,3 +258,22 @@ app:
       enabled: true
       # Запускать каждый день в 3:00 ночи
       cron: "0 0 3 * * ?"
+  integrations:
+    github:
+      # Секрет, который вы настраиваете в GitHub для подписи веб-хуков.
+      # ОБЯЗАТЕЛЬНО вынести в переменные окружения или Vault в production.
+      webhook-secret: "your_super_secret_string_here"
+      # Персональный токен доступа (PAT) для аутентификации в GitHub API.
+      # ОБЯЗАТЕЛЬНО вынести в переменные окружения или Vault в production.
+      api-token: "ghp_YourGitHubPersonalAccessToken"
+    jira:
+      # Jira не использует HMAC-подпись по умолчанию.
+      # Часто используется Basic Auth или API Token в заголовке для "секретности".
+      # Здесь мы будем использовать простой токен для проверки.
+      webhook-secret-token: "your_jira_secret_token"
+      # URL вашего инстанса Jira
+      base-url: "https://your-domain.atlassian.net"
+      # Email пользователя для API
+      api-user: "your-email@example.com"
+      # API токен, сгенерированный в Jira
+      api-token: "YourJiraApiToken"
