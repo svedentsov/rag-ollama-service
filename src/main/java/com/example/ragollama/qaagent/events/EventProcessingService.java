@@ -74,12 +74,16 @@ public class EventProcessingService {
 
         } catch (Exception e) {
             log.error("Не удалось распарсить или обработать GitHub webhook payload", e);
-            // Здесь можно отправить сообщение в DLQ или метрику
         }
     }
 
     /**
      * Обрабатывает событие создания задачи в Jira.
+     * <p>
+     * Реализует полный асинхронный конвейер:
+     * 1. Десериализует payload.
+     * 2. Создает контекст и запускает конвейер 'jira-bug-pipeline'.
+     * 3. Форматирует результат и асинхронно публикует комментарий в задачу.
      *
      * @param payloadRaw Сырой JSON payload, полученный из очереди.
      */
@@ -128,7 +132,6 @@ public class EventProcessingService {
             comment.append("#### Агент: `").append(result.agentName()).append("`\n");
             comment.append("> ").append(result.summary()).append("\n\n");
 
-            // Специальное форматирование для приоритизатора тестов
             if ("test-prioritizer".equals(result.agentName()) && result.details().containsKey("prioritizedTests")) {
                 @SuppressWarnings("unchecked")
                 List<String> tests = (List<String>) result.details().get("prioritizedTests");

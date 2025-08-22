@@ -1,10 +1,6 @@
 package com.example.ragollama.qaagent.config;
 
-import org.springframework.amqp.core.Binding;
-import org.springframework.amqp.core.BindingBuilder;
-import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.core.QueueBuilder;
-import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.annotation.EnableRabbit;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
@@ -14,8 +10,9 @@ import org.springframework.context.annotation.Configuration;
 /**
  * Конфигурация для RabbitMQ.
  * <p>
- * В этой версии обновлен биндинг для Jira, чтобы он реагировал
- * на более специфичный ключ маршрутизации.
+ * В этой версии архитектура конвейера индексации упрощена.
+ * Удалена очередь `ingestion.batch.claimed.queue` и соответствующий
+ * биндинг, так как теперь используется единая очередь для пакетной обработки.
  */
 @Configuration
 @EnableRabbit
@@ -28,11 +25,9 @@ public class RabbitMqConfig {
     public static final String GITHUB_EVENTS_QUEUE = "github.events.queue";
     public static final String JIRA_EVENTS_QUEUE = "jira.events.queue";
 
-    // Очереди и ключи для конвейера индексации
-    public static final String JOB_BATCH_CLAIMED_QUEUE = "ingestion.batch.claimed.queue";
+    // Упрощенная конфигурация для конвейера индексации
     public static final String DOCUMENT_PROCESSING_QUEUE = "ingestion.document.processing.queue";
-    public static final String JOB_BATCH_CLAIMED_ROUTING_KEY = "ingestion.batch.claimed";
-    public static final String DOCUMENT_PROCESSING_ROUTING_KEY = "ingestion.document.process";
+    public static final String DOCUMENT_PROCESSING_ROUTING_KEY = "ingestion.document.process.batch";
 
     /**
      * Создает обменник типа "topic" для маршрутизации событий.
@@ -74,21 +69,23 @@ public class RabbitMqConfig {
         return BindingBuilder.bind(jiraEventsQueue).to(exchange).with("jira.issue_created");
     }
 
-    @Bean
-    public Queue jobBatchClaimedQueue() {
-        return createDurableQueue(JOB_BATCH_CLAIMED_QUEUE);
-    }
-
+    /**
+     * Создает единую очередь для обработки пакетов документов.
+     *
+     * @return Экземпляр {@link Queue}.
+     */
     @Bean
     public Queue documentProcessingQueue() {
         return createDurableQueue(DOCUMENT_PROCESSING_QUEUE);
     }
 
-    @Bean
-    public Binding jobBatchClaimedBinding(TopicExchange exchange, Queue jobBatchClaimedQueue) {
-        return BindingBuilder.bind(jobBatchClaimedQueue).to(exchange).with(JOB_BATCH_CLAIMED_ROUTING_KEY);
-    }
-
+    /**
+     * Связывает очередь обработки документов с обменником по ключу маршрутизации.
+     *
+     * @param exchange                Обменник.
+     * @param documentProcessingQueue Очередь для обработки.
+     * @return Объект {@link Binding}.
+     */
     @Bean
     public Binding documentProcessingBinding(TopicExchange exchange, Queue documentProcessingQueue) {
         return BindingBuilder.bind(documentProcessingQueue).to(exchange).with(DOCUMENT_PROCESSING_ROUTING_KEY);

@@ -1,52 +1,31 @@
 package com.example.ragollama.qaagent.impl;
 
+import com.example.ragollama.buganalysis.domain.BugAnalysisService;
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
 import com.example.ragollama.qaagent.QaAgent;
-import com.example.ragollama.rag.agent.ProcessedQueries;
-import com.example.ragollama.rag.retrieval.HybridRetrievalStrategy;
-import com.example.ragollama.rag.retrieval.RetrievalProperties;
-import com.example.ragollama.shared.llm.LlmClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.chat.prompt.PromptTemplate;
-import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /**
  * Агент для поиска дубликатов баг-репортов.
  * <p>
- * Эта версия стала "умнее": она использует фильтрацию по метаданным
- * для поиска только среди документов типа 'bug_report', что повышает
- * точность и производительность.
+ * Этот агент является фасадом над {@link BugAnalysisService}. Он извлекает
+ * необходимую информацию из {@link AgentContext} и делегирует выполнение
+ * сложной логики анализа специализированному сервису, следуя принципам
+ * разделения ответственности.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class BugDuplicateDetectorAgent implements QaAgent {
 
-    private final HybridRetrievalStrategy retrievalStrategy;
-    private final LlmClient llmClient;
-    private final RetrievalProperties retrievalProperties;
-
     private static final String BUG_REPORT_TEXT_KEY = "bugReportText";
-    private static final PromptTemplate PROMPT_TEMPLATE = new PromptTemplate("""
-            Проанализируй предоставленный "Новый баг-репорт" и список "Похожих тикетов".
-            Твоя задача - определить, является ли новый баг-репорт дубликатом одного из существующих.
-            Ответь ТОЛЬКО ОДНИМ СЛОВОМ: DUPLICATE, SIMILAR или UNIQUE.
-            
-            Новый баг-репорт:
-            {new_bug_report}
-            
-            Похожие тикеты:
-            {similar_tickets}
-            """);
+    private final BugAnalysisService bugAnalysisService;
 
     /**
      * {@inheritDoc}
@@ -78,54 +57,27 @@ public class BugDuplicateDetectorAgent implements QaAgent {
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String bugReportText = (String) context.payload().get(BUG_REPORT_TEXT_KEY);
-        var retrievalConfig = retrievalProperties.hybrid().vectorSearch();
 
-        ProcessedQueries processedQueries = new ProcessedQueries(bugReportText, List.of());
-
-        // Создаем фильтр для поиска только по документам с метаданными doc_type = 'bug_report'
-        Filter.Expression filter = new Filter.Expression(
-                Filter.ExpressionType.EQ,
-                new Filter.Key("doc_type"),
-                new Filter.Value("bug_report")
-        );
-
-        return retrievalStrategy.retrieve(
-                        processedQueries,
-                        bugReportText,
-                        retrievalConfig.topK(),
-                        retrievalConfig.similarityThreshold(),
-                        filter // Передаем фильтр в стратегию
-                )
-                .toFuture()
-                .thenCompose(similarDocs -> {
-                    if (similarDocs.isEmpty()) {
-                        return CompletableFuture.completedFuture(new AgentResult(
-                                getName(),
-                                AgentResult.Status.SUCCESS,
-                                "Похожих баг-репортов не найдено. Вероятно, тикет уникален.",
-                                Map.of("status", "UNIQUE")
-                        ));
+        return bugAnalysisService.analyzeBugReport(bugReportText)
+                .thenApply(analysisResponse -> {
+                    String summary;
+                    if (analysisResponse.isDuplicate()) {
+                        summary = String.format("Обнаружен возможный дубликат. Похожие тикеты: %s",
+                                analysisResponse.duplicateCandidates());
+                    } else {
+                        summary = "Похожих баг-репортов не найдено. Вероятно, тикет уникален.";
                     }
 
-                    String similarTicketsContext = similarDocs.stream()
-                            .map(doc -> "ID: " + doc.getMetadata().get("documentId") + "\n" + doc.getText())
-                            .collect(Collectors.joining("\n---\n"));
-
-                    String promptString = PROMPT_TEMPLATE.render(Map.of(
-                            "new_bug_report", bugReportText,
-                            "similar_tickets", similarTicketsContext
-                    ));
-
-                    return llmClient.callChat(new Prompt(promptString))
-                            .thenApply(llmResponse -> {
-                                String summary = "Анализ на дубликаты завершен. Статус: " + llmResponse.trim();
-                                return new AgentResult(
-                                        getName(),
-                                        AgentResult.Status.SUCCESS,
-                                        summary,
-                                        Map.of("status", llmResponse.trim(), "candidates", similarDocs)
-                                );
-                            });
+                    return new AgentResult(
+                            getName(),
+                            AgentResult.Status.SUCCESS,
+                            summary,
+                            Map.of(
+                                    "isDuplicate", analysisResponse.isDuplicate(),
+                                    "candidates", analysisResponse.duplicateCandidates(),
+                                    "improvedDescription", analysisResponse.improvedDescription()
+                            )
+                    );
                 });
     }
 }

@@ -77,7 +77,7 @@ spring:
           llava-chat:
             options:
               model: llava
-              temperature: 0.4 # Для анализа точность важнее креативности
+              temperature: 0.2 # Для анализа точность важнее креативности
       embedding:
         options:
           # Модель для создания векторных представлений (эмбеддингов).
@@ -276,10 +276,10 @@ app:
   integrations:
     github:
       # Секрет, который вы настраиваете в GitHub для подписи веб-хуков.
-      # ОБЯЗАТЕЛЬНО вынести в переменные окружения или Vault в production.
+      # !!! ВАЖНО: В production вынести в переменные окружения или Vault.
       webhook-secret: "your_super_secret_string_here"
       # Персональный токен доступа (PAT) для аутентификации в GitHub API.
-      # ОБЯЗАТЕЛЬНО вынести в переменные окружения или Vault в production.
+      # !!! ВАЖНО: В production вынести в переменные окружения или Vault.
       api-token: "ghp_YourGitHubPersonalAccessToken"
     jira:
       # Jira не использует HMAC-подпись по умолчанию.

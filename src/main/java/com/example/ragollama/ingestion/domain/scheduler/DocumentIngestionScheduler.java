@@ -1,5 +1,6 @@
 package com.example.ragollama.ingestion.domain.scheduler;
 
+import com.example.ragollama.ingestion.consumer.DocumentProcessingConsumer;
 import com.example.ragollama.ingestion.domain.DocumentJobService;
 import com.example.ragollama.ingestion.domain.model.DocumentJob;
 import com.example.ragollama.qaagent.config.RabbitMqConfig;
@@ -16,10 +17,10 @@ import java.util.UUID;
 /**
  * Планировщик, периодически запускающий пакетную индексацию документов.
  * <p>
- * В этой версии планировщик больше не запускает обработку напрямую. Его
- * единственная задача — атомарно захватить пакет задач и опубликовать
- * событие в RabbitMQ. Это полностью отвязывает процесс поиска задач от
- * их выполнения, создавая надежную, асинхронную архитектуру.
+ * Его единственная задача — атомарно захватить пакет ожидающих задач
+ * и опубликовать одно событие в RabbitMQ для их пакетной обработки.
+ * Это полностью отвязывает процесс поиска задач от их выполнения,
+ * создавая надежную, асинхронную и эффективную архитектуру.
  */
 @Service
 @RequiredArgsConstructor
@@ -43,20 +44,12 @@ public class DocumentIngestionScheduler {
 
         if (!jobs.isEmpty()) {
             List<UUID> jobIds = jobs.stream().map(DocumentJob::getId).toList();
-            log.info("Захвачен пакет из {} задач. Публикация события 'JobBatchClaimedEvent'. IDs: {}", jobs.size(), jobIds);
+            log.info("Захвачен пакет из {} задач. Публикация события 'BatchProcessingRequestedEvent'. IDs: {}", jobs.size(), jobIds);
             rabbitTemplate.convertAndSend(
                     RabbitMqConfig.EVENTS_EXCHANGE,
-                    RabbitMqConfig.JOB_BATCH_CLAIMED_ROUTING_KEY,
-                    new JobBatchClaimedEvent(jobIds)
+                    RabbitMqConfig.DOCUMENT_PROCESSING_ROUTING_KEY,
+                    new DocumentProcessingConsumer.BatchProcessingRequestedEvent(jobIds)
             );
         }
-    }
-
-    /**
-     * DTO для события, информирующего о захвате нового пакета задач.
-     *
-     * @param jobIds Список ID задач в пакете.
-     */
-    public record JobBatchClaimedEvent(List<UUID> jobIds) {
     }
 }

@@ -3,25 +3,23 @@ package com.example.ragollama.qaagent.impl;
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
 import com.example.ragollama.qaagent.QaAgent;
-import com.example.ragollama.qaagent.tools.CodebaseMappingService;
+import com.example.ragollama.rag.domain.TestCaseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Component;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Агент, который анализирует git diff и предлагает приоритетный список тестов для запуска.
+ * Интеллектуальный агент, который анализирует git diff и предлагает
+ * приоритетный список тестов для запуска, используя семантический поиск.
  * <p>
- * Этот агент не использует LLM. Он реализует простую, но эффективную бизнес-логику:
- * 1. Парсит `git diff`, чтобы найти измененные файлы.
- * 2. Для каждого файла из `src/main/java` ищет соответствующий тестовый файл.
- * 3. Возвращает список найденных тестов.
+ * Этот агент больше не использует примитивное сопоставление имен. Вместо этого,
+ * он делегирует поиск специализированному {@link TestCaseService}, который
+ * выполняет RAG-поиск по базе тест-кейсов, используя содержимое
+ * измененного кода в качестве поискового запроса.
  */
 @Slf4j
 @Component
@@ -29,8 +27,7 @@ import java.util.concurrent.CompletableFuture;
 public class TestPrioritizerAgent implements QaAgent {
 
     public static final String GIT_DIFF_CONTENT_KEY = "gitDiffContent";
-    private final CodebaseMappingService codebaseMappingService;
-    private final AsyncTaskExecutor applicationTaskExecutor;
+    private final TestCaseService testCaseService;
 
     /**
      * {@inheritDoc}
@@ -45,7 +42,7 @@ public class TestPrioritizerAgent implements QaAgent {
      */
     @Override
     public String getDescription() {
-        return "Анализирует git diff и приоритизирует тесты для запуска в CI/CD.";
+        return "Анализирует git diff и приоритизирует тесты для запуска в CI/CD с помощью семантического поиска.";
     }
 
     /**
@@ -61,43 +58,33 @@ public class TestPrioritizerAgent implements QaAgent {
      */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
-        // Выполняем логику в нашем общем пуле потоков
-        return CompletableFuture.supplyAsync(() -> {
-            String diffContent = (String) context.payload().get(GIT_DIFF_CONTENT_KEY);
-            List<String> changedFiles = parseChangedFiles(diffContent);
-
-            List<String> prioritizedTests = changedFiles.stream()
-                    .filter(file -> file.startsWith("src/main/"))
-                    .map(codebaseMappingService::findTestForAppFile)
-                    .flatMap(Optional::stream)
-                    .distinct()
-                    .toList();
-
-            String summary = "Приоритизация завершена. Найдено " + prioritizedTests.size() + " релевантных тестов.";
-            log.info(summary + " Тесты: {}", prioritizedTests);
-
-            return new AgentResult(
+        String diffContent = (String) context.payload().get(GIT_DIFF_CONTENT_KEY);
+        if (diffContent == null || diffContent.isBlank()) {
+            return CompletableFuture.completedFuture(new AgentResult(
                     getName(),
                     AgentResult.Status.SUCCESS,
-                    summary,
-                    Map.of("prioritizedTests", prioritizedTests, "changedAppFiles", changedFiles)
-            );
-        }, applicationTaskExecutor);
-    }
-
-    /**
-     * Извлекает список измененных файлов из стандартного вывода `git diff --name-only`.
-     *
-     * @param diffContent Содержимое diff.
-     * @return Список путей к файлам.
-     */
-    private List<String> parseChangedFiles(String diffContent) {
-        if (diffContent == null || diffContent.isBlank()) {
-            return List.of();
+                    "Изменения в коде не найдены, приоритизация тестов не требуется.",
+                    Map.of("prioritizedTests", List.of())
+            ));
         }
-        return Arrays.stream(diffContent.split("\n"))
-                .map(String::trim)
-                .filter(line -> !line.isEmpty())
-                .toList();
+
+        // Используем наш RAG-сервис для поиска релевантных тест-кейсов
+        return testCaseService.findRelevantTestCases(diffContent)
+                .map(foundDocuments -> {
+                    List<String> testNames = foundDocuments.stream()
+                            .map(doc -> doc.getMetadata().get("source").toString())
+                            .distinct()
+                            .toList();
+
+                    String summary = "Приоритизация завершена. Найдено " + testNames.size() + " релевантных тестов.";
+                    log.info(summary + " Тесты: {}", testNames);
+
+                    return new AgentResult(
+                            getName(),
+                            AgentResult.Status.SUCCESS,
+                            summary,
+                            Map.of("prioritizedTests", testNames)
+                    );
+                }).toFuture();
     }
 }

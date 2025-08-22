@@ -12,8 +12,9 @@ import java.util.stream.Collectors;
 /**
  * Сервис-оркестратор, управляющий выполнением конвейеров из QA-агентов.
  * <p>
- * Эта версия дополнена новым конвейером `github-pr-pipeline`,
- * который демонстрирует последовательное выполнение нескольких агентов.
+ * Он автоматически обнаруживает все доступные реализации {@link QaAgent}
+ * и позволяет запускать их в виде предопределенных последовательных цепочек (пайплайнов).
+ * Это обеспечивает высокую расширяемость и следование принципу Open/Closed.
  */
 @Slf4j
 @Service
@@ -45,8 +46,7 @@ public class AgentOrchestratorService {
     private Map<String, List<QaAgent>> definePipelines() {
         return Map.of(
                 "github-pr-pipeline", List.of(
-                        agentMap.get("test-prioritizer"),
-                        agentMap.get("pr-test-coverage-gate")
+                        agentMap.get("test-prioritizer")
                 ),
                 "jira-bug-pipeline", List.of(
                         agentMap.get("bug-duplicate-detector")
@@ -120,10 +120,6 @@ public class AgentOrchestratorService {
 
         public List<AgentResult> getResults() {
             return results;
-        }
-
-        public AgentContext getCurrentContext() {
-            return currentContext;
         }
     }
 }
