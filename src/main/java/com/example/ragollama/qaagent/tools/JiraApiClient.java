@@ -11,6 +11,9 @@ import java.util.Map;
 
 /**
  * Клиент для взаимодействия с Jira Cloud REST API.
+ * <p>
+ * Инкапсулирует логику HTTP-запросов к Jira, используя неблокирующий
+ * {@link WebClient}.
  */
 @Slf4j
 @Service
@@ -18,6 +21,14 @@ public class JiraApiClient {
 
     private final WebClient webClient;
 
+    /**
+     * Конструктор, который создает и настраивает {@link WebClient} для Jira.
+     *
+     * @param webClientBuilder Строитель {@link WebClient} из общей конфигурации.
+     * @param baseUrl          Базовый URL вашего инстанса Jira.
+     * @param apiUser          Email пользователя для аутентификации.
+     * @param apiToken         API токен, сгенерированный в Jira.
+     */
     public JiraApiClient(WebClient.Builder webClientBuilder,
                          @Value("${app.integrations.jira.base-url}") String baseUrl,
                          @Value("${app.integrations.jira.api-user}") String apiUser,
@@ -29,14 +40,15 @@ public class JiraApiClient {
     }
 
     /**
-     * Публикует комментарий к задаче в Jira.
+     * Асинхронно публикует комментарий к задаче в Jira.
      *
      * @param issueKey Ключ задачи (например, "PROJ-123").
      * @param comment  Текст комментария.
      * @return {@link Mono}, который завершается при успешной публикации.
      */
     public Mono<Void> postCommentToIssue(String issueKey, String comment) {
-        // API Jira для комментариев требует сложной структуры JCON
+        log.info("Публикация комментария в задачу Jira: {}", issueKey);
+        // API Jira для комментариев требует сложной структуры Atlassian Document Format
         Map<String, Object> body = Map.of(
                 "body", Map.of(
                         "type", "doc",

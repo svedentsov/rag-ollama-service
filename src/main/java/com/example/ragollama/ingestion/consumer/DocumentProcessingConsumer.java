@@ -1,4 +1,4 @@
-package com.example.ragollama.ingestion.domain.consumer;
+package com.example.ragollama.ingestion.consumer;
 
 import com.example.ragollama.ingestion.cleaning.DataCleaningService;
 import com.example.ragollama.ingestion.domain.DocumentJobService;
@@ -20,17 +20,14 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Основной "воркер" конвейера индексации, реализованный как слушатель RabbitMQ.
- * <p>
- * Этот класс заменяет собой старый {@code DocumentProcessingService}. Он
- * обрабатывает по одному документу за раз, выполняя полный цикл: очистка,
- * разбивка на чанки, генерация summary и запись в {@link VectorStore}.
- * Такая гранулярность обеспечивает высокую надежность и масштабируемость.
+ * Основной "воркер" конвейера индексации.
  */
 @Service
 @Slf4j
@@ -53,9 +50,6 @@ public class DocumentProcessingConsumer {
 
     /**
      * Обрабатывает событие {@link JobBatchConsumer.ProcessDocumentJobEvent}.
-     * Метод полностью асинхронный и неблокирующий.
-     *
-     * @param event Событие с данными одного документа.
      */
     @RabbitListener(queues = RabbitMqConfig.DOCUMENT_PROCESSING_QUEUE)
     public void processDocument(@Payload JobBatchConsumer.ProcessDocumentJobEvent event) {
@@ -73,7 +67,7 @@ public class DocumentProcessingConsumer {
                         log.error("Критическая ошибка при обработке документа. Job ID: {}", event.jobId(), e);
                         documentJobService.markAsFailed(event.jobId(), "Критическая ошибка: " + e.getMessage());
                     })
-                    .subscribe(); // Запускаем реактивную цепочку
+                    .subscribe();
 
         } catch (Exception e) {
             log.error("Непредвиденная синхронная ошибка в обработчике документа. Job ID: {}", event.jobId(), e);
@@ -83,16 +77,18 @@ public class DocumentProcessingConsumer {
 
     /**
      * Выполняет очистку, разбивку и обогащение документа.
-     *
-     * @param event Данные задачи.
-     * @return Поток {@link Flux} с обогащенными чанками.
      */
     private Flux<Document> processJob(JobBatchConsumer.ProcessDocumentJobEvent event) {
         String cleanedText = dataCleaningService.cleanDocumentText(event.textContent());
-        Document document = new Document(
-                cleanedText,
-                Map.of("source", event.sourceName(), "documentId", event.jobId().toString())
-        );
+
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("source", event.sourceName());
+        metadata.put("documentId", event.jobId().toString());
+        if (event.metadata() != null) {
+            metadata.putAll(event.metadata());
+        }
+
+        Document document = new Document(cleanedText, metadata);
         List<Document> chunks = tokenTextSplitter.apply(List.of(document));
         log.debug("Создано {} чанков для документа '{}'.", chunks.size(), event.sourceName());
 
@@ -104,10 +100,7 @@ public class DocumentProcessingConsumer {
     }
 
     /**
-     * Асинхронно генерирует краткое содержание для одного чанка.
-     *
-     * @param chunk Документ-чанк.
-     * @return {@link Mono} с обогащенным чанком.
+     * Асинхронно генерирует краткое содержание для чанка.
      */
     private Mono<Document> generateSummaryForChunk(Document chunk) {
         String promptString = INGEST_SUMMARY_PROMPT.render(Map.of("chunk_text", chunk.getText()));
@@ -119,14 +112,11 @@ public class DocumentProcessingConsumer {
                     return chunk;
                 })
                 .doOnError(e -> log.warn("Не удалось сгенерировать summary. Ошибка: {}", e.getMessage()))
-                .onErrorReturn(chunk); // В случае ошибки возвращаем чанк без summary
+                .onErrorReturn(chunk);
     }
 
     /**
-     * Добавляет список чанков в векторное хранилище.
-     *
-     * @param chunks Список чанков для добавления.
-     * @return {@link Mono}, завершающийся после выполнения операции.
+     * Добавляет чанки в векторное хранилище.
      */
     private Mono<Void> addChunksToVectorStore(List<Document> chunks) {
         if (chunks.isEmpty()) {
@@ -136,7 +126,7 @@ public class DocumentProcessingConsumer {
         log.info("Добавление {} чанков в VectorStore.", chunks.size());
         return Mono.fromRunnable(() -> {
                     vectorStore.add(chunks);
-                    vectorCacheService.evictAll(); // Очищаем кэш после обновления данных
+                    vectorCacheService.evictAll();
                 })
                 .subscribeOn(Schedulers.boundedElastic())
                 .then();

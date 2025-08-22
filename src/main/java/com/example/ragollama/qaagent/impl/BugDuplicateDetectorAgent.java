@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -21,10 +22,9 @@ import java.util.stream.Collectors;
 /**
  * Агент для поиска дубликатов баг-репортов.
  * <p>
- * Использует RAG-конвейер для семантического поиска похожих тикетов
- * в базе знаний и LLM для финального вердикта о дублировании.
- * Эта версия полностью соответствует обновленному контракту
- * {@link HybridRetrievalStrategy}.
+ * Эта версия стала "умнее": она использует фильтрацию по метаданным
+ * для поиска только среди документов типа 'bug_report', что повышает
+ * точность и производительность.
  */
 @Slf4j
 @Component
@@ -80,15 +80,22 @@ public class BugDuplicateDetectorAgent implements QaAgent {
         String bugReportText = (String) context.payload().get(BUG_REPORT_TEXT_KEY);
         var retrievalConfig = retrievalProperties.hybrid().vectorSearch();
 
-        // ИЗМЕНЕНИЕ: Формируем структурированный объект ProcessedQueries.
-        // Для данной задачи у нас есть только один, основной запрос.
         ProcessedQueries processedQueries = new ProcessedQueries(bugReportText, List.of());
+
+        // Создаем фильтр для поиска только по документам с метаданными doc_type = 'bug_report'
+        Filter.Expression filter = new Filter.Expression(
+                Filter.ExpressionType.EQ,
+                new Filter.Key("doc_type"),
+                new Filter.Value("bug_report")
+        );
 
         return retrievalStrategy.retrieve(
                         processedQueries,
-                        bugReportText, // Оригинальный текст по-прежнему нужен для FTS и reranking
+                        bugReportText,
                         retrievalConfig.topK(),
-                        retrievalConfig.similarityThreshold())
+                        retrievalConfig.similarityThreshold(),
+                        filter // Передаем фильтр в стратегию
+                )
                 .toFuture()
                 .thenCompose(similarDocs -> {
                     if (similarDocs.isEmpty()) {

@@ -25,7 +25,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Сервис для выполнения оффлайн-оценки качества RAG-системы по "золотому датасету".
- * Загружает эталонные данные и прогоняет их через RAG-конвейер для расчета метрик.
  */
 @Slf4j
 @Service
@@ -42,12 +41,6 @@ public class RagEvaluationService {
 
     /**
      * Запускает полный цикл оценки качества RAG-системы.
-     * <p>
-     * Метод загружает эталонный набор данных, параллельно обрабатывает каждую запись,
-     * вычисляя метрики точности и полноты для этапа Retrieval, и агрегирует
-     * результаты в итоговый отчет.
-     *
-     * @return {@link Mono} с итоговыми результатами оценки в виде {@link EvaluationResult}.
      */
     public Mono<EvaluationResult> evaluate() {
         try {
@@ -64,8 +57,8 @@ public class RagEvaluationService {
                                         log.error("Ошибка во время оценки записи ID: {}", record.queryId(), e);
                                         failures.add(record.queryId());
                                     })
-                                    .onErrorResume(e -> Mono.empty()), // Продолжаем обработку даже если одна запись упала
-                            4) // Уровень параллелизма
+                                    .onErrorResume(e -> Mono.empty()),
+                            4)
                     .then(Mono.fromCallable(() -> calculateFinalResults(dataset.size(), details, failures)));
 
         } catch (IOException e) {
@@ -76,18 +69,16 @@ public class RagEvaluationService {
 
     /**
      * Оценивает одну запись из "золотого датасета".
-     *
-     * @param record Запись для оценки.
-     * @return {@link Mono} с кортежем (ID записи, результат оценки).
      */
     private Mono<Tuple2<String, EvaluationResult.RecordResult>> evaluateRecord(GoldenRecord record) {
         var retrievalConfig = retrievalProperties.hybrid().vectorSearch();
         return queryProcessingPipeline.process(record.queryText())
-                .flatMap(queries -> retrievalStrategy.retrieve(
-                        queries,
+                .flatMap(processedQueries -> retrievalStrategy.retrieve(
+                        processedQueries,
                         record.queryText(),
                         retrievalConfig.topK(),
-                        retrievalConfig.similarityThreshold()
+                        retrievalConfig.similarityThreshold(),
+                        null // Фильтр не используется при общей оценке
                 ))
                 .map(retrievedDocs -> {
                     Set<String> retrievedIds = new HashSet<>();
@@ -115,12 +106,7 @@ public class RagEvaluationService {
     }
 
     /**
-     * Вычисляет итоговые агрегированные метрики по результатам всех записей.
-     *
-     * @param total   Общее количество записей в датасете.
-     * @param details Детализированные результаты по каждой записи.
-     * @param failures Список ID записей, обработка которых завершилась с ошибкой.
-     * @return Итоговый объект {@link EvaluationResult}.
+     * Вычисляет итоговые агрегированные метрики.
      */
     private EvaluationResult calculateFinalResults(int total, Map<String, EvaluationResult.RecordResult> details, Set<String> failures) {
         double avgPrecision = details.values().stream().mapToDouble(EvaluationResult.RecordResult::precision).average().orElse(0.0);
@@ -132,10 +118,7 @@ public class RagEvaluationService {
     }
 
     /**
-     * Загружает и десериализует "золотой датасет" из JSON-файла.
-     *
-     * @return Список {@link GoldenRecord}.
-     * @throws IOException если файл не найден или не может быть прочитан.
+     * Загружает и десериализует "золотой датасет".
      */
     private List<GoldenRecord> loadGoldenDataset() throws IOException {
         Resource resource = resourceLoader.getResource(GOLDEN_DATASET_PATH);

@@ -1,4 +1,4 @@
-package com.example.ragollama.ingestion.domain.consumer;
+package com.example.ragollama.ingestion.consumer;
 
 import com.example.ragollama.ingestion.domain.model.DocumentJob;
 import com.example.ragollama.ingestion.domain.scheduler.DocumentIngestionScheduler;
@@ -11,33 +11,22 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
  * Слушатель RabbitMQ, который реагирует на событие захвата пакета задач.
- * <p>
- * Его единственная задача — разбить пакет на отдельные задачи и опубликовать
- * для каждой из них индивидуальное событие на обработку. Этот "разветвитель"
- * (fan-out) является ключевым элементом для обеспечения изоляции сбоев:
- * ошибка при обработке одного документа не повлияет на остальные в пакете.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class JobBatchConsumer {
 
-    /**
-     * Внедряем JpaRepository напрямую для простой операции поиска.
-     * Это избавляет от необходимости в дополнительном слое сервиса
-     * для такой тривиальной задачи.
-     */
     private final JpaRepository<DocumentJob, UUID> jobRepository;
     private final RabbitTemplate rabbitTemplate;
 
     /**
      * Обрабатывает событие {@link DocumentIngestionScheduler.JobBatchClaimedEvent}.
-     *
-     * @param event Событие, содержащее список ID задач для обработки.
      */
     @RabbitListener(queues = RabbitMqConfig.JOB_BATCH_CLAIMED_QUEUE)
     public void handleJobBatchClaimed(DocumentIngestionScheduler.JobBatchClaimedEvent event) {
@@ -46,7 +35,7 @@ public class JobBatchConsumer {
 
         jobs.forEach(job -> {
             log.debug("Публикация события 'ProcessDocumentJobEvent' для Job ID: {}", job.getId());
-            var processEvent = new ProcessDocumentJobEvent(job.getId(), job.getSourceName(), job.getTextContent());
+            var processEvent = new ProcessDocumentJobEvent(job.getId(), job.getSourceName(), job.getTextContent(), Map.of("doc_type", "bug_report"));
             rabbitTemplate.convertAndSend(
                     RabbitMqConfig.EVENTS_EXCHANGE,
                     RabbitMqConfig.DOCUMENT_PROCESSING_ROUTING_KEY,
@@ -57,12 +46,6 @@ public class JobBatchConsumer {
 
     /**
      * DTO для события, инициирующего обработку одного документа.
-     * Содержит все необходимые данные, чтобы обработчик был stateless.
-     *
-     * @param jobId       Уникальный ID задачи.
-     * @param sourceName  Имя источника документа.
-     * @param textContent Полный текст документа.
      */
-    public record ProcessDocumentJobEvent(UUID jobId, String sourceName, String textContent) {
-    }
+    public record ProcessDocumentJobEvent(UUID jobId, String sourceName, String textContent, Map<String, Object> metadata) {}
 }

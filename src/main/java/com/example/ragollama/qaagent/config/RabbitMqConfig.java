@@ -14,8 +14,8 @@ import org.springframework.context.annotation.Configuration;
 /**
  * Конфигурация для RabbitMQ.
  * <p>
- * Добавлены новые очереди и биндинги для поддержки
- * событийно-ориентированного конвейера индексации документов.
+ * В этой версии обновлен биндинг для Jira, чтобы он реагировал
+ * на более специфичный ключ маршрутизации.
  */
 @Configuration
 @EnableRabbit
@@ -28,7 +28,7 @@ public class RabbitMqConfig {
     public static final String GITHUB_EVENTS_QUEUE = "github.events.queue";
     public static final String JIRA_EVENTS_QUEUE = "jira.events.queue";
 
-    // Новые очереди и ключи для конвейера индексации
+    // Очереди и ключи для конвейера индексации
     public static final String JOB_BATCH_CLAIMED_QUEUE = "ingestion.batch.claimed.queue";
     public static final String DOCUMENT_PROCESSING_QUEUE = "ingestion.document.processing.queue";
     public static final String JOB_BATCH_CLAIMED_ROUTING_KEY = "ingestion.batch.claimed";
@@ -54,8 +54,6 @@ public class RabbitMqConfig {
         return new Queue(DEAD_LETTER_QUEUE);
     }
 
-    // --- Конфигурация очередей для веб-хуков ---
-
     @Bean
     public Queue githubEventsQueue() {
         return createDurableQueue(GITHUB_EVENTS_QUEUE);
@@ -73,10 +71,8 @@ public class RabbitMqConfig {
 
     @Bean
     public Binding jiraBinding(TopicExchange exchange, Queue jiraEventsQueue) {
-        return BindingBuilder.bind(jiraEventsQueue).to(exchange).with("jira.#");
+        return BindingBuilder.bind(jiraEventsQueue).to(exchange).with("jira.issue_created");
     }
-
-    // --- Конфигурация очередей для конвейера индексации ---
 
     @Bean
     public Queue jobBatchClaimedQueue() {

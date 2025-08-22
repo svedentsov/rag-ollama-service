@@ -64,7 +64,7 @@ public class WebhookController {
      * Принимает веб-хуки от Jira.
      * <p>
      * Проверяет статический токен аутентификации, после чего публикует
-     * событие в RabbitMQ с роутинг-ключом "jira.issue".
+     * событие в RabbitMQ с роутинг-ключом "jira.issue_created".
      *
      * @param authToken Токен для простой проверки аутентичности, передаваемый как query-параметр.
      * @param payload   Тело запроса.
@@ -82,7 +82,7 @@ public class WebhookController {
         }
 
         log.info("Получен валидный веб-хук от Jira. Публикация в очередь.");
-        rabbitTemplate.convertAndSend(RabbitMqConfig.EVENTS_EXCHANGE, "jira.issue", payload);
+        rabbitTemplate.convertAndSend(RabbitMqConfig.EVENTS_EXCHANGE, "jira.issue_created", payload);
 
         return ResponseEntity.accepted().build();
     }

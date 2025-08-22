@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * "Чистый" сервис-оркестратор RAG-конвейера, построенный на реактивной модели.
+ * "Чистый" сервис-оркестратор RAG-конвейера.
  */
 @Slf4j
 @Service
@@ -34,15 +34,9 @@ public class RagService {
     private final MetricService metricService;
     private final GroundingService groundingService;
 
-    /**
-     * Внутренний record для передачи результата работы "чистого" RAG-сервиса.
-     */
     public record RagAnswer(String answer, List<String> sourceCitations) {
     }
 
-    /**
-     * Выполняет RAG-запрос и возвращает полный ответ.
-     */
     public CompletableFuture<RagAnswer> queryAsync(String query, List<Message> history, int topK, double similarityThreshold) {
         return metricService.recordTimer("rag.requests.async.pure",
                 () -> prepareRagFlow(query, history, topK, similarityThreshold)
@@ -60,9 +54,6 @@ public class RagService {
         );
     }
 
-    /**
-     * Выполняет RAG-запрос и возвращает ответ в виде потока (SSE).
-     */
     public Flux<StreamingResponsePart> queryStream(String query, List<Message> history, int topK, double similarityThreshold) {
         return metricService.recordTimer("rag.requests.stream.pure",
                 () -> prepareRagFlow(query, history, topK, similarityThreshold)
@@ -74,14 +65,11 @@ public class RagService {
         );
     }
 
-    /**
-     * Собирает и выполняет общую часть RAG-конвейера: от валидации до создания промпта.
-     */
     private Mono<RagFlowContext> prepareRagFlow(String query, List<Message> history, int topK, double similarityThreshold) {
         return Mono.fromRunnable(() -> promptGuardService.checkForInjection(query))
                 .then(Mono.defer(() ->
                         queryProcessingPipeline.process(query)
-                                .flatMap(processedQueries -> retrievalStrategy.retrieve(processedQueries, query, topK, similarityThreshold))
+                                .flatMap(processedQueries -> retrievalStrategy.retrieve(processedQueries, query, topK, similarityThreshold, null))
                                 .flatMap(rerankedDocuments ->
                                         augmentationService.augment(rerankedDocuments, query, history)
                                                 .map(prompt -> new RagFlowContext(rerankedDocuments, prompt))
@@ -93,9 +81,6 @@ public class RagService {
                 });
     }
 
-    /**
-     * Внутренний record для передачи подготовленного контекста по RAG-конвейеру.
-     */
     private record RagFlowContext(List<Document> documents, Prompt prompt) {
     }
 }
