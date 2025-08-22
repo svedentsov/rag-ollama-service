@@ -23,12 +23,10 @@ import java.util.stream.Collectors;
  * <p>
  * Этот сервис вызывается слушателями RabbitMQ ({@link EventConsumerService}).
  * Он отвечает за парсинг входящих сообщений, преобразование их в
- * {@link AgentContext} и запуск соответствующего пайплайна агентов через
- * {@link AgentOrchestratorService}. После выполнения пайплайна, он форматирует
- * результаты и отправляет их обратно во внешние системы (GitHub, Jira).
- * <p>
- * Методы этого класса больше не помечены аннотацией `@Async`, так как асинхронность
- * и надежность обеспечиваются на уровне брокера сообщений.
+ * {@link AgentContext}, взаимодействие с внешними API (GitHub, Jira) для
+ * обогащения контекста и запуск соответствующего конвейера агентов через
+ * {@link AgentOrchestratorService}. После выполнения конвейера, он форматирует
+ * результаты и отправляет их обратно.
  */
 @Slf4j
 @Service
@@ -42,6 +40,12 @@ public class EventProcessingService {
 
     /**
      * Обрабатывает событие открытия или синхронизации Pull Request из GitHub.
+     * <p>
+     * Реализует полный асинхронный конвейер:
+     * 1. Десериализует payload.
+     * 2. Асинхронно запрашивает diff из GitHub API.
+     * 3. Создает контекст и запускает конвейер 'github-pr-pipeline'.
+     * 4. Форматирует результат и асинхронно публикует комментарий в PR.
      *
      * @param payloadRaw Сырой JSON payload, полученный из очереди.
      */
@@ -64,12 +68,13 @@ public class EventProcessingService {
                         return gitHubApiClient.postCommentToPullRequest(owner, repo, prNumber, comment);
                     })
                     .subscribe(
-                            null,
+                            v -> log.info("Конвейер обработки для PR #{} успешно завершен.", prNumber),
                             error -> log.error("Ошибка в конвейере обработки события для PR #{}:", prNumber, error)
                     );
 
         } catch (Exception e) {
             log.error("Не удалось распарсить или обработать GitHub webhook payload", e);
+            // Здесь можно отправить сообщение в DLQ или метрику
         }
     }
 
@@ -97,9 +102,12 @@ public class EventProcessingService {
                         String comment = formatPipelineResultAsJiraComment(results);
                         return jiraApiClient.postCommentToIssue(issueKey, comment).toFuture();
                     })
-                    .exceptionally(ex -> {
-                        log.error("Ошибка в конвейере обработки события для Jira-задачи {}:", issueKey, ex);
-                        return null;
+                    .whenComplete((result, ex) -> {
+                        if (ex != null) {
+                            log.error("Ошибка в конвейере обработки события для Jira-задачи {}:", issueKey, ex);
+                        } else {
+                            log.info("Конвейер обработки для Jira-задачи {} успешно завершен.", issueKey);
+                        }
                     });
 
         } catch (Exception e) {
@@ -108,26 +116,37 @@ public class EventProcessingService {
     }
 
     /**
-     * Форматирует агрегированный результат работы пайплайна в Markdown-комментарий для GitHub.
+     * Форматирует агрегированный результат работы конвейера в Markdown-комментарий для GitHub.
      *
-     * @param results Список результатов от каждого агента в пайплайне.
+     * @param results Список результатов от каждого агента в конвейере.
      * @return Строка с отформатированным комментарием.
      */
     private String formatPipelineResultAsGithubComment(List<AgentResult> results) {
         StringBuilder comment = new StringBuilder("### ✅ AI-Ассистент: Результаты анализа\n\n");
         for (AgentResult result : results) {
-            comment.append("--- \n");
+            comment.append("---\n");
             comment.append("#### Агент: `").append(result.agentName()).append("`\n");
             comment.append("> ").append(result.summary()).append("\n\n");
-            // Дополнительное форматирование деталей при необходимости
+
+            // Специальное форматирование для приоритизатора тестов
+            if ("test-prioritizer".equals(result.agentName()) && result.details().containsKey("prioritizedTests")) {
+                @SuppressWarnings("unchecked")
+                List<String> tests = (List<String>) result.details().get("prioritizedTests");
+                if (!tests.isEmpty()) {
+                    comment.append("**Рекомендуемые тесты для запуска:**\n");
+                    comment.append("```\n");
+                    tests.forEach(test -> comment.append(test).append("\n"));
+                    comment.append("```\n");
+                }
+            }
         }
         return comment.toString();
     }
 
     /**
-     * Форматирует агрегированный результат работы пайплайна в комментарий для Jira.
+     * Форматирует агрегированный результат работы конвейера в комментарий для Jira.
      *
-     * @param results Список результатов от каждого агента в пайплайне.
+     * @param results Список результатов от каждого агента в конвейере.
      * @return Строка с отформатированным комментарием.
      */
     private String formatPipelineResultAsJiraComment(List<AgentResult> results) {

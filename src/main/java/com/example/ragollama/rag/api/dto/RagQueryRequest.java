@@ -1,19 +1,21 @@
 package com.example.ragollama.rag.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 import java.util.UUID;
 
 /**
  * DTO для RAG-запроса, содержащий вопрос пользователя, параметры поиска и опциональный ID сессии.
+ * <p>
+ * Валидация параметров поиска вынесена в {@link com.example.ragollama.orchestration.dto.UniversalRequest},
+ * этот DTO теперь является простым контейнером данных.
  *
- * @param query               Вопрос пользователя, на основе которого будет производиться поиск и генерация ответа.
- * @param sessionId           Опциональный идентификатор сессии. Если предоставлен, в промпт будет добавлена
- *                            история диалога для поддержания контекста. Если null, будет создана новая сессия.
- * @param topK                Количество наиболее релевантных документов (чанков) для извлечения из векторного хранилища.
- * @param similarityThreshold Минимальный порог схожести (от 0.0 до 1.0), которому должны соответствовать
- *                            извлекаемые документы. Документы с меньшей схожестью будут отфильтрованы.
+ * @param query               Вопрос пользователя.
+ * @param sessionId           Опциональный идентификатор сессии.
+ * @param topK                Количество извлекаемых документов.
+ * @param similarityThreshold Порог схожести.
  */
 @Schema(description = "DTO для RAG-запроса с поддержкой сессий")
 public record RagQueryRequest(
@@ -26,15 +28,13 @@ public record RagQueryRequest(
         UUID sessionId,
 
         @Schema(description = "Количество извлекаемых чанков", defaultValue = "4", example = "5")
-        @NotNull @Min(1) @Max(10)
         Integer topK,
 
-        @Schema(description = "Порог схожести (0.0-1.0)", defaultValue = "0.7", example = "0.75")
-        @NotNull @DecimalMin("0.0") @DecimalMax("1.0")
+        @Schema(description = "Порог схожести (0.1-1.0)", defaultValue = "0.7", example = "0.75")
         Double similarityThreshold
 ) {
     /**
-     * Компактный конструктор для установки значений по умолчанию, если они не предоставлены в запросе.
+     * Компактный конструктор для установки значений по умолчанию, если они не предоставлены (null).
      */
     public RagQueryRequest {
         if (topK == null) topK = 4;

@@ -7,21 +7,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.StringJoiner;
 
 /**
  * Сервис для интеллектуальной сборки контекста для RAG-промпта.
  * <p>
- * Эта версия реализует стратегию "summary-first". Она сначала пытается
- * использовать краткое содержание (summary) из метаданных документа,
- * которое было сгенерировано на этапе индексации. Если summary отсутствует,
- * используется полный текст документа. Это позволяет передавать в LLM
- * более концентрированный и релевантный контекст.
- * <p>
- * Также используется паттерн "Стратегия" для переупорядочивания
- * документов и механизм "умного" отсечения (precision truncation) для
- * максимального заполнения контекстного окна.
+ * В этой версии сервис больше не "сплющивает" контекст в строку. Его
+ * единственная задача — **управление контекстным окном**. Он отбирает
+ * наиболее релевантные документы, которые помещаются в заданный лимит
+ * токенов, и возвращает их в виде структурированного списка.
  */
 @Service
 @Slf4j
@@ -33,7 +28,6 @@ public class ContextAssemblerService {
 
     /**
      * Минимальное количество токенов, которое имеет смысл добавлять при отсечении.
-     * Предотвращает добавление бессмысленных обрывков из 1-2 слов.
      */
     private static final int MIN_TRUNCATION_TOKENS = 20;
 
@@ -41,7 +35,7 @@ public class ContextAssemblerService {
      * Конструктор для внедрения зависимостей.
      *
      * @param tokenizationService Сервис для работы с токенами.
-     * @param arrangementStrategy Стратегия для упорядочивания документов перед сборкой.
+     * @param arrangementStrategy Стратегия для упорядочивания документов.
      * @param appProperties       Типобезопасная конфигурация приложения.
      */
     public ContextAssemblerService(
@@ -51,59 +45,51 @@ public class ContextAssemblerService {
         this.tokenizationService = tokenizationService;
         this.arrangementStrategy = arrangementStrategy;
         this.maxContextTokens = appProperties.context().maxTokens();
-        log.info("ContextAssemblerService инициализирован с лимитом в {} токенов и стратегией 'summary-first'.", maxContextTokens);
+        log.info("ContextAssemblerService инициализирован с лимитом в {} токенов.", maxContextTokens);
     }
 
     /**
-     * Собирает единую строку контекста из списка документов, не превышая лимит токенов.
+     * Собирает список документов для контекста, не превышая лимит токенов.
      *
      * @param documents Список документов, извлеченных из векторного хранилища.
-     * @return Строка, содержащая объединенный и оптимизированный контекст.
+     * @return Отфильтрованный и потенциально усеченный список документов,
+     * готовый для передачи в шаблон промпта.
      */
-    public String assembleContext(List<Document> documents) {
+    public List<Document> assembleContext(List<Document> documents) {
         if (documents == null || documents.isEmpty()) {
-            return "";
+            return List.of();
         }
 
         List<Document> arrangedDocs = arrangementStrategy.arrange(documents);
-
-        StringJoiner contextJoiner = new StringJoiner("\n---\n");
+        List<Document> contextDocuments = new ArrayList<>();
         int currentTokenCount = 0;
-        int documentCount = 0;
 
-        final int separatorTokens = tokenizationService.countTokens("\n---\n");
+        // Приблизительная оценка токенов на "обвязку" XML-подобного формата в промпте
+        final int perDocumentOverheadTokens = 20;
 
         for (Document doc : arrangedDocs) {
-            // ПРИОРИТЕТ: Используем summary, если оно есть, иначе - полный текст.
             String textToUse = (String) doc.getMetadata().getOrDefault("summary", doc.getText());
             int documentTokens = tokenizationService.countTokens(textToUse);
-
-            int requiredTokens = documentTokens + (documentCount > 0 ? separatorTokens : 0);
+            int requiredTokens = documentTokens + perDocumentOverheadTokens;
 
             if (currentTokenCount + requiredTokens <= maxContextTokens) {
-                // Документ помещается целиком
-                contextJoiner.add(textToUse);
+                contextDocuments.add(doc);
                 currentTokenCount += requiredTokens;
-                documentCount++;
             } else {
-                // Документ не помещается целиком, пытаемся добавить его часть
-                int remainingTokens = maxContextTokens - currentTokenCount - (documentCount > 0 ? separatorTokens : 0);
+                int remainingTokens = maxContextTokens - currentTokenCount - perDocumentOverheadTokens;
                 if (remainingTokens >= MIN_TRUNCATION_TOKENS) {
                     String truncatedText = tokenizationService.truncate(textToUse, remainingTokens);
-                    contextJoiner.add(truncatedText);
-                    currentTokenCount += tokenizationService.countTokens(truncatedText) + (documentCount > 0 ? separatorTokens : 0);
-                    documentCount++;
-                    log.debug("Последний документ был усечен, чтобы поместиться в контекст. Добавлено ~{} токенов.", remainingTokens);
+                    // Создаем новый документ с усеченным текстом, чтобы не изменять оригинал
+                    Document truncatedDoc = new Document(truncatedText, doc.getMetadata());
+                    contextDocuments.add(truncatedDoc);
+                    log.debug("Последний документ был усечен для экономии места в контексте.");
                 }
-                // Если места осталось слишком мало, просто прекращаем сборку
-                log.debug("Достигнут лимит контекста ({}/{} токенов). Добавлено {} из {} документов. Пропускаем остальные.",
-                        currentTokenCount, maxContextTokens, documentCount, arrangedDocs.size());
-                break;
+                log.info("Достигнут лимит контекста. Включено {} из {} документов.", contextDocuments.size(), arrangedDocs.size());
+                break; // Прекращаем сборку, так как лимит достигнут
             }
         }
 
-        String finalContext = contextJoiner.toString();
-        log.info("Контекст собран из {} документов, итоговый размер: {} токенов.", documentCount, tokenizationService.countTokens(finalContext));
-        return finalContext;
+        log.info("Контекст собран из {} документов.", contextDocuments.size());
+        return contextDocuments;
     }
 }

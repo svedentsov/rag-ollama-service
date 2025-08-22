@@ -1,36 +1,53 @@
--- Убедимся, что используем схему public
-SET search_path = public;
+DO $$
+BEGIN
+    -- === ШАГ 1: Проверка и создание кастомного словаря ===
+    -- Проверяем наличие словаря в системном каталоге pg_ts_dict
+    IF NOT EXISTS (SELECT 1 FROM pg_ts_dict WHERE dictname = 'russian_nostop_dict') THEN
+        CREATE TEXT SEARCH DICTIONARY russian_nostop_dict (
+            TEMPLATE = snowball,
+            Language = russian
+        );
+    END IF;
 
--- Шаг 1: Добавляем в таблицу `vector_store` новый столбец типа tsvector.
--- Этот тип данных специально предназначен для хранения предварительно
--- обработанного текста для полнотекстового поиска (лексемы, стоп-слова и т.д.).
+    -- === ШАГ 2: Проверка и создание кастомной FTS-конфигурации ===
+    -- Проверяем наличие конфигурации в системном каталоге pg_ts_config
+    IF NOT EXISTS (SELECT 1 FROM pg_ts_config WHERE cfgname = 'russian_nostop') THEN
+        CREATE TEXT SEARCH CONFIGURATION russian_nostop (COPY = russian);
+    END IF;
+END;
+$$;
+
+-- === ШАГ 3: Привязка словаря к типам токенов в конфигурации ===
+-- Эта операция идемпотентна, повторное выполнение не вызовет ошибки.
+ALTER TEXT SEARCH CONFIGURATION russian_nostop
+    ALTER MAPPING FOR hword, hword_part, word
+    WITH russian_nostop_dict;
+
+-- === ШАГ 4: Добавление tsvector-колонки в таблицу ===
 ALTER TABLE vector_store ADD COLUMN IF NOT EXISTS content_tsv tsvector;
 
--- Шаг 2: Создаем функцию, которая будет вызываться триггером.
--- Эта функция берет текстовое поле 'content', преобразует его в tsvector
--- (используя конфигурацию для русского языка 'russian') и сохраняет
--- в поле 'content_tsv'.
+-- === ШАГ 5: Создание функции-триггера с использованием новой конфигурации ===
+-- CREATE OR REPLACE FUNCTION является идемпотентной операцией.
 CREATE OR REPLACE FUNCTION update_content_tsv()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.content_tsv := to_tsvector('russian', NEW.content);
+    -- Используем полное имя конфигурации со схемой для надежности
+    NEW.content_tsv := to_tsvector('public.russian_nostop', NEW.content);
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Шаг 3: Создаем триггер, который будет автоматически вызывать нашу функцию
--- перед каждой операцией вставки (INSERT) или обновления (UPDATE) в таблице.
--- Это гарантирует, что наш поисковый индекс всегда будет актуален.
+-- === ШАГ 6: Создание триггера ===
+-- Сначала удаляем, потом создаем — это делает операцию идемпотентной.
 DROP TRIGGER IF EXISTS tsvectorupdate ON vector_store;
 CREATE TRIGGER tsvectorupdate
 BEFORE INSERT OR UPDATE ON vector_store
 FOR EACH ROW EXECUTE FUNCTION update_content_tsv();
 
--- Шаг 4: Создаем GIN (Generalized Inverted Index) индекс на нашем tsvector-столбце.
--- GIN-индексы идеально подходят для полнотекстового поиска и обеспечивают
--- высочайшую производительность.
+-- === ШАГ 7: Создание GIN-индекса ===
 CREATE INDEX IF NOT EXISTS idx_content_tsv ON vector_store USING GIN(content_tsv);
 
--- Шаг 5: (Опционально, но рекомендуется) Единоразово заполняем
--- столбец content_tsv для уже существующих данных в таблице.
-UPDATE vector_store SET content_tsv = to_tsvector('russian', content) WHERE content_tsv IS NULL;
+-- === ШАГ 8: Единоразовое обновление существующих данных ===
+-- Перестраиваем tsvector для всех строк, где он еще не был создан,
+-- используя новую конфигурацию.
+UPDATE vector_store SET content_tsv = to_tsvector('public.russian_nostop', content) WHERE content_tsv IS NULL;

@@ -1,68 +1,77 @@
 package com.example.ragollama.shared.prompts;
 
 import com.example.ragollama.shared.config.properties.AppProperties;
+import freemarker.template.Configuration;
+import freemarker.template.Template;
+import freemarker.template.TemplateException;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.prompt.PromptTemplate;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.io.StringWriter;
 import java.util.Map;
 
 /**
  * Сервис для управления и создания промптов из шаблонов.
- * Централизует логику загрузки и рендеринга шаблонов промптов,
- * что позволяет легко изменять их без перекомпиляции кода.
+ * <p>
+ * Эта версия полностью переведена на использование движка шаблонов FreeMarker.
+ * Это позволяет работать со сложными структурами данных (списками, объектами)
+ * прямо в шаблоне, отделяя логику подготовки данных от их представления.
+ * Spring Boot автоматически сконфигурирует бин {@link Configuration},
+ * если в classpath есть зависимость `spring-boot-starter-freemarker`.
  */
 @Slf4j
 @Service
 public class PromptService {
 
-    private final ResourceLoader resourceLoader;
     private final String ragTemplatePath;
-    private PromptTemplate ragPromptTemplate;
+    private final Configuration freemarkerConfig;
+    private Template ragPromptTemplate;
 
     /**
-     * Конструктор сервиса, использующий централизованные настройки.
+     * Конструктор сервиса.
      *
-     * @param resourceLoader Загрузчик ресурсов Spring.
-     * @param appProperties  Объект с настройками приложения.
+     * @param appProperties    Объект с настройками приложения.
+     * @param freemarkerConfig Автоматически сконфигурированный бин FreeMarker.
      */
-    public PromptService(ResourceLoader resourceLoader, AppProperties appProperties) {
-        this.resourceLoader = resourceLoader;
+    public PromptService(AppProperties appProperties, Configuration freemarkerConfig) {
         this.ragTemplatePath = appProperties.prompt().ragTemplatePath();
+        this.freemarkerConfig = freemarkerConfig;
     }
 
     /**
-     * Инициализирует сервис после создания бина.
-     * Загружает шаблон промпта из файла в classpath, компилирует его
-     * и сохраняет в поле {@code ragPromptTemplate} для дальнейшего использования.
-     * В случае ошибки загрузки выбрасывает исключение, останавливая запуск приложения.
+     * Инициализирует сервис, загружая и компилируя шаблон FreeMarker.
+     * Вызывается один раз после создания бина.
+     *
+     * @throws IllegalStateException если шаблон не может быть загружен.
      */
     @PostConstruct
     private void init() {
         try {
-            Resource resource = resourceLoader.getResource("classpath:" + ragTemplatePath);
-            String templateString = resource.getContentAsString(StandardCharsets.UTF_8);
-            this.ragPromptTemplate = new PromptTemplate(templateString);
-            log.info("Шаблон RAG-промпта успешно загружен из: {}", ragTemplatePath);
+            this.ragPromptTemplate = freemarkerConfig.getTemplate(ragTemplatePath);
+            log.info("Шаблон RAG-промпта FreeMarker успешно загружен из: {}", ragTemplatePath);
         } catch (IOException e) {
-            log.error("Не удалось загрузить шаблон RAG-промпта из: {}", ragTemplatePath, e);
-            throw new IllegalStateException("Не удалось инициализировать PromptService", e);
+            log.error("Не удалось загрузить шаблон RAG-промпта FreeMarker из: {}. Убедитесь, что путь в application.yml (spring.freemarker.template-loader-path) указан верно.", ragTemplatePath, e);
+            throw new IllegalStateException("Не удалось инициализировать PromptService с FreeMarker", e);
         }
     }
 
     /**
-     * Создает финальный текст промпта для RAG-запроса, подставляя данные в шаблон.
+     * Создает финальный текст промпта, обрабатывая шаблон FreeMarker с предоставленной моделью данных.
      *
      * @param model Карта (Map), содержащая переменные для подстановки в шаблон
-     *              (например, "context" и "question").
+     *              (например, "documents", "question").
      * @return Готовый к отправке в LLM текст промпта.
+     * @throws IllegalStateException если происходит ошибка во время обработки шаблона.
      */
     public String createRagPrompt(Map<String, Object> model) {
-        return this.ragPromptTemplate.render(model);
+        try (StringWriter writer = new StringWriter()) {
+            ragPromptTemplate.process(model, writer);
+            return writer.toString();
+        } catch (TemplateException | IOException e) {
+            log.error("Ошибка при обработке шаблона RAG-промпта FreeMarker", e);
+            throw new IllegalStateException("Ошибка рендеринга RAG-промпта", e);
+        }
     }
 }

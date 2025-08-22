@@ -17,10 +17,9 @@ import java.util.stream.Collectors;
 /**
  * Сервис, отвечающий за этап обогащения (Augmentation) в RAG-конвейере.
  * <p>
- * Этот сервис применяет цепочку всех доступных "советников" ({@link RagAdvisor})
- * для модификации и обогащения RAG-контекста перед финальной сборкой промпта.
- * Все ресурсоемкие операции, такие как суммаризация, были вынесены
- * в конвейер индексации, поэтому все советники считаются быстрыми.
+ * Эта версия передает в модель промпта структурированный список документов,
+ * а не "сплющенную" строку. Это позволяет LLM лучше понимать контекст
+ * и генерировать более точные и аудируемые ответы.
  */
 @Service
 @Slf4j
@@ -34,7 +33,7 @@ public class AugmentationService {
      * Конструктор для внедрения зависимостей.
      *
      * @param advisors                Список всех бинов-советников, автоматически внедряемых Spring.
-     * @param contextAssemblerService Сервис для сборки контекста из документов.
+     * @param contextAssemblerService Сервис для управления контекстным окном.
      * @param promptService           Сервис для создания промптов из шаблонов.
      */
     public AugmentationService(List<RagAdvisor> advisors, ContextAssemblerService contextAssemblerService, PromptService promptService) {
@@ -45,7 +44,8 @@ public class AugmentationService {
     }
 
     /**
-     * Выполняет обогащение, последовательно применяя все доступные советники.
+     * Выполняет обогащение, последовательно применяя все доступные советники
+     * и формируя промпт со структурированным контекстом.
      *
      * @param documents   Извлеченные документы.
      * @param query       Запрос пользователя.
@@ -56,20 +56,22 @@ public class AugmentationService {
         RagContext initialContext = new RagContext(query);
         initialContext.setDocuments(documents);
 
-        // Применяем цепочку всех советников
         Mono<RagContext> finalContextMono = Flux.fromIterable(advisors)
                 .reduce(Mono.just(initialContext), (contextMono, advisor) -> contextMono.flatMap(advisor::advise))
                 .flatMap(mono -> mono);
 
         return finalContextMono.map(finalContext -> {
-            String contextString = contextAssemblerService.assembleContext(finalContext.getDocuments());
-            finalContext.getPromptModel().put("context", contextString);
+            // Новая логика: получаем отфильтрованный список документов
+            List<Document> documentsForContext = contextAssemblerService.assembleContext(finalContext.getDocuments());
+
+            // Передаем в модель структурированный список, а не строку
+            finalContext.getPromptModel().put("documents", documentsForContext);
             finalContext.getPromptModel().put("question", query);
             String historyString = formatHistory(chatHistory);
             finalContext.getPromptModel().put("history", historyString);
 
             String promptString = promptService.createRagPrompt(finalContext.getPromptModel());
-            log.debug("Этап Augmentation успешно завершен. Использовано {} советников.", advisors.size());
+            log.debug("Этап Augmentation успешно завершен. Использовано {} документов в контексте.", documentsForContext.size());
             return new Prompt(promptString);
         });
     }

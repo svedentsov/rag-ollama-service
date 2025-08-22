@@ -10,7 +10,10 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Сервис-оркестратор, управляющий выполнением пайплайнов из QA-агентов.
+ * Сервис-оркестратор, управляющий выполнением конвейеров из QA-агентов.
+ * <p>
+ * Эта версия дополнена новым конвейером `github-pr-pipeline`,
+ * который демонстрирует последовательное выполнение нескольких агентов.
  */
 @Slf4j
 @Service
@@ -19,14 +22,27 @@ public class AgentOrchestratorService {
     private final Map<String, QaAgent> agentMap;
     private final Map<String, List<QaAgent>> pipelines;
 
+    /**
+     * Конструктор, который автоматически собирает все бины типа {@link QaAgent}
+     * и инициализирует предопределенные конвейеры.
+     *
+     * @param agents Список всех реализаций {@link QaAgent}, найденных в контексте Spring.
+     */
     public AgentOrchestratorService(List<QaAgent> agents) {
         this.agentMap = agents.stream()
                 .collect(Collectors.toMap(QaAgent::getName, Function.identity()));
         this.pipelines = definePipelines();
+        log.info("AgentOrchestratorService инициализирован. Доступные агенты: {}. Доступные конвейеры: {}",
+                agentMap.keySet(), pipelines.keySet());
     }
 
+    /**
+     * Определяет статические конвейеры (цепочки) выполнения агентов.
+     * В production-системе эта конфигурация может быть вынесена в YAML-файл.
+     *
+     * @return Карта, где ключ - имя конвейера, а значение - упорядоченный список агентов.
+     */
     private Map<String, List<QaAgent>> definePipelines() {
-        // Определяем наши пайплайны здесь. В production это можно вынести в конфигурацию.
         return Map.of(
                 "github-pr-pipeline", List.of(
                         agentMap.get("test-prioritizer"),
@@ -39,37 +55,46 @@ public class AgentOrchestratorService {
     }
 
     /**
-     * Асинхронно выполняет именованный пайплайн агентов.
+     * Асинхронно выполняет именованный конвейер агентов.
+     * <p>
+     * Метод последовательно выполняет каждого агента из конвейера, передавая
+     * и обогащая {@link AgentContext} на каждом шаге. Результаты всех агентов
+     * агрегируются в итоговый список.
      *
-     * @param pipelineName   Имя пайплайна для запуска.
-     * @param initialContext Начальный контекст.
+     * @param pipelineName   Имя конвейера для запуска.
+     * @param initialContext Начальный контекст с входными данными.
      * @return {@link CompletableFuture} с агрегированными результатами всех агентов.
      */
     public CompletableFuture<List<AgentResult>> invokePipeline(String pipelineName, AgentContext initialContext) {
         List<QaAgent> agentsInPipeline = pipelines.get(pipelineName);
         if (agentsInPipeline == null || agentsInPipeline.isEmpty()) {
-            log.warn("Пайплайн с именем '{}' не найден или пуст.", pipelineName);
+            log.warn("Конвейер с именем '{}' не найден или пуст.", pipelineName);
             return CompletableFuture.completedFuture(List.of());
         }
 
-        log.info("Запуск пайплайна '{}' с {} агентами.", pipelineName, agentsInPipeline.size());
+        log.info("Запуск конвейера '{}' с {} агентами.", pipelineName, agentsInPipeline.size());
 
+        // Создаем цепочку асинхронных вызовов
         CompletableFuture<PipelineExecutionState> executionChain = CompletableFuture.completedFuture(
                 new PipelineExecutionState(initialContext, List.of())
         );
 
         for (QaAgent agent : agentsInPipeline) {
-            executionChain = executionChain.thenCompose(state ->
-                    agent.execute(state.currentContext)
-                            .thenApply(result -> state.addResult(result))
-            );
+            executionChain = executionChain.thenCompose(state -> {
+                log.debug("Выполнение агента '{}' в конвейере '{}'", agent.getName(), pipelineName);
+                return agent.execute(state.currentContext)
+                        .thenApply(state::addResult);
+            });
         }
 
         return executionChain.thenApply(PipelineExecutionState::getResults);
     }
 
     /**
-     * Внутренний класс для хранения состояния выполнения пайплайна.
+     * Внутренний неизменяемый класс для хранения состояния выполнения конвейера.
+     * <p>
+     * Вместо изменения одного объекта, каждый шаг создает новый экземпляр,
+     * что делает логику более предсказуемой и безопасной в асинхронной среде.
      */
     private static class PipelineExecutionState {
         private final AgentContext currentContext;
@@ -80,15 +105,25 @@ public class AgentOrchestratorService {
             this.results = new java.util.ArrayList<>(results);
         }
 
+        /**
+         * Добавляет новый результат и обогащает контекст для следующего шага.
+         *
+         * @param newResult Результат работы предыдущего агента.
+         * @return Новый экземпляр {@link PipelineExecutionState}.
+         */
         public PipelineExecutionState addResult(AgentResult newResult) {
-            this.results.add(newResult);
-            // Мержим детали результата в контекст для следующих агентов
+            List<AgentResult> newResults = new java.util.ArrayList<>(this.results);
+            newResults.add(newResult);
             this.currentContext.payload().putAll(newResult.details());
-            return new PipelineExecutionState(this.currentContext, this.results);
+            return new PipelineExecutionState(this.currentContext, newResults);
         }
 
         public List<AgentResult> getResults() {
             return results;
+        }
+
+        public AgentContext getCurrentContext() {
+            return currentContext;
         }
     }
 }

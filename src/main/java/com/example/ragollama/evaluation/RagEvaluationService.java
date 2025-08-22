@@ -4,6 +4,7 @@ import com.example.ragollama.evaluation.model.EvaluationResult;
 import com.example.ragollama.evaluation.model.GoldenRecord;
 import com.example.ragollama.rag.agent.QueryProcessingPipeline;
 import com.example.ragollama.rag.retrieval.HybridRetrievalStrategy;
+import com.example.ragollama.rag.retrieval.RetrievalProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuple2;
+import reactor.util.function.Tuples;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,6 +36,7 @@ public class RagEvaluationService {
     private final ObjectMapper objectMapper;
     private final QueryProcessingPipeline queryProcessingPipeline;
     private final HybridRetrievalStrategy retrievalStrategy;
+    private final RetrievalProperties retrievalProperties;
 
     private static final String GOLDEN_DATASET_PATH = "classpath:evaluation/golden-dataset.json";
 
@@ -71,9 +74,21 @@ public class RagEvaluationService {
         }
     }
 
+    /**
+     * Оценивает одну запись из "золотого датасета".
+     *
+     * @param record Запись для оценки.
+     * @return {@link Mono} с кортежем (ID записи, результат оценки).
+     */
     private Mono<Tuple2<String, EvaluationResult.RecordResult>> evaluateRecord(GoldenRecord record) {
+        var retrievalConfig = retrievalProperties.hybrid().vectorSearch();
         return queryProcessingPipeline.process(record.queryText())
-                .flatMap(queries -> retrievalStrategy.retrieve(queries, record.queryText()))
+                .flatMap(queries -> retrievalStrategy.retrieve(
+                        queries,
+                        record.queryText(),
+                        retrievalConfig.topK(),
+                        retrievalConfig.similarityThreshold()
+                ))
                 .map(retrievedDocs -> {
                     Set<String> retrievedIds = new HashSet<>();
                     for (Document doc : retrievedDocs) {
@@ -95,10 +110,18 @@ public class RagEvaluationService {
                     double recall = (tp + fn) > 0 ? (double) tp / (tp + fn) : 0.0;
 
                     var result = new EvaluationResult.RecordResult(precision, recall, expectedIds.size(), retrievedIds.size(), tp);
-                    return reactor.util.function.Tuples.of(record.queryId(), result);
+                    return Tuples.of(record.queryId(), result);
                 });
     }
 
+    /**
+     * Вычисляет итоговые агрегированные метрики по результатам всех записей.
+     *
+     * @param total   Общее количество записей в датасете.
+     * @param details Детализированные результаты по каждой записи.
+     * @param failures Список ID записей, обработка которых завершилась с ошибкой.
+     * @return Итоговый объект {@link EvaluationResult}.
+     */
     private EvaluationResult calculateFinalResults(int total, Map<String, EvaluationResult.RecordResult> details, Set<String> failures) {
         double avgPrecision = details.values().stream().mapToDouble(EvaluationResult.RecordResult::precision).average().orElse(0.0);
         double avgRecall = details.values().stream().mapToDouble(EvaluationResult.RecordResult::recall).average().orElse(0.0);
@@ -108,6 +131,12 @@ public class RagEvaluationService {
         return new EvaluationResult(total, avgPrecision, avgRecall, f1Score, new ArrayList<>(failures), details);
     }
 
+    /**
+     * Загружает и десериализует "золотой датасет" из JSON-файла.
+     *
+     * @return Список {@link GoldenRecord}.
+     * @throws IOException если файл не найден или не может быть прочитан.
+     */
     private List<GoldenRecord> loadGoldenDataset() throws IOException {
         Resource resource = resourceLoader.getResource(GOLDEN_DATASET_PATH);
         try (InputStream inputStream = resource.getInputStream()) {

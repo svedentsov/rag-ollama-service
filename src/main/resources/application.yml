@@ -15,9 +15,21 @@ spring:
     timeout-per-shutdown-phase: 30s # Таймаут для корректного завершения работы приложения (graceful shutdown)
   mvc:
     async:
-      # Таймаут для асинхронных запросов в контроллерах (CompletableFuture).
-      # САМЫЙ ВНЕШНИЙ УРОВЕНЬ: должен быть больше всех вложенных таймаутов.
-      request-timeout: 190s
+      # САМЫЙ ВНЕШНИЙ УРОВЕНЬ: Таймаут для асинхронных запросов в контроллерах.
+      # Должен быть больше всех вложенных таймаутов.
+      request-timeout: 290s
+
+  # --- FreeMarker Template Engine Configuration ---
+  freemarker:
+    # Явно указываем Spring Boot, где искать наши шаблоны.
+    # Путь должен начинаться с 'classpath:' и указывать на директорию.
+    template-loader-path: classpath:/prompts/
+    # Опционально: можно указать суффикс, если все файлы имеют одинаковое расширение
+    suffix: .ftl
+    # Глобальная настройка для форматирования boolean-значений.
+    # 'c' выводит true/false без кавычек, что безопасно для LLM и предотвращает ошибки.
+    settings:
+      boolean_format: c
 
   # --- Database & Persistence ---
   datasource:
@@ -150,7 +162,7 @@ resilience4j:
     instances:
       ollama:
         # САМЫЙ ВНУТРЕННИЙ УРОВЕНЬ: Максимальное время ожидания ответа от LLM.
-        timeout-duration: 180s
+        timeout-duration: 280s
         cancel-running-future: true
 
 # ===================================================================
@@ -158,7 +170,8 @@ resilience4j:
 # ===================================================================
 app:
   prompt:
-    rag-template-path: "prompts/rag-prompt.tmpl" # Путь к шаблону промпта для RAG
+    # Имя файла шаблона. Путь теперь задается в spring.freemarker.template-loader-path
+    rag-template-path: "rag-prompt.ftl"
 
   # Гибкая конфигурация Reranker Agent
   reranking:
@@ -203,8 +216,8 @@ app:
   http-client:
     # СРЕДНИЙ УРОВЕНЬ: таймауты WebClient, должны быть чуть больше, чем TimeLimiter
     connect-timeout: 10s # Таймаут на установку TCP-соединения
-    response-timeout: 185s # Общий таймаут на получение ответа
-    read-write-timeout: 185s # Таймаут на чтение/запись данных
+    response-timeout: 285s # Общий таймаут на получение ответа
+    read-write-timeout: 285s # Таймаут на чтение/запись данных
 
   task-executor:
     # Настройки основного пула потоков для @Async задач.
@@ -258,6 +271,8 @@ app:
       enabled: true
       # Запускать каждый день в 3:00 ночи
       cron: "0 0 3 * * ?"
+
+  # Настройки для интеграций с внешними системами
   integrations:
     github:
       # Секрет, который вы настраиваете в GitHub для подписи веб-хуков.
