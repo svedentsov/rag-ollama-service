@@ -18,16 +18,16 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Реализует адаптивную гибридную стратегию извлечения документов.
  * <p>
- * Эта версия дополнена поддержкой опциональной фильтрации по метаданным,
- * что позволяет выполнять более точные и эффективные поисковые запросы,
- * ограничивая поиск определенным подмножеством документов.
+ * Эта версия использует по-настоящему параллельный подход. Она одновременно
+ * выполняет точный поиск по основному запросу и расширяющие поиски по
+ * альтернативным запросам, а затем интеллектуально объединяет все результаты.
+ * Также добавлена поддержка опциональной фильтрации и логирование
+ * "пробелов в знаниях".
  */
 @Slf4j
 @Service
@@ -44,7 +44,7 @@ public class HybridRetrievalStrategy {
     private final KnowledgeGapService knowledgeGapService;
 
     /**
-     * Асинхронно извлекает и ранжирует документы с поддержкой фильтрации.
+     * Асинхронно извлекает и ранжирует документы, используя параллельный гибридный поиск.
      *
      * @param processedQueries    Объект с основным и расширенными запросами.
      * @param originalQuery       Оригинальный запрос пользователя для FTS и реранжирования.
@@ -65,52 +65,42 @@ public class HybridRetrievalStrategy {
             return Mono.just(List.of());
         }
 
-        Mono<List<Document>> vectorSearchMono = executeAdaptiveVectorSearch(processedQueries, topK, similarityThreshold, filter);
-        Mono<List<Document>> ftsSearchMono = executeFtsSearch(originalQuery);
+        // 1. Параллельно запускаем все поиски: точный векторный, расширенный векторный и FTS
+        Mono<List<Document>> primaryVectorSearch = executeVectorSearch(List.of(processedQueries.primaryQuery()), topK, similarityThreshold, filter);
+        Mono<List<Document>> expansionVectorSearch = executeVectorSearch(processedQueries.expansionQueries(), topK, similarityThreshold, filter);
+        Mono<List<Document>> ftsSearch = executeFtsSearch(originalQuery);
 
-        return Mono.zip(vectorSearchMono, ftsSearchMono)
+        // 2. Объединяем результаты всех трех потоков
+        return Mono.zip(primaryVectorSearch, expansionVectorSearch, ftsSearch)
                 .map(tuple -> {
-                    log.debug("Получено {} док-ов от векторного поиска и {} от FTS.", tuple.getT1().size(), tuple.getT2().size());
-                    return fusionService.reciprocalRankFusion(List.of(tuple.getT1(), tuple.getT2()));
+                    List<List<Document>> searchResults = List.of(tuple.getT1(), tuple.getT2(), tuple.getT3());
+                    log.debug("Получено документов: точный={}, расширенный={}, fts={}", tuple.getT1().size(), tuple.getT2().size(), tuple.getT3().size());
+                    return fusionService.reciprocalRankFusion(searchResults);
                 })
                 .map(fusedDocs -> rerankingService.rerank(fusedDocs, originalQuery))
                 .doOnSuccess(finalList -> {
                     log.info("Гибридный поиск завершен. Финальный список содержит {} документов.", finalList.size());
                     metricService.recordRetrievedDocumentsCount(finalList.size());
+                    // 3. Если после всех усилий ничего не найдено, логируем "пробел в знаниях"
                     if (finalList.isEmpty()) {
                         knowledgeGapService.recordGap(originalQuery);
                     }
                 });
     }
 
-    private Mono<List<Document>> executeAdaptiveVectorSearch(ProcessedQueries queries, int topK, double threshold, @Nullable Filter.Expression filter) {
-        log.info("Запуск адаптивной стратегии извлечения. Основной запрос: '{}'", queries.primaryQuery());
-        Mono<List<Document>> primarySearchMono = executeVectorSearch(List.of(queries.primaryQuery()), topK, threshold, filter);
-
-        return primarySearchMono.flatMap(primaryResults -> {
-            int minDocsThreshold = retrievalProperties.hybrid().expansionMinDocsThreshold();
-            if (primaryResults.size() >= minDocsThreshold || queries.expansionQueries().isEmpty()) {
-                log.info("Найдено достаточно ({}) документов на первом шаге. Расширение поиска не требуется.", primaryResults.size());
-                return Mono.just(primaryResults);
-            }
-
-            log.info("Найдено {}/{} документов. Запуск расширенного поиска по {} запросам.",
-                    primaryResults.size(), minDocsThreshold, queries.expansionQueries().size());
-            Mono<List<Document>> expansionSearchMono = executeVectorSearch(queries.expansionQueries(), topK, threshold, filter);
-
-            return Mono.zip(Mono.just(primaryResults), expansionSearchMono)
-                    .map(tuple -> {
-                        List<Document> combined = new ArrayList<>(tuple.getT1());
-                        combined.addAll(tuple.getT2());
-                        return combined.stream()
-                                .filter(d -> d.getId() != null)
-                                .collect(Collectors.toMap(Document::getId, d -> d, (d1, d2) -> d1))
-                                .values().stream().toList();
-                    });
-        });
-    }
-
+    /**
+     * Выполняет параллельный векторный поиск для списка запросов.
+     *
+     * @param queries             Список текстовых запросов.
+     * @param topK                Количество документов.
+     * @param similarityThreshold Порог схожести.
+     * @param filter              Опциональный фильтр.
+     * @return {@link Mono} со списком уникальных найденных документов.
+     */
     private Mono<List<Document>> executeVectorSearch(List<String> queries, int topK, double similarityThreshold, @Nullable Filter.Expression filter) {
+        if (queries == null || queries.isEmpty()) {
+            return Mono.just(List.of());
+        }
         return Mono.fromCallable(() ->
                         queries.parallelStream()
                                 .flatMap(query -> {
@@ -125,12 +115,15 @@ public class HybridRetrievalStrategy {
                                             vectorSearchService.search(requestBuilder.build())
                                     ).stream();
                                 })
-                                .distinct()
+                                .distinct() // Убираем дубликаты документов, найденные по разным запросам
                                 .toList()
                 )
                 .subscribeOn(Schedulers.fromExecutor(applicationTaskExecutor));
     }
 
+    /**
+     * Выполняет полнотекстовый поиск.
+     */
     private Mono<List<Document>> executeFtsSearch(String query) {
         int ftsTopK = retrievalProperties.hybrid().fts().topK();
         return Mono.fromCallable(() ->

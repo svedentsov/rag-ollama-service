@@ -10,9 +10,9 @@ import org.springframework.context.annotation.Configuration;
 /**
  * Конфигурация для RabbitMQ.
  * <p>
- * В этой версии архитектура конвейера индексации упрощена.
- * Удалена очередь `ingestion.batch.claimed.queue` и соответствующий
- * биндинг, так как теперь используется единая очередь для пакетной обработки.
+ * Эта финальная версия содержит только конфигурацию, необходимую
+ * для обработки асинхронных событий от внешних систем (веб-хуков),
+ * так как конвейер индексации был переведен на прямой @Async вызов.
  */
 @Configuration
 @EnableRabbit
@@ -24,10 +24,6 @@ public class RabbitMqConfig {
     // Очереди для веб-хуков
     public static final String GITHUB_EVENTS_QUEUE = "github.events.queue";
     public static final String JIRA_EVENTS_QUEUE = "jira.events.queue";
-
-    // Упрощенная конфигурация для конвейера индексации
-    public static final String DOCUMENT_PROCESSING_QUEUE = "ingestion.document.processing.queue";
-    public static final String DOCUMENT_PROCESSING_ROUTING_KEY = "ingestion.document.process.batch";
 
     /**
      * Создает обменник типа "topic" для маршрутизации событий.
@@ -49,46 +45,40 @@ public class RabbitMqConfig {
         return new Queue(DEAD_LETTER_QUEUE);
     }
 
+    /**
+     * Создает очередь для событий от GitHub.
+     *
+     * @return Отказоустойчивая очередь с DLQ.
+     */
     @Bean
     public Queue githubEventsQueue() {
         return createDurableQueue(GITHUB_EVENTS_QUEUE);
     }
 
+    /**
+     * Создает очередь для событий от Jira.
+     *
+     * @return Отказоустойчивая очередь с DLQ.
+     */
     @Bean
     public Queue jiraEventsQueue() {
         return createDurableQueue(JIRA_EVENTS_QUEUE);
     }
 
+    /**
+     * Связывает очередь GitHub с обменником по ключу "github.#".
+     */
     @Bean
     public Binding githubBinding(TopicExchange exchange, Queue githubEventsQueue) {
         return BindingBuilder.bind(githubEventsQueue).to(exchange).with("github.#");
     }
 
+    /**
+     * Связывает очередь Jira с обменником по ключу "jira.issue_created".
+     */
     @Bean
     public Binding jiraBinding(TopicExchange exchange, Queue jiraEventsQueue) {
         return BindingBuilder.bind(jiraEventsQueue).to(exchange).with("jira.issue_created");
-    }
-
-    /**
-     * Создает единую очередь для обработки пакетов документов.
-     *
-     * @return Экземпляр {@link Queue}.
-     */
-    @Bean
-    public Queue documentProcessingQueue() {
-        return createDurableQueue(DOCUMENT_PROCESSING_QUEUE);
-    }
-
-    /**
-     * Связывает очередь обработки документов с обменником по ключу маршрутизации.
-     *
-     * @param exchange                Обменник.
-     * @param documentProcessingQueue Очередь для обработки.
-     * @return Объект {@link Binding}.
-     */
-    @Bean
-    public Binding documentProcessingBinding(TopicExchange exchange, Queue documentProcessingQueue) {
-        return BindingBuilder.bind(documentProcessingQueue).to(exchange).with(DOCUMENT_PROCESSING_ROUTING_KEY);
     }
 
     /**

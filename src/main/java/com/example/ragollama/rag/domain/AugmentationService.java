@@ -3,6 +3,7 @@ package com.example.ragollama.rag.domain;
 import com.example.ragollama.rag.advisors.RagAdvisor;
 import com.example.ragollama.rag.model.RagContext;
 import com.example.ragollama.shared.prompts.PromptService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -17,12 +18,13 @@ import java.util.stream.Collectors;
 /**
  * Сервис, отвечающий за этап обогащения (Augmentation) в RAG-конвейере.
  * <p>
- * Эта версия передает в модель промпта структурированный список документов,
- * а не "сплющенную" строку. Это позволяет LLM лучше понимать контекст
- * и генерировать более точные и аудируемые ответы.
+ * Эта версия использует наш кастомный {@link PromptService} для рендеринга
+ * шаблона, что обеспечивает полный контроль и независимость от
+ * стандартного рендерера Spring AI.
  */
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class AugmentationService {
 
     private final List<RagAdvisor> advisors;
@@ -30,22 +32,8 @@ public class AugmentationService {
     private final PromptService promptService;
 
     /**
-     * Конструктор для внедрения зависимостей.
-     *
-     * @param advisors                Список всех бинов-советников, автоматически внедряемых Spring.
-     * @param contextAssemblerService Сервис для управления контекстным окном.
-     * @param promptService           Сервис для создания промптов из шаблонов.
-     */
-    public AugmentationService(List<RagAdvisor> advisors, ContextAssemblerService contextAssemblerService, PromptService promptService) {
-        this.advisors = advisors;
-        this.contextAssemblerService = contextAssemblerService;
-        this.promptService = promptService;
-        log.info("AugmentationService инициализирован с {} советниками.", advisors.size());
-    }
-
-    /**
      * Выполняет обогащение, последовательно применяя все доступные советники
-     * и формируя промпт со структурированным контекстом.
+     * и формируя промпт с помощью кастомного {@link PromptService}.
      *
      * @param documents   Извлеченные документы.
      * @param query       Запрос пользователя.
@@ -61,16 +49,13 @@ public class AugmentationService {
                 .flatMap(mono -> mono);
 
         return finalContextMono.map(finalContext -> {
-            // Новая логика: получаем отфильтрованный список документов
             List<Document> documentsForContext = contextAssemblerService.assembleContext(finalContext.getDocuments());
 
-            // Передаем в модель структурированный список, а не строку
             finalContext.getPromptModel().put("documents", documentsForContext);
             finalContext.getPromptModel().put("question", query);
             String historyString = formatHistory(chatHistory);
             finalContext.getPromptModel().put("history", historyString);
-
-            String promptString = promptService.createRagPrompt(finalContext.getPromptModel());
+            String promptString = promptService.render("ragPrompt", finalContext.getPromptModel());
             log.debug("Этап Augmentation успешно завершен. Использовано {} документов в контексте.", documentsForContext.size());
             return new Prompt(promptString);
         });

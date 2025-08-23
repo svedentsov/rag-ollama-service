@@ -71,6 +71,7 @@ dependencies {
     implementation 'io.github.resilience4j:resilience4j-reactor'
     implementation 'com.bucket4j:bucket4j_jdk17-core:8.14.0'
     implementation 'com.knuddels:jtokkit:1.1.0'
+    implementation 'io.hypersistence:hypersistence-utils-hibernate-63:3.8.1'
 
     // Тестирование
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

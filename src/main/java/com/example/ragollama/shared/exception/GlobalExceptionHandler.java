@@ -14,8 +14,9 @@ import java.util.stream.Collectors;
 
 /**
  * Глобальный обработчик исключений для всего приложения.
- * Перехватывает исключения и формирует стандартизированные ответы об ошибках.
- * Добавлены обработчики для кастомных исключений RAG-конвейера.
+ * <p>
+ * Добавлен обработчик для {@link ProcessingException}, чтобы возвращать
+ * клиенту корректный код ошибки в случае сбоя парсинга ответа от LLM.
  */
 @RestControllerAdvice
 @Slf4j
@@ -96,11 +97,23 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * "Catch-all" обработчик для всех остальных непредвиденных исключений.
+     * Обрабатывает исключения, связанные с ошибками в фоновой обработке,
+     * например, при парсинге ответа от LLM.
      *
-     * @param e Любое необработанное исключение.
-     * @return {@link ProblemDetail} с кодом 500 (Internal Server Error).
+     * @param e Исключение {@link ProcessingException}.
+     * @return {@link ProblemDetail} с кодом 502 (Bad Gateway), так как
+     * ошибка произошла при взаимодействии с внешней системой (LLM).
      */
+    @ExceptionHandler(ProcessingException.class)
+    public ProblemDetail handleProcessingException(ProcessingException e) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, "Ошибка при обработке ответа от нижестоящего AI-сервиса.");
+        problemDetail.setTitle("AI Service Response Error");
+        problemDetail.setProperty("timestamp", Instant.now());
+        metricService.incrementApiError(HttpStatus.BAD_GATEWAY.value());
+        log.error("Ошибка обработки: {}", e.getMessage(), e.getCause());
+        return problemDetail;
+    }
+
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleGenericException(Exception e) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Произошла внутренняя ошибка сервера.");

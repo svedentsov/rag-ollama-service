@@ -1,6 +1,7 @@
 package com.example.ragollama.agent.domain;
 
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.prompts.PromptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -9,14 +10,13 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Сервис, реализующий логику "Router Agent".
  * <p>
- * Классифицирует запрос пользователя для направления в соответствующий конвейер.
- * Эта версия использует усиленный промпт и более надежный механизм парсинга
- * ответа от LLM для повышения стабильности и предсказуемости.
+ * Эта финальная версия содержит усиленный промпт и более интеллектуальную
+ * логику парсинга для точного разграничения между вопросами для RAG
+ * и командами на обработку текста (Summarization).
  */
 @Slf4j
 @Service
@@ -24,74 +24,52 @@ import java.util.Optional;
 public class RouterAgentService {
 
     private final LlmClient llmClient;
+    private final PromptService promptService;
 
-    /**
-     * Промпт, который заставляет LLM классифицировать запрос и вернуть ТОЛЬКО одно из
-     * предопределенных ключевых слов, соответствующих значениям enum {@link QueryIntent}.
-     * Такой подход значительно надежнее, чем просьба вернуть JSON.
-     */
-    private static final PromptTemplate ROUTER_PROMPT_TEMPLATE = new PromptTemplate("""
-            Твоя задача - проанализировать ЗАПРОС ПОЛЬЗОВАТЕЛЯ и определить его намерение.
-            Ответь ТОЛЬКО ОДНИМ СЛОВОМ из следующего списка:
-            - CHITCHAT
-            - RAG_QUERY
-            - CODE_GENERATION
-            
-            Примеры:
-            - Запрос: "Привет, как дела?" -> Ответ: CHITCHAT
-            - Запрос: "Что такое Spring AI?" -> Ответ: RAG_QUERY
-            - Запрос: "Напиши тест для /api/users" -> Ответ: CODE_GENERATION
-            
-            ЗАПРОС ПОЛЬЗОВАТЕЛЯ:
-            {query}
-            """);
-
-    /**
-     * Определяет намерение пользователя по тексту его запроса.
-     * <p>
-     * Метод использует усиленный промпт и безопасный парсинг ответа, чтобы избежать
-     * {@link IllegalArgumentException} и сделать логику более устойчивой к
-     * незначительным отклонениям в ответах LLM. В случае невозможности
-     * распознать ответ, используется безопасный fallback-вариант {@link QueryIntent#UNKNOWN}.
-     *
-     * @param query Текст запроса от пользователя.
-     * @return {@link Mono} с определенным {@link QueryIntent}.
-     */
     public Mono<QueryIntent> route(String query) {
-        String promptString = ROUTER_PROMPT_TEMPLATE.render(Map.of("query", query));
+        String promptString = promptService.render("routerAgent", Map.of("query", query));
         Prompt prompt = new Prompt(promptString);
 
         return Mono.fromFuture(llmClient.callChat(prompt))
-                .map(this::parseIntentFromLlmResponse)
-                .map(Optional::get) // Мы доверяем, что parse... всегда вернет значение
-                .doOnSuccess(intent -> log.info("Запрос классифицирован с намерением: {}", intent));
+                .map(response -> parseIntentFromLlmResponse(response, query))
+                .doOnSuccess(intent -> log.info("Запрос '{}' классифицирован с намерением: {}", query, intent));
     }
 
     /**
-     * Безопасно парсит строковый ответ от LLM в {@link QueryIntent}.
+     * Безопасно парсит строковый ответ от LLM в {@link QueryIntent} с улучшенной fallback-логикой.
      *
-     * @param response Ответ от LLM.
-     * @return {@link Optional}, содержащий {@link QueryIntent}, или fallback-значение.
+     * @param response      Ответ от LLM.
+     * @param originalQuery Оригинальный запрос пользователя для анализа в fallback-сценарии.
+     * @return Распознанный {@link QueryIntent} или наиболее вероятный fallback.
      */
-    private Optional<QueryIntent> parseIntentFromLlmResponse(String response) {
+    private QueryIntent parseIntentFromLlmResponse(String response, String originalQuery) {
         if (response == null || response.isBlank()) {
-            log.warn("RouterAgent получил пустой ответ от LLM. Используется fallback UNKNOWN.");
-            return Optional.of(QueryIntent.UNKNOWN);
+            log.warn("RouterAgent получил пустой ответ от LLM. Используется fallback.");
+            return fallbackToRagIfQuestion(originalQuery);
         }
 
-        String cleanedResponse = response.trim().toUpperCase();
+        String cleanedResponse = response.trim().toUpperCase().replaceAll("[^A-Z_]", "");
 
-        if (cleanedResponse.contains("RAG_QUERY")) {
-            return Optional.of(QueryIntent.RAG_QUERY);
+        try {
+            return QueryIntent.valueOf(cleanedResponse);
+        } catch (IllegalArgumentException e) {
+            log.warn("RouterAgent не смог распознать намерение из ответа LLM: '{}'. Используется fallback.", response);
+            return fallbackToRagIfQuestion(originalQuery);
         }
-        if (cleanedResponse.contains("CHITCHAT")) {
-            return Optional.of(QueryIntent.CHITCHAT);
-        }
-        if (cleanedResponse.contains("CODE_GENERATION")) {
-            return Optional.of(QueryIntent.CODE_GENERATION);
-        }
+    }
 
-        log.warn("RouterAgent не смог распознать намерение из ответа LLM: '{}'. Используется fallback UNKNOWN.", response);
-        return Optional.of(QueryIntent.UNKNOWN); // Более честный fallback
+    /**
+     * Fallback-стратегия: если запрос похож на вопрос, считаем его RAG_QUERY.
+     *
+     * @param query Оригинальный запрос.
+     * @return {@link QueryIntent#RAG_QUERY} или {@link QueryIntent#UNKNOWN}.
+     */
+    private QueryIntent fallbackToRagIfQuestion(String query) {
+        String lowerCaseQuery = query.toLowerCase();
+        if (lowerCaseQuery.matches(".*(что|где|когда|кто|как|почему|сколько|какой|whose|what|where|when|who|how|why).*") || lowerCaseQuery.endsWith("?")) {
+            log.debug("Fallback: запрос похож на вопрос, классифицируем как RAG_QUERY.");
+            return QueryIntent.RAG_QUERY;
+        }
+        return QueryIntent.UNKNOWN;
     }
 }

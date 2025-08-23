@@ -7,10 +7,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * Компонент-маппер, отвечающий за преобразование DTO в доменные сущности.
- * Этот класс инкапсулирует логику создания сущностей из запросов, следуя
- * Принципу единственной ответственности (SRP).
- * *
- * Для более сложных сценариев здесь можно использовать библиотеки, такие как MapStruct.
+ * <p>
+ * Эта версия корректно переносит опциональные метаданные из запроса
+ * в соответствующее поле сущности {@link DocumentJob}.
  */
 @Component
 public class DocumentMapper {
@@ -26,6 +25,7 @@ public class DocumentMapper {
                 .sourceName(request.sourceName())
                 .textContent(request.text())
                 .status(JobStatus.PENDING)
+                .metadata(request.metadata()) // Переносим метаданные
                 .build();
     }
 }

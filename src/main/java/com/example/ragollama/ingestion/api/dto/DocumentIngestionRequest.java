@@ -14,7 +14,7 @@ import java.util.Map;
  *
  * @param sourceName Уникальное имя или идентификатор источника документа.
  * @param text       Полный текст документа для индексации.
- * @param metadata   Опциональная карта с дополнительными метаданными (например, `{"doc_type": "bug_report"}`).
+ * @param metadata   Опциональная карта с дополнительными метаданными (например, `{"doc_type": "test_case"}`).
  */
 @Schema(description = "DTO для загрузки нового документа для RAG")
 public record DocumentIngestionRequest(
@@ -27,7 +27,7 @@ public record DocumentIngestionRequest(
         @NotBlank(message = "Текст документа не может быть пустым")
         String text,
 
-        @Schema(description = "Опциональная карта с метаданными для фильтрации", example = "{\"doc_type\": \"bug_report\", \"priority\": \"High\"}")
+        @Schema(description = "Опциональная карта с метаданными для фильтрации", example = "{\"doc_type\": \"test_case\", \"priority\": \"High\"}")
         Map<String, Object> metadata
 ) {
 }

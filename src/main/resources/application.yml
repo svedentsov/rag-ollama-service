@@ -186,10 +186,7 @@ app:
   rate-limiting:
     enabled: true
     limits:
-      - endpoint: "/api/v1/rag/query"
-        capacity: 10 # 10 запросов
-        refill-period-minutes: 1 # за 1 минуту
-      - endpoint: "/api/v1/chat"
+      - endpoint: "/api/v1/orchestrator/ask"
         capacity: 20
         refill-period-minutes: 1
 
@@ -209,9 +206,9 @@ app:
       max-messages: 10
 
   ingestion:
-    scheduler:
-      delay-ms: 10000 # 10 секунд между проверками очереди.
-    batch-size: 10 # Кол-во документов, обрабатываемых за один раз.
+    chunking:
+      default-chunk-size: 256
+      chunk-overlap: 32
 
   http-client:
     # СРЕДНИЙ УРОВЕНЬ: таймауты WebClient, должны быть чуть больше, чем TimeLimiter

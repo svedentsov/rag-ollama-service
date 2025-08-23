@@ -1,11 +1,10 @@
-package com.example.ragollama.rag.agent.MultiQueryGeneratorAgent;
+package com.example.ragollama.rag.agent;
 
-import com.example.ragollama.rag.agent.QueryEnhancementAgent;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.prompts.PromptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -19,10 +18,7 @@ import java.util.stream.Collectors;
 /**
  * AI-агент, реализующий стратегию Multi-Query.
  * <p>
- * Эта версия использует значительно улучшенный промпт с техникой "few-shot prompting"
- * (предоставление примеров), чтобы заставить LLM генерировать чистый,
- * структурированный вывод без лишних фраз и маркеров. Это повышает
- * надежность всего RAG-конвейера.
+ * Эта версия использует кастомный {@link PromptService} для рендеринга шаблона.
  */
 @Slf4j
 @Component
@@ -31,42 +27,22 @@ import java.util.stream.Collectors;
 public class MultiQueryGeneratorAgent implements QueryEnhancementAgent {
 
     private final LlmClient llmClient;
+    private final PromptService promptService;
 
-    private static final PromptTemplate MULTI_QUERY_PROMPT_TEMPLATE = new PromptTemplate("""
-            Твоя задача — сгенерировать 3 альтернативных поисковых запроса на основе ИСХОДНОГО ЗАПРОСА.
-            Запросы должны быть на том же языке, что и оригинал, и рассматривать вопрос с разных сторон.
-            
-            ПРАВИЛА ВЫВОДА:
-            1. Твой ответ должен содержать ТОЛЬКО сгенерированные запросы.
-            2. Каждый запрос должен быть на новой строке.
-            3. НЕ добавляй нумерацию, маркеры (например, `*` или `•`), заголовки, кавычки или любые вводные/заключительные фразы.
-            
-            ПРИМЕР:
-            ИСХОДНЫЙ ЗАПРОС: "Расскажи, как Spring Boot упрощает разработку микросервисов."
-            
-            ПРИМЕР ВЫВОДА:
-            Преимущества Spring Boot для микросервисов
-            Автоконфигурация в Spring Boot для backend-разработки
-            Сравнение Spring Boot и Micronaut
-            
-            ИСХОДНЫЙ ЗАПРОС:
-            {query}
-            """);
-
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public Mono<List<String>> enhance(String originalQuery) {
-        String promptString = MULTI_QUERY_PROMPT_TEMPLATE.render(Map.of("query", originalQuery));
+        String promptString = promptService.render("multiQuery", Map.of("query", originalQuery));
         Prompt prompt = new Prompt(promptString);
 
         return Mono.fromFuture(llmClient.callChat(prompt))
                 .map(this::parseToList)
                 .map(generatedQueries -> {
+                    List<String> uniqueGenerated = generatedQueries.stream()
+                            .filter(q -> !q.equalsIgnoreCase(originalQuery))
+                            .toList();
                     List<String> allQueries = new ArrayList<>();
                     allQueries.add(originalQuery);
-                    allQueries.addAll(generatedQueries);
+                    allQueries.addAll(uniqueGenerated);
                     return allQueries;
                 })
                 .doOnSuccess(queries ->

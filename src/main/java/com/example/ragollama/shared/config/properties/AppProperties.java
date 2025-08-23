@@ -1,5 +1,6 @@
 package com.example.ragollama.shared.config.properties;
 
+import com.example.ragollama.ingestion.IngestionProperties;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -12,15 +13,15 @@ import java.time.Duration;
 /**
  * Главный класс для всех кастомных настроек приложения, загружаемых из application.yml с префиксом "app".
  *
- * @param prompt          Настройки, связанные с шаблонами промптов.
- * @param reranking       Настройки для опционального сервиса переранжирования.
- * @param tokenization    Настройки токенизатора.
- * @param context         Настройки сборки контекста для RAG.
- * @param chat            Настройки для функционала чата.
- * @param ingestion       Настройки для процесса фоновой индексации документов.
- * @param httpClient      Настройки для HTTP-клиентов, таких как WebClient.
- * @param taskExecutor    Настройки для основного пула асинхронных задач.
- * @param vectorStore     Настройки для векторного хранилища, включая параметры индекса.
+ * @param prompt       Настройки, связанные с шаблонами промптов.
+ * @param reranking    Настройки для опционального сервиса переранжирования.
+ * @param tokenization Настройки токенизатора.
+ * @param context      Настройки сборки контекста для RAG.
+ * @param chat         Настройки для функционала чата.
+ * @param ingestion    Настройки для процесса фоновой индексации документов, включая чанкинг.
+ * @param httpClient   Настройки для HTTP-клиентов.
+ * @param taskExecutor Настройки для основного пула асинхронных задач.
+ * @param vectorStore  Настройки для векторного хранилища.
  */
 @Validated
 @ConfigurationProperties(prefix = "app")
@@ -30,7 +31,7 @@ public record AppProperties(
         @NotNull Tokenization tokenization,
         @NotNull Context context,
         @NotNull Chat chat,
-        @NotNull Ingestion ingestion,
+        @NotNull IngestionProperties ingestion,
         @NotNull HttpClient httpClient,
         @NotNull TaskExecutor taskExecutor,
         @NotNull VectorStoreProperties vectorStore
@@ -47,11 +48,6 @@ public record AppProperties(
     public record Chat(@NotNull History history) {
         /** Настройки истории чата. */
         public record History(@Min(1) @Max(50) int maxMessages) {}
-    }
-    /** Настройки для процесса индексации документов. */
-    public record Ingestion(@NotNull Scheduler scheduler) {
-        /** Настройки планировщика индексации. */
-        public record Scheduler(@Min(1000) long delayMs) {}
     }
 
     /**

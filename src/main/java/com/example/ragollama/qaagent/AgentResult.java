@@ -17,8 +17,17 @@ public record AgentResult(
         String summary,
         Map<String, Object> details
 ) {
+    /**
+     * Перечисление возможных статусов завершения работы агента.
+     */
     public enum Status {
+        /**
+         * Агент успешно выполнил свою задачу.
+         */
         SUCCESS,
+        /**
+         * В процессе выполнения агента произошла ошибка.
+         */
         FAILURE
     }
 }

@@ -1,6 +1,5 @@
 package com.example.ragollama.shared.llm;
 
-import com.example.ragollama.shared.config.AiConfig;
 import com.example.ragollama.shared.metrics.MetricService;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -23,12 +22,10 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Отказоустойчивый клиент, являющийся единственной точкой входа
  * для взаимодействия с LLM в приложении.
+ * <p>
  * Этот компонент инкапсулирует применение паттернов отказоустойчивости
  * (Retry, Circuit Breaker, TimeLimiter), гарантируя, что все обращения
- * к внешнему сервису (Ollama) защищены от сбоев. Он полностью скрывает
- * "сырой" {@link ChatClient} от остального приложения, следуя принципу "Pit of Success".
- * * Важно: этот класс НЕ является Spring-компонентом (@Component),
- * * а создается и настраивается исключительно через @Bean-метод в {@link AiConfig}.
+ * к внешнему сервису (Ollama) защищены от сбоев.
  */
 public class LlmClient {
 
@@ -46,12 +43,6 @@ public class LlmClient {
 
     /**
      * Конструктор для внедрения зависимостей.
-     *
-     * @param chatClient             Экземпляр "сырого" ChatClient, предоставляемый конфигурацией.
-     * @param metricService          Сервис для сбора метрик.
-     * @param circuitBreakerRegistry Реестр для управления Circuit Breaker'ами.
-     * @param retryRegistry          Реестр для управления политиками Retry.
-     * @param timeLimiterRegistry    Реестр для управления TimeLimiter'ами.
      */
     public LlmClient(
             ChatClient chatClient,
@@ -68,9 +59,6 @@ public class LlmClient {
 
     /**
      * Инициализирует компоненты Resilience4j после создания бина.
-     * Этот метод гарантирует, что экземпляры {@link CircuitBreaker}, {@link Retry}
-     * и {@link TimeLimiter} будут получены из соответствующих реестров
-     * до первого вызова клиента.
      */
     @PostConstruct
     public void init() {
@@ -81,9 +69,6 @@ public class LlmClient {
 
     /**
      * Асинхронно вызывает чат-модель для получения полного, не-потокового ответа.
-     * Оборачивает блокирующий вызов Spring AI в {@code Mono.fromCallable} и выполняет
-     * его в специализированном пуле потоков {@code Schedulers.boundedElastic()},
-     * предотвращая блокировку основного event-loop и обеспечивая масштабируемость.
      *
      * @param prompt Промпт для отправки в модель.
      * @return {@link CompletableFuture}, который будет завершен строковым ответом от LLM.
@@ -97,8 +82,6 @@ public class LlmClient {
 
     /**
      * Вызывает чат-модель для получения ответа в виде непрерывного потока токенов.
-     * Этот метод является полностью неблокирующим и идеально подходит для
-     * реализации потоковой передачи (SSE) на клиент.
      *
      * @param prompt Промпт для отправки в модель.
      * @return {@link Flux}, который асинхронно эмитит части ответа от LLM.

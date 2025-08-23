@@ -6,17 +6,14 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.retry.RetryRegistry;
 import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
  * Конфигурационный класс для централизованного создания и настройки бинов, связанных с AI.
- * Эта версия класса полностью полагается на автоконфигурацию Spring AI для
- * создания низкоуровневых компонентов (таких как OllamaChatModel). Мы лишь
- * внедряем готовый {@link ChatClient.Builder} для построения нашего
- * отказоустойчивого фасада {@link LlmClient}.
- * Такой подход значительно упрощает код, повышает его надежность и соответствие "the Spring Boot way".
+ * <p>
+ * Эта финальная версия полностью отказывается от стандартного TokenTextSplitter
+ * в пользу нашего кастомного, более мощного TextSplitterService.
  */
 @Configuration
 public class AiConfig {
@@ -50,16 +47,5 @@ public class AiConfig {
                 retryRegistry,
                 timeLimiterRegistry
         );
-    }
-
-    /**
-     * Создает бин {@link TokenTextSplitter} для разбиения текста на чанки.
-     * Этот компонент является утилитарным и может быть публичным.
-     *
-     * @return Экземпляр {@link TokenTextSplitter}.
-     */
-    @Bean
-    public TokenTextSplitter tokenTextSplitter() {
-        return new TokenTextSplitter();
     }
 }

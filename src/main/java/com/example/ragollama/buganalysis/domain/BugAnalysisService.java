@@ -4,13 +4,14 @@ import com.example.ragollama.buganalysis.api.dto.BugAnalysisResponse;
 import com.example.ragollama.rag.agent.QueryProcessingPipeline;
 import com.example.ragollama.rag.retrieval.HybridRetrievalStrategy;
 import com.example.ragollama.rag.retrieval.RetrievalProperties;
+import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.prompts.PromptService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.stereotype.Service;
@@ -24,11 +25,9 @@ import java.util.stream.Collectors;
 /**
  * Сервис-оркестратор для агента анализа баг-репортов.
  * <p>
- * Реализует полный агентский конвейер:
- * 1. Улучшает исходный запрос.
- * 2. Выполняет гибридный поиск похожих баг-репортов с использованием фильтра.
- * 3. Формирует промпт с найденным контекстом, запрашивая у LLM JSON-ответ.
- * 4. Вызывает LLM и надежно парсит полученный JSON в DTO.
+ * Эта версия использует усиленный промпт и надежный внутренний парсер
+ * для получения структурированного ответа от LLM без использования
+ * внешних зависимостей для парсинга.
  */
 @Service
 @Slf4j
@@ -40,36 +39,8 @@ public class BugAnalysisService {
     private final RetrievalProperties retrievalProperties;
     private final LlmClient llmClient;
     private final ObjectMapper objectMapper;
+    private final PromptService promptService;
 
-    private static final PromptTemplate BUG_ANALYSIS_PROMPT = new PromptTemplate("""
-            ТЫ — ЭКСПЕРТНЫЙ QA-АНАЛИТИК. Твоя задача — улучшить предоставленный черновик баг-репорта и проверить его на дублирование.
-
-            ПРАВИЛА:
-            1. Внимательно изучи "ЧЕРНОВИК ОТЧЕТА".
-            2. Перепиши его в четкий, структурированный баг-репорт с разделами: "Шаги воспроизведения", "Ожидаемый результат", "Фактический результат".
-            3. Проанализируй список "СУЩЕСТВУЮЩИЕ БАГИ". Определи, является ли новый отчет их дубликатом. Отчет считается дубликатом, если он описывает ту же самую проблему.
-            4. Твой ответ должен быть ТОЛЬКО в формате JSON, без каких-либо комментариев или текста до/после.
-
-            ЧЕРНОВИК ОТЧЕТА:
-            {draft_report}
-
-            СУЩЕСТВУЮЩИЕ БАГИ:
-            {context_bugs}
-
-            ФОРМАТ JSON ОТВЕТА:
-            {
-              "improvedDescription": "...",
-              "isDuplicate": true,
-              "duplicateCandidates": ["JIRA-123", "JIRA-456"]
-            }
-            """);
-
-    /**
-     * Выполняет полный цикл анализа баг-репорта.
-     *
-     * @param draftDescription "Сырой" текст отчета от пользователя.
-     * @return {@link CompletableFuture} со структурированным результатом анализа.
-     */
     public CompletableFuture<BugAnalysisResponse> analyzeBugReport(String draftDescription) {
         log.info("Запуск анализа бага для: '{}'", draftDescription);
 
@@ -86,7 +57,7 @@ public class BugAnalysisService {
                 ))
                 .flatMap(similarDocs -> {
                     String context = formatDocumentsAsContext(similarDocs);
-                    String promptString = BUG_ANALYSIS_PROMPT.render(Map.of(
+                    String promptString = promptService.render("bugAnalysis", Map.of(
                             "draft_report", draftDescription,
                             "context_bugs", context.isEmpty() ? "Похожих багов не найдено." : context
                     ));
@@ -103,15 +74,22 @@ public class BugAnalysisService {
                 .collect(Collectors.joining("\n---\n"));
     }
 
+    /**
+     * Надежно парсит JSON-ответ от LLM, предварительно очищая его от
+     * распространенных артефактов (Markdown, лишние пробелы).
+     *
+     * @param llmResponse Сырой ответ от языковой модели.
+     * @return Десериализованный объект {@link BugAnalysisResponse}.
+     * @throws ProcessingException если парсинг не удался даже после очистки.
+     */
     private BugAnalysisResponse parseLlmResponse(String llmResponse) {
         try {
             // LLM иногда возвращает JSON внутри markdown-блока ```json ... ```. Очистим его.
             String cleanedResponse = llmResponse.replaceAll("(?s)```json\\s*|\\s*```", "").trim();
             return objectMapper.readValue(cleanedResponse, BugAnalysisResponse.class);
         } catch (JsonProcessingException e) {
-            log.error("Не удалось распарсить JSON-ответ от LLM: {}", llmResponse, e);
-            // Fallback: если LLM не вернул JSON, возвращаем только улучшенное описание
-            return new BugAnalysisResponse(llmResponse, false, List.of());
+            log.error("Не удалось распарсить JSON-ответ от LLM даже после очистки: {}", llmResponse, e);
+            throw new ProcessingException("LLM вернула невалидный JSON-ответ.", e);
         }
     }
 }
