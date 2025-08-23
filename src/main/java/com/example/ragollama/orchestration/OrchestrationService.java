@@ -20,7 +20,7 @@ import java.util.concurrent.CompletableFuture;
  * <p>
  * Эта финальная версия вводит жесткие бизнес-правила по использованию полей
  * из {@link UniversalRequest} в зависимости от определенного намерения.
- * Это устраняет двусмысленность API и обеспечивает корректное поведение системы.
+ * Все асинхронные операции теперь унифицированы с использованием Project Reactor.
  */
 @Slf4j
 @Service
@@ -40,27 +40,29 @@ public class OrchestrationService {
      * @return {@link CompletableFuture} с полным, агрегированным ответом.
      */
     public CompletableFuture<UniversalSyncResponse> processSync(UniversalRequest request) {
-        return router.route(request.query()).toFuture()
-                .thenCompose(intent -> {
+        return router.route(request.query())
+                .flatMap(intent -> {
                     log.info("Маршрутизация запроса с намерением: {}. SessionID: {}", intent, request.sessionId());
                     return switch (intent) {
                         // Для всех интентов, кроме SUMMARIZATION, используем поле `query`
-                        case RAG_QUERY -> sessionService.processRagRequestAsync(request.toRagQueryRequest())
-                                .thenApply(response -> UniversalSyncResponse.from(response, intent));
-                        case CHITCHAT -> sessionService.processChatRequestAsync(request.toChatRequest())
-                                .thenApply(response -> UniversalSyncResponse.from(response, intent));
+                        case RAG_QUERY ->
+                                Mono.fromFuture(sessionService.processRagRequestAsync(request.toRagQueryRequest()))
+                                        .map(response -> UniversalSyncResponse.from(response, intent));
+                        case CHITCHAT ->
+                                Mono.fromFuture(sessionService.processChatRequestAsync(request.toChatRequest()))
+                                        .map(response -> UniversalSyncResponse.from(response, intent));
                         case CODE_GENERATION -> codeGenerationService.generateCode(request.toCodeGenerationRequest())
-                                .thenApply(response -> UniversalSyncResponse.from(response, intent));
+                                .map(response -> UniversalSyncResponse.from(response, intent));
                         case BUG_ANALYSIS -> bugAnalysisService.analyzeBugReport(request.query())
-                                .thenApply(response -> UniversalSyncResponse.from(response, intent));
+                                .map(response -> UniversalSyncResponse.from(response, intent));
                         // Для SUMMARIZATION используем ТОЛЬКО поле `context`
                         case SUMMARIZATION -> summarizationService.summarizeAsync(request.context(), null)
-                                .thenApply(summary -> UniversalSyncResponse.from(summary, intent));
+                                .map(summary -> UniversalSyncResponse.from(summary, intent));
                         case UNKNOWN -> // Fallback-поведение
-                                sessionService.processChatRequestAsync(request.toChatRequest())
-                                        .thenApply(response -> UniversalSyncResponse.from(response, intent));
+                                Mono.fromFuture(sessionService.processChatRequestAsync(request.toChatRequest()))
+                                        .map(response -> UniversalSyncResponse.from(response, intent));
                     };
-                });
+                }).toFuture();
     }
 
     /**
@@ -81,13 +83,12 @@ public class OrchestrationService {
                         case CODE_GENERATION ->
                                 Flux.from(sessionService.processChatRequestStream(request.toChatRequest()))
                                         .map(UniversalResponse::from);
-                        case BUG_ANALYSIS -> Mono.fromFuture(() -> bugAnalysisService.analyzeBugReport(request.query()))
+                        case BUG_ANALYSIS -> bugAnalysisService.analyzeBugReport(request.query())
                                 .map(UniversalResponse::from)
                                 .flux();
-                        case SUMMARIZATION ->
-                                Mono.fromFuture(() -> summarizationService.summarizeAsync(request.context(), null))
-                                        .map(UniversalResponse::from)
-                                        .flux();
+                        case SUMMARIZATION -> summarizationService.summarizeAsync(request.context(), null)
+                                .map(UniversalResponse::from)
+                                .flux();
                         case UNKNOWN -> Flux.from(sessionService.processChatRequestStream(request.toChatRequest()))
                                 .map(UniversalResponse::from);
                     };

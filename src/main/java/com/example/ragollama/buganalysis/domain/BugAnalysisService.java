@@ -19,15 +19,13 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
  * Сервис-оркестратор для агента анализа баг-репортов.
  * <p>
- * Эта версия использует усиленный промпт и надежный внутренний парсер
- * для получения структурированного ответа от LLM без использования
- * внешних зависимостей для парсинга.
+ * Эта версия использует полностью реактивный подход на базе Project Reactor,
+ * возвращая {@link Mono} для построения неблокирующего конвейера обработки.
  */
 @Service
 @Slf4j
@@ -41,7 +39,16 @@ public class BugAnalysisService {
     private final ObjectMapper objectMapper;
     private final PromptService promptService;
 
-    public CompletableFuture<BugAnalysisResponse> analyzeBugReport(String draftDescription) {
+    /**
+     * Асинхронно анализирует баг-репорт, используя неблокирующий RAG-конвейер.
+     *
+     * @param draftDescription Черновик описания бага от пользователя.
+     * @return {@link Mono}, который по завершении будет содержать
+     * структурированный {@link BugAnalysisResponse}.
+     * @throws ProcessingException если LLM возвращает невалидный JSON,
+     *                             ошибка будет передана по цепочке Mono.
+     */
+    public Mono<BugAnalysisResponse> analyzeBugReport(String draftDescription) {
         log.info("Запуск анализа бага для: '{}'", draftDescription);
 
         Filter.Expression filter = new Filter.Expression(Filter.ExpressionType.EQ, new Filter.Key("metadata.doc_type"), new Filter.Value("bug_report"));
@@ -63,10 +70,15 @@ public class BugAnalysisService {
                     ));
                     return Mono.fromFuture(llmClient.callChat(new Prompt(promptString)));
                 })
-                .map(this::parseLlmResponse)
-                .toFuture();
+                .map(this::parseLlmResponse);
     }
 
+    /**
+     * Форматирует список документов в единую строку для передачи в промпт LLM.
+     *
+     * @param documents Список найденных документов.
+     * @return Строка с контекстом.
+     */
     private String formatDocumentsAsContext(List<Document> documents) {
         return documents.stream()
                 .map(doc -> String.format("ID: %s\nСодержимое: %s",

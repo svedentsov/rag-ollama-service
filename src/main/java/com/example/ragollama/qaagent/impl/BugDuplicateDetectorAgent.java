@@ -53,13 +53,17 @@ public class BugDuplicateDetectorAgent implements QaAgent {
 
     /**
      * {@inheritDoc}
+     * <p>
+     * Эта версия использует Project Reactor для асинхронной обработки и
+     * возвращает результат в виде {@link CompletableFuture} для совместимости
+     * с {@link com.example.ragollama.qaagent.AgentOrchestratorService}.
      */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String bugReportText = (String) context.payload().get(BUG_REPORT_TEXT_KEY);
 
         return bugAnalysisService.analyzeBugReport(bugReportText)
-                .thenApply(analysisResponse -> {
+                .map(analysisResponse -> {
                     String summary;
                     if (analysisResponse.isDuplicate()) {
                         summary = String.format("Обнаружен возможный дубликат. Похожие тикеты: %s",
@@ -78,6 +82,6 @@ public class BugDuplicateDetectorAgent implements QaAgent {
                                     "improvedDescription", analysisResponse.improvedDescription()
                             )
                     );
-                });
+                }).toFuture();
     }
 }

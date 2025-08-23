@@ -3,6 +3,7 @@ package com.example.ragollama.qaagent.events;
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentOrchestratorService;
 import com.example.ragollama.qaagent.AgentResult;
+import com.example.ragollama.qaagent.impl.JiraFetcherAgent;
 import com.example.ragollama.qaagent.impl.TestPrioritizerAgent;
 import com.example.ragollama.qaagent.tools.GitHubApiClient;
 import com.example.ragollama.qaagent.tools.JiraApiClient;
@@ -16,6 +17,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -78,44 +80,74 @@ public class EventProcessingService {
     }
 
     /**
-     * Обрабатывает событие создания задачи в Jira.
+     * Обрабатывает события, связанные с задачами в Jira.
      * <p>
-     * Реализует полный асинхронный конвейер:
-     * 1. Десериализует payload.
-     * 2. Создает контекст и запускает конвейер 'jira-bug-pipeline'.
-     * 3. Форматирует результат и асинхронно публикует комментарий в задачу.
+     * В зависимости от типа события, запускает соответствующий конвейер:
+     * <ul>
+     *   <li><b>jira:issue_created</b>: Запускает 'jira-bug-creation-pipeline', используя данные из payload.</li>
+     *   <li><b>jira:issue_updated</b>: Запускает 'jira-update-analysis-pipeline', который сначала
+     *   извлекает актуальные данные через {@link JiraFetcherAgent}.</li>
+     * </ul>
      *
      * @param payloadRaw Сырой JSON payload, полученный из очереди.
      */
     public void processJiraIssueEvent(String payloadRaw) {
         try {
             JiraIssuePayload payload = objectMapper.readValue(payloadRaw, JiraIssuePayload.class);
-            if (!"jira:issue_created".equals(payload.webhookEvent()) || !"Bug".equals(payload.issue().fields().issuetype().name())) {
-                log.trace("Пропускаем событие Jira, не являющееся созданием бага: {}", payload.webhookEvent());
-                return;
-            }
-
+            String eventType = payload.webhookEvent();
             String issueKey = payload.issue().key();
-            String bugText = payload.issue().fields().summary() + "\n" + payload.issue().fields().description();
-            log.info("Обработка события создания бага: {}", issueKey);
 
-            AgentContext context = new AgentContext(Map.of("bugReportText", bugText));
-
-            agentOrchestratorService.invokePipeline("jira-bug-pipeline", context)
-                    .thenCompose(results -> {
-                        String comment = formatPipelineResultAsJiraComment(results);
-                        return jiraApiClient.postCommentToIssue(issueKey, comment).toFuture();
-                    })
-                    .whenComplete((result, ex) -> {
-                        if (ex != null) {
-                            log.error("Ошибка в конвейере обработки события для Jira-задачи {}:", issueKey, ex);
-                        } else {
-                            log.info("Конвейер обработки для Jira-задачи {} успешно завершен.", issueKey);
-                        }
-                    });
+            if ("jira:issue_created".equals(eventType) && "Bug".equals(payload.issue().fields().issuetype().name())) {
+                processJiraBugCreation(issueKey, payload);
+            } else if ("jira:issue_updated".equals(eventType)) {
+                processJiraIssueUpdate(issueKey);
+            } else {
+                log.trace("Пропускаем необрабатываемое событие Jira: {} для задачи {}", eventType, issueKey);
+            }
 
         } catch (Exception e) {
             log.error("Не удалось распарсить или обработать Jira webhook payload", e);
+        }
+    }
+
+    /**
+     * Обрабатывает создание нового бага.
+     */
+    private void processJiraBugCreation(String issueKey, JiraIssuePayload payload) {
+        log.info("Обработка события создания бага: {}", issueKey);
+        String bugText = payload.issue().fields().summary() + "\n" + payload.issue().fields().description();
+        AgentContext context = new AgentContext(Map.of("bugReportText", bugText));
+
+        agentOrchestratorService.invokePipeline("jira-bug-creation-pipeline", context)
+                .thenCompose(results -> postJiraComment(issueKey, results))
+                .whenComplete((result, ex) -> logPipelineCompletion("Jira-задачи " + issueKey, ex));
+    }
+
+    /**
+     * Обрабатывает обновление существующей задачи.
+     */
+    private void processJiraIssueUpdate(String issueKey) {
+        log.info("Обработка события обновления задачи: {}", issueKey);
+        AgentContext context = new AgentContext(Map.of(JiraFetcherAgent.JIRA_ISSUE_KEY, issueKey));
+
+        agentOrchestratorService.invokePipeline("jira-update-analysis-pipeline", context)
+                .thenCompose(results -> postJiraComment(issueKey, results))
+                .whenComplete((result, ex) -> logPipelineCompletion("Jira-задачи " + issueKey, ex));
+    }
+
+    private CompletableFuture<Void> postJiraComment(String issueKey, List<AgentResult> results) {
+        if (results.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        String comment = formatPipelineResultAsJiraComment(results);
+        return jiraApiClient.postCommentToIssue(issueKey, comment).toFuture();
+    }
+
+    private void logPipelineCompletion(String entity, Throwable ex) {
+        if (ex != null) {
+            log.error("Ошибка в конвейере обработки для {}:", entity, ex.getCause());
+        } else {
+            log.info("Конвейер обработки для {} успешно завершен.", entity);
         }
     }
 

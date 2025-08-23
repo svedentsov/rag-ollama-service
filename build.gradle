@@ -17,6 +17,8 @@ ext {
     testcontainersVersion = '1.19.8'
     lombokVersion = '1.18.32'
     resilience4jVersion = '2.3.0'
+    jgitVersion = '6.9.0.202403050737-r'
+    swaggerParserVersion = '2.1.22'
 }
 
 repositories {
@@ -72,6 +74,10 @@ dependencies {
     implementation 'com.bucket4j:bucket4j_jdk17-core:8.14.0'
     implementation 'com.knuddels:jtokkit:1.1.0'
     implementation 'io.hypersistence:hypersistence-utils-hibernate-63:3.8.1'
+
+    // Инструменты агентов
+    implementation "org.eclipse.jgit:org.eclipse.jgit:${jgitVersion}"
+    implementation "io.swagger.parser.v3:swagger-parser:${swaggerParserVersion}"
 
     // Тестирование
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

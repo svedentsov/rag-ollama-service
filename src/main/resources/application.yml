@@ -135,7 +135,7 @@ springdoc:
 resilience4j:
   circuitbreaker:
     instances:
-      ollama: # Единственная, правильно названная конфигурация для Ollama
+      ollama: # Конфигурация для Ollama
         register-health-indicator: true
         sliding-window-size: 10 # Количество вызовов для анализа.
         minimum-number-of-calls: 3 # Мин. вызовов для срабатывания.
@@ -144,25 +144,55 @@ resilience4j:
         record-exceptions: # Считать DataAccessException как сбой
           - org.springframework.dao.DataAccessException
           - java.util.concurrent.TimeoutException
+      jira: # Конфигурация для Jira API
+        register-health-indicator: true
+        sliding-window-size: 20
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s # Более долгое ожидание, т.к. Jira может быть временно недоступна
+        record-exceptions:
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.reactive.function.client.WebClientResponseException$ServiceUnavailable
+      confluence: # Конфигурация для Confluence API
+        register-health-indicator: true
+        sliding-window-size: 20
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        record-exceptions:
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.reactive.function.client.WebClientResponseException$ServiceUnavailable
   retry:
     instances:
       ollama:
-        max-attempts: 2                  # Макс. количество попыток (1-я + 1 повторная).
-        wait-duration: 5s                # Пауза между попытками.
-        # Повторять только при явных сетевых ошибках или таймаутах, а не при 5xx ответах.
+        max-attempts: 2
+        wait-duration: 5s
         retry-on-exception: "org.springframework.web.reactive.function.client.WebClientRequestException, org.springframework.web.client.ResourceAccessException, java.util.concurrent.TimeoutException"
-      database: # Новая конфигурация для БД
+      database:
         max-attempts: 3
-        wait-duration: 200ms # Короткая задержка для быстрых операций с БД
-        retry-exceptions: # Повторять только при транзиентных ошибках
+        wait-duration: 200ms
+        retry-exceptions:
           - org.springframework.dao.TransientDataAccessException
           - java.util.concurrent.TimeoutException
           - java.sql.SQLTransientException
+      jira: # Конфигурация для Jira API
+        max-attempts: 3
+        wait-duration: 1s
+        retry-on-exception: "org.springframework.web.reactive.function.client.WebClientRequestException, java.util.concurrent.TimeoutException, org.springframework.web.reactive.function.client.WebClientResponseException$ServiceUnavailable"
+      confluence: # Конфигурация для Confluence API
+        max-attempts: 3
+        wait-duration: 2s # Задержка побольше, т.к. API может быть под нагрузкой
+        retry-on-exception: "org.springframework.web.reactive.function.client.WebClientRequestException, java.util.concurrent.TimeoutException, org.springframework.web.reactive.function.client.WebClientResponseException$ServiceUnavailable"
   timelimiter:
     instances:
       ollama:
-        # САМЫЙ ВНУТРЕННИЙ УРОВЕНЬ: Максимальное время ожидания ответа от LLM.
         timeout-duration: 280s
+        cancel-running-future: true
+      jira: # Конфигурация для Jira API
+        timeout-duration: 15s # Внешние API должны отвечать быстро
+        cancel-running-future: true
+      confluence: # Конфигурация для Confluence API
+        timeout-duration: 20s
         cancel-running-future: true
 
 # ===================================================================
@@ -211,7 +241,6 @@ app:
       chunk-overlap: 32
 
   http-client:
-    # СРЕДНИЙ УРОВЕНЬ: таймауты WebClient, должны быть чуть больше, чем TimeLimiter
     connect-timeout: 10s # Таймаут на установку TCP-соединения
     response-timeout: 285s # Общий таймаут на получение ответа
     read-write-timeout: 285s # Таймаут на чтение/запись данных
@@ -289,3 +318,15 @@ app:
       api-user: "your-email@example.com"
       # API токен, сгенерированный в Jira
       api-token: "YourJiraApiToken"
+    confluence:
+      # URL вашего инстанса Confluence. Пример: https://your-domain.atlassian.net
+      base-url: "https://your-domain.atlassian.net"
+      # Email пользователя для API
+      api-user: "your-email@example.com"
+      # API токен, сгенерированный в Confluence
+      api-token: "YourConfluenceApiToken"
+    git:
+      # URL для клонирования/fetch репозитория
+      repository-url: "https://github.com/your-org/your-repo.git"
+      # Персональный токен доступа (PAT) с правами на чтение репозитория
+      personal-access-token: "ghp_YourGitPersonalAccessToken"

@@ -13,14 +13,18 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Агент-адаптер для сервиса саммаризации.
  * <p>
- * Связывает "чистый" {@link SummarizationService} с платформой QA-агентов,
- * позволяя вызывать его в рамках конвейеров.
+ * Связывает "чистый" {@link SummarizationService}, работающий на Project Reactor,
+ * с платформой QA-агентов, которая ожидает {@link CompletableFuture}.
+ * Этот класс является примером чистого архитектурного паттерна "Адаптер".
  */
 @Component
 @Slf4j
 @RequiredArgsConstructor
 public class SummarizerAgent implements QaAgent {
 
+    /**
+     * Ключ для извлечения текста из {@link AgentContext}.
+     */
     public static final String TEXT_TO_SUMMARIZE_KEY = "textToSummarize";
     private final SummarizationService summarizationService;
 
@@ -50,6 +54,15 @@ public class SummarizerAgent implements QaAgent {
 
     /**
      * {@inheritDoc}
+     * <p>
+     * Метод асинхронно вызывает реактивный {@link SummarizationService},
+     * преобразует результат с помощью оператора {@code map} и адаптирует
+     * итоговый {@code Mono} к {@code CompletableFuture} для совместимости
+     * с оркестратором агентов.
+     *
+     * @param context Контекст с входными данными для агента.
+     * @return {@link CompletableFuture}, который по завершении будет содержать
+     * результат работы агента в виде {@link AgentResult}.
      */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
@@ -57,7 +70,7 @@ public class SummarizerAgent implements QaAgent {
         SummarizationService.SummaryOptions options = new SummarizationService.SummaryOptions(null);
 
         return summarizationService.summarizeAsync(text, options)
-                .thenApply(summary -> {
+                .map(summary -> {
                     log.info("SummarizerAgent успешно сгенерировал summary.");
                     return new AgentResult(
                             getName(),
@@ -65,6 +78,7 @@ public class SummarizerAgent implements QaAgent {
                             "Краткое содержание успешно создано.",
                             Map.of("summary", summary)
                     );
-                });
+                })
+                .toFuture();
     }
 }

@@ -6,11 +6,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 
+/**
+ * Сервис для создания краткого содержания (summary) текста.
+ * <p>
+ * Эта версия использует полностью асинхронный подход на базе Project Reactor.
+ */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -19,9 +24,16 @@ public class SummarizationService {
     private final LlmClient llmClient;
     private final PromptService promptService;
 
-    public CompletableFuture<String> summarizeAsync(String text, SummaryOptions options) {
+    /**
+     * Асинхронно создает краткое содержание для предоставленного текста.
+     *
+     * @param text    Текст для анализа.
+     * @param options Опции, управляющие стилем и форматом резюме.
+     * @return {@link Mono}, который по завершении будет содержать строку с резюме.
+     */
+    public Mono<String> summarizeAsync(String text, SummaryOptions options) {
         if (text == null || text.isBlank()) {
-            return CompletableFuture.completedFuture("Текст для анализа не предоставлен.");
+            return Mono.just("Текст для анализа не предоставлен.");
         }
 
         log.info("Запущена задача саммаризации...");
@@ -32,7 +44,7 @@ public class SummarizationService {
                 "style", style
         ));
 
-        return llmClient.callChat(new Prompt(promptString));
+        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString)));
     }
 
     /**

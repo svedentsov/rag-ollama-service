@@ -45,11 +45,26 @@ public class AgentOrchestratorService {
      */
     private Map<String, List<QaAgent>> definePipelines() {
         return Map.of(
+                // Конвейер для анализа PR в GitHub
                 "github-pr-pipeline", List.of(
                         agentMap.get("test-prioritizer")
                 ),
-                "jira-bug-pipeline", List.of(
+                // Конвейер для анализа нового бага в Jira (данные из вебхука)
+                "jira-bug-creation-pipeline", List.of(
                         agentMap.get("bug-duplicate-detector")
+                ),
+                // Конвейер: сначала извлекает данные из Jira, потом анализирует
+                "jira-update-analysis-pipeline", List.of(
+                        agentMap.get("jira-fetcher"),
+                        agentMap.get("bug-duplicate-detector")
+                ),
+                // Конвейер для Git-инспектора
+                "git-inspector-pipeline", List.of(
+                        agentMap.get("git-inspector")
+                ),
+                // НОВЫЙ КОНВЕЙЕР: для анализа OpenAPI
+                "openapi-pipeline", List.of(
+                        agentMap.get("openapi-agent")
                 )
         );
     }
@@ -114,8 +129,9 @@ public class AgentOrchestratorService {
         public PipelineExecutionState addResult(AgentResult newResult) {
             List<AgentResult> newResults = new java.util.ArrayList<>(this.results);
             newResults.add(newResult);
-            this.currentContext.payload().putAll(newResult.details());
-            return new PipelineExecutionState(this.currentContext, newResults);
+            Map<String, Object> newPayload = new java.util.HashMap<>(this.currentContext.payload());
+            newPayload.putAll(newResult.details());
+            return new PipelineExecutionState(new AgentContext(newPayload), newResults);
         }
 
         public List<AgentResult> getResults() {

@@ -1,5 +1,15 @@
 package com.example.ragollama.qaagent.tools;
 
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.reactor.circuitbreaker.operator.CircuitBreakerOperator;
+import io.github.resilience4j.reactor.retry.RetryOperator;
+import io.github.resilience4j.reactor.timelimiter.TimeLimiterOperator;
+import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryRegistry;
+import io.github.resilience4j.timelimiter.TimeLimiter;
+import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -13,30 +23,75 @@ import java.util.Map;
  * Клиент для взаимодействия с Jira Cloud REST API.
  * <p>
  * Инкапсулирует логику HTTP-запросов к Jira, используя неблокирующий
- * {@link WebClient}.
+ * {@link WebClient}. Все публичные методы защищены механизмами
+ * отказоустойчивости Resilience4j (Retry, Circuit Breaker, Timeout).
  */
 @Slf4j
 @Service
 public class JiraApiClient {
 
+    private static final String JIRA_RESILIENCE_CONFIG = "jira";
     private final WebClient webClient;
+    private final CircuitBreakerRegistry circuitBreakerRegistry;
+    private final RetryRegistry retryRegistry;
+    private final TimeLimiterRegistry timeLimiterRegistry;
+
+    private CircuitBreaker circuitBreaker;
+    private Retry retry;
+    private TimeLimiter timeLimiter;
 
     /**
      * Конструктор, который создает и настраивает {@link WebClient} для Jira.
      *
-     * @param webClientBuilder Строитель {@link WebClient} из общей конфигурации.
-     * @param baseUrl          Базовый URL вашего инстанса Jira.
-     * @param apiUser          Email пользователя для аутентификации.
-     * @param apiToken         API токен, сгенерированный в Jira.
+     * @param webClientBuilder     Строитель {@link WebClient} из общей конфигурации.
+     * @param baseUrl              Базовый URL вашего инстанса Jira.
+     * @param apiUser              Email пользователя для аутентификации.
+     * @param apiToken             API токен, сгенерированный в Jira.
+     * @param circuitBreakerRegistry Реестр Circuit Breaker'ов.
+     * @param retryRegistry          Реестр Retry.
+     * @param timeLimiterRegistry    Реестр Time Limiter'ов.
      */
     public JiraApiClient(WebClient.Builder webClientBuilder,
                          @Value("${app.integrations.jira.base-url}") String baseUrl,
                          @Value("${app.integrations.jira.api-user}") String apiUser,
-                         @Value("${app.integrations.jira.api-token}") String apiToken) {
+                         @Value("${app.integrations.jira.api-token}") String apiToken,
+                         CircuitBreakerRegistry circuitBreakerRegistry,
+                         RetryRegistry retryRegistry,
+                         TimeLimiterRegistry timeLimiterRegistry) {
         this.webClient = webClientBuilder
                 .baseUrl(baseUrl)
                 .defaultHeaders(h -> h.setBasicAuth(apiUser, apiToken))
                 .build();
+        this.circuitBreakerRegistry = circuitBreakerRegistry;
+        this.retryRegistry = retryRegistry;
+        this.timeLimiterRegistry = timeLimiterRegistry;
+    }
+
+    /**
+     * Инициализирует компоненты Resilience4j после создания бина.
+     */
+    @PostConstruct
+    public void init() {
+        this.circuitBreaker = circuitBreakerRegistry.circuitBreaker(JIRA_RESILIENCE_CONFIG);
+        this.retry = retryRegistry.retry(JIRA_RESILIENCE_CONFIG);
+        this.timeLimiter = timeLimiterRegistry.timeLimiter(JIRA_RESILIENCE_CONFIG);
+    }
+
+    /**
+     * Асинхронно извлекает детали задачи из Jira.
+     *
+     * @param issueKey Ключ задачи (например, "PROJ-123").
+     * @return {@link Mono} с DTO, содержащим информацию о задаче.
+     */
+    public Mono<JiraIssueDto> getIssueDetails(String issueKey) {
+        log.debug("Запрос деталей для задачи Jira: {}", issueKey);
+        Mono<JiraIssueDto> requestMono = webClient.get()
+                .uri("/rest/api/3/issue/{issueKey}", issueKey)
+                .retrieve()
+                .bodyToMono(JiraIssueDto.class);
+
+        return applyResilience(requestMono)
+                .doOnError(e -> log.error("Ошибка при запросе деталей задачи {}: {}", issueKey, e.getMessage()));
     }
 
     /**
@@ -64,12 +119,28 @@ public class JiraApiClient {
                 )
         );
 
-        return webClient.post()
+        Mono<Void> requestMono = webClient.post()
                 .uri("/rest/api/3/issue/{issueKey}/comment", issueKey)
                 .bodyValue(body)
                 .retrieve()
-                .bodyToMono(Void.class)
+                .bodyToMono(Void.class);
+
+        return applyResilience(requestMono)
                 .doOnSuccess(v -> log.info("Комментарий успешно опубликован в задаче {}", issueKey))
                 .doOnError(e -> log.error("Ошибка при публикации комментария в задачу {}: {}", issueKey, e.getMessage()));
+    }
+
+    /**
+     * Применяет общую цепочку отказоустойчивости к Mono-паблишеру.
+     *
+     * @param publisher Исходный {@link Mono} с запросом.
+     * @param <T> Тип ответа.
+     * @return {@link Mono}, обернутый в Retry, TimeLimiter и CircuitBreaker.
+     */
+    private <T> Mono<T> applyResilience(Mono<T> publisher) {
+        return publisher
+                .transformDeferred(RetryOperator.of(retry))
+                .transformDeferred(TimeLimiterOperator.of(timeLimiter))
+                .transformDeferred(CircuitBreakerOperator.of(circuitBreaker));
     }
 }
