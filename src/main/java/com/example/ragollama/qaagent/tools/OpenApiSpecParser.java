@@ -1,11 +1,15 @@
 package com.example.ragollama.qaagent.tools;
 
+import com.example.ragollama.qaagent.model.EndpointInfo;
 import com.example.ragollama.shared.exception.ProcessingException;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 /**
  * Инфраструктурный сервис, инкапсулирующий логику парсинга OpenAPI спецификаций.
@@ -52,5 +56,24 @@ public class OpenApiSpecParser {
             throw new ProcessingException("Не удалось получить OpenAPI спецификацию с URL: " + url);
         }
         return openAPI;
+    }
+
+    /**
+     * Извлекает все определения эндпоинтов из объекта OpenAPI.
+     *
+     * @param openApi Распарсенный объект спецификации.
+     * @return Список объектов {@link EndpointInfo}.
+     */
+    public List<EndpointInfo> extractEndpoints(OpenAPI openApi) {
+        if (openApi == null || openApi.getPaths() == null) {
+            return List.of();
+        }
+        return openApi.getPaths().entrySet().stream()
+                .flatMap(pathEntry -> {
+                    String path = pathEntry.getKey();
+                    return pathEntry.getValue().readOperationsMap().keySet().stream()
+                            .map(httpMethod -> new EndpointInfo(path, HttpMethod.valueOf(httpMethod.name())));
+                })
+                .toList();
     }
 }

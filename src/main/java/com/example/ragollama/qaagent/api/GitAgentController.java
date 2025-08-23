@@ -44,4 +44,58 @@ public class GitAgentController {
         ));
         return orchestratorService.invokePipeline("git-inspector-pipeline", context);
     }
+
+    /**
+     * Запускает конвейер для поиска пробелов в тестовом покрытии.
+     *
+     * @param request DTO с `oldRef` и `newRef`.
+     * @return {@link CompletableFuture} с результатами работы конвейера, включая список пробелов.
+     */
+    @PostMapping("/analyze-test-gaps")
+    @Operation(summary = "Найти пробелы в тестовом покрытии для изменений",
+            description = "Запускает 'test-coverage-pipeline', который сначала находит измененные файлы, " +
+                    "а затем ищет исходные файлы без соответствующих изменений в тестах.")
+    public CompletableFuture<List<AgentResult>> analyzeTestGaps(@Valid @RequestBody GitInspectRequest request) {
+        AgentContext context = new AgentContext(Map.of(
+                "oldRef", request.oldRef(),
+                "newRef", request.newRef()
+        ));
+        return orchestratorService.invokePipeline("test-coverage-pipeline", context);
+    }
+
+    /**
+     * Запускает полный, глубокий аудит безопасности для изменений в коде.
+     *
+     * @param request DTO с `oldRef` и `newRef`.
+     * @return {@link CompletableFuture} с результатами работы конвейера, включая список найденных рисков.
+     */
+    @PostMapping("/deep-security-audit")
+    @Operation(summary = "Провести глубокий аудит безопасности изменений",
+            description = "Запускает 'deep-security-audit-pipeline', который находит измененные файлы, " +
+                    "извлекает из них правила RBAC и анализирует их на предмет рисков.")
+    public CompletableFuture<List<AgentResult>> deepSecurityAudit(@Valid @RequestBody GitInspectRequest request) {
+        AgentContext context = new AgentContext(Map.of(
+                "oldRef", request.oldRef(),
+                "newRef", request.newRef()
+        ));
+        return orchestratorService.invokePipeline("deep-security-audit-pipeline", context);
+    }
+
+    /**
+     * Запускает конвейер для анализа влияния изменений в коде.
+     *
+     * @param request DTO с `oldRef` и `newRef`.
+     * @return {@link CompletableFuture} с отчетом о потенциальном влиянии.
+     */
+    @PostMapping("/analyze-impact")
+    @Operation(summary = "Проанализировать влияние изменений в коде",
+            description = "Запускает 'impact-analysis-pipeline', который сначала находит измененные файлы, " +
+                    "а затем с помощью LLM прогнозирует их влияние на другие части системы.")
+    public CompletableFuture<List<AgentResult>> analyzeImpact(@Valid @RequestBody GitInspectRequest request) {
+        AgentContext context = new AgentContext(Map.of(
+                "oldRef", request.oldRef(),
+                "newRef", request.newRef()
+        ));
+        return orchestratorService.invokePipeline("impact-analysis-pipeline", context);
+    }
 }

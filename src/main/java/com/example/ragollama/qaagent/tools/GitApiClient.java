@@ -9,17 +9,23 @@ import org.eclipse.jgit.diff.DiffFormatter;
 import org.eclipse.jgit.internal.storage.dfs.DfsRepositoryDescription;
 import org.eclipse.jgit.internal.storage.dfs.InMemoryRepository;
 import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.ObjectLoader;
 import org.eclipse.jgit.lib.ObjectReader;
 import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevTree;
+import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.eclipse.jgit.treewalk.AbstractTreeIterator;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
+import org.eclipse.jgit.treewalk.TreeWalk;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -52,6 +58,42 @@ public class GitApiClient {
                 gitProperties.personalAccessToken(), ""
         );
     }
+
+    /**
+     * Асинхронно получает содержимое файла из репозитория для указанной ссылки (ref).
+     *
+     * @param filePath Путь к файлу в репозитории.
+     * @param ref      Git-ссылка (коммит, ветка, тег).
+     * @return {@link Mono} со строковым содержимым файла.
+     */
+    public Mono<String> getFileContent(String filePath, String ref) {
+        return Mono.fromCallable(() -> {
+            try (Repository repo = new InMemoryRepository(new DfsRepositoryDescription("temp-repo-content"))) {
+                Git git = new Git(repo);
+                // Выполняем fetch только для одной нужной нам ссылки
+                git.fetch()
+                        .setRemote(gitProperties.repositoryUrl())
+                        .setCredentialsProvider(credentialsProvider)
+                        .setRefSpecs(new org.eclipse.jgit.transport.RefSpec("+" + "refs/heads/" + ref + ":refs/remotes/origin/" + ref))
+                        .call();
+
+                ObjectId refId = repo.resolve("refs/remotes/origin/" + ref);
+                if (refId == null) throw new IOException("Ref not found: " + ref);
+
+                try (RevWalk revWalk = new RevWalk(repo)) {
+                    RevCommit commit = revWalk.parseCommit(refId);
+                    RevTree tree = commit.getTree();
+                    try (TreeWalk treeWalk = TreeWalk.forPath(repo, filePath, tree)) {
+                        if (treeWalk == null) return ""; // Файл не найден в этом коммите
+                        ObjectId objectId = treeWalk.getObjectId(0);
+                        ObjectLoader loader = repo.open(objectId);
+                        return new String(loader.getBytes(), StandardCharsets.UTF_8);
+                    }
+                }
+            }
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
 
     /**
      * Асинхронно получает список измененных файлов между двумя Git-ссылками.
@@ -99,7 +141,47 @@ public class GitApiClient {
     }
 
     /**
+     * Асинхронно получает отформатированный diff между двумя Git-ссылками.
+     *
+     * @param oldRef Исходная ссылка.
+     * @param newRef Конечная ссылка.
+     * @return {@link Mono} со строковым представлением diff.
+     */
+    public Mono<String> getDiff(String oldRef, String newRef) {
+        return Mono.fromCallable(() -> {
+            try (Repository repo = new InMemoryRepository(new DfsRepositoryDescription("temp-repo-diff"))) {
+                Git git = new Git(repo);
+                // Fetch'им обе нужные ссылки
+                git.fetch()
+                        .setRemote(gitProperties.repositoryUrl())
+                        .setCredentialsProvider(credentialsProvider)
+                        .setRefSpecs(
+                                new org.eclipse.jgit.transport.RefSpec("+" + "refs/heads/" + oldRef + ":refs/remotes/origin/" + oldRef),
+                                new org.eclipse.jgit.transport.RefSpec("+" + "refs/heads/" + newRef + ":refs/remotes/origin/" + newRef)
+                        )
+                        .call();
+
+                AbstractTreeIterator oldTree = getTreeIterator(repo, "refs/remotes/origin/" + oldRef);
+                AbstractTreeIterator newTree = getTreeIterator(repo, "refs/remotes/origin/" + newRef);
+
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                try (DiffFormatter formatter = new DiffFormatter(out)) {
+                    formatter.setRepository(repo);
+                    formatter.format(oldTree, newTree);
+                    return out.toString(StandardCharsets.UTF_8);
+                }
+            }
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+
+    /**
      * Вспомогательный метод для получения итератора по дереву файлов для указанной ссылки.
+     *
+     * @param repository Репозиторий JGit.
+     * @param ref        Строковое представление ссылки.
+     * @return Итератор по дереву файлов.
+     * @throws IOException если ссылка не найдена или произошла ошибка чтения.
      */
     private AbstractTreeIterator getTreeIterator(Repository repository, String ref) throws IOException {
         final ObjectId id = repository.resolve(ref);
@@ -108,15 +190,18 @@ public class GitApiClient {
         }
 
         try (ObjectReader reader = repository.newObjectReader()) {
-            return new CanonicalTreeParser(null, reader, new org.eclipse.jgit.revwalk.RevWalk(reader).parseTree(id));
+            return new CanonicalTreeParser(null, reader, new RevWalk(reader).parseTree(id));
         }
     }
 
     /**
-     * Форматирует объект DiffEntry в человекочитаемую строку.
+     * Форматирует объект DiffEntry в путь к измененному файлу.
+     *
+     * @param entry Объект, представляющий одно изменение.
+     * @return Строка с путем к файлу.
      */
     private String formatDiffEntry(DiffEntry entry) {
-        return String.format("%s: %s", entry.getChangeType(),
-                entry.getNewPath().equals(DiffEntry.DEV_NULL) ? entry.getOldPath() : entry.getNewPath());
+        // Возвращаем только путь к файлу, тип изменения не так важен для потребителей
+        return entry.getNewPath().equals(DiffEntry.DEV_NULL) ? entry.getOldPath() : entry.getNewPath();
     }
 }

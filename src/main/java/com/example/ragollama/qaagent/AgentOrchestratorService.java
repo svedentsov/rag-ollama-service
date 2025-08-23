@@ -11,10 +11,6 @@ import java.util.stream.Collectors;
 
 /**
  * Сервис-оркестратор, управляющий выполнением конвейеров из QA-агентов.
- * <p>
- * Он автоматически обнаруживает все доступные реализации {@link QaAgent}
- * и позволяет запускать их в виде предопределенных последовательных цепочек (пайплайнов).
- * Это обеспечивает высокую расширяемость и следование принципу Open/Closed.
  */
 @Slf4j
 @Service
@@ -23,12 +19,6 @@ public class AgentOrchestratorService {
     private final Map<String, QaAgent> agentMap;
     private final Map<String, List<QaAgent>> pipelines;
 
-    /**
-     * Конструктор, который автоматически собирает все бины типа {@link QaAgent}
-     * и инициализирует предопределенные конвейеры.
-     *
-     * @param agents Список всех реализаций {@link QaAgent}, найденных в контексте Spring.
-     */
     public AgentOrchestratorService(List<QaAgent> agents) {
         this.agentMap = agents.stream()
                 .collect(Collectors.toMap(QaAgent::getName, Function.identity()));
@@ -37,49 +27,44 @@ public class AgentOrchestratorService {
                 agentMap.keySet(), pipelines.keySet());
     }
 
-    /**
-     * Определяет статические конвейеры (цепочки) выполнения агентов.
-     * В production-системе эта конфигурация может быть вынесена в YAML-файл.
-     *
-     * @return Карта, где ключ - имя конвейера, а значение - упорядоченный список агентов.
-     */
     private Map<String, List<QaAgent>> definePipelines() {
-        return Map.of(
-                // Конвейер для анализа PR в GitHub
-                "github-pr-pipeline", List.of(
-                        agentMap.get("test-prioritizer")
-                ),
-                // Конвейер для анализа нового бага в Jira (данные из вебхука)
-                "jira-bug-creation-pipeline", List.of(
-                        agentMap.get("bug-duplicate-detector")
-                ),
-                // Конвейер: сначала извлекает данные из Jira, потом анализирует
-                "jira-update-analysis-pipeline", List.of(
+        return Map.ofEntries(
+                Map.entry("git-inspector-pipeline", List.of(agentMap.get("git-inspector"))),
+                Map.entry("openapi-pipeline", List.of(agentMap.get("openapi-agent"))),
+                Map.entry("flaky-test-detection-pipeline", List.of(agentMap.get("flaky-test-detector"))),
+                Map.entry("spec-drift-sentinel-pipeline", List.of(agentMap.get("spec-drift-sentinel"))),
+                Map.entry("github-pr-pipeline", List.of(agentMap.get("test-prioritizer"))),
+                Map.entry("jira-bug-creation-pipeline", List.of(agentMap.get("bug-duplicate-detector"))),
+                Map.entry("jira-update-analysis-pipeline", List.of(
                         agentMap.get("jira-fetcher"),
-                        agentMap.get("bug-duplicate-detector")
+                        agentMap.get("bug-duplicate-detector"))
                 ),
-                // Конвейер для Git-инспектора
-                "git-inspector-pipeline", List.of(
-                        agentMap.get("git-inspector")
+                Map.entry("test-coverage-pipeline", List.of(
+                        agentMap.get("git-inspector"),
+                        agentMap.get("test-gap-analyzer"))
                 ),
-                // НОВЫЙ КОНВЕЙЕР: для анализа OpenAPI
-                "openapi-pipeline", List.of(
-                        agentMap.get("openapi-agent")
+                Map.entry("security-audit-pipeline", List.of(
+                        agentMap.get("git-inspector"),
+                        agentMap.get("rbac-extractor"))
+                ),
+                Map.entry("deep-security-audit-pipeline", List.of(
+                        agentMap.get("git-inspector"),
+                        agentMap.get("rbac-extractor"),
+                        agentMap.get("auth-risk-detector"))
+                ),
+                Map.entry("root-cause-analysis-pipeline", List.of(
+                        agentMap.get("flaky-test-detector"),
+                        agentMap.get("git-inspector"),
+                        agentMap.get("root-cause-analyzer"))
+                ),
+                // НОВЫЙ КОМПОЗИТНЫЙ КОНВЕЙЕР
+                Map.entry("impact-analysis-pipeline", List.of(
+                        agentMap.get("git-inspector"),
+                        agentMap.get("impact-analyzer"))
                 )
         );
     }
 
-    /**
-     * Асинхронно выполняет именованный конвейер агентов.
-     * <p>
-     * Метод последовательно выполняет каждого агента из конвейера, передавая
-     * и обогащая {@link AgentContext} на каждом шаге. Результаты всех агентов
-     * агрегируются в итоговый список.
-     *
-     * @param pipelineName   Имя конвейера для запуска.
-     * @param initialContext Начальный контекст с входными данными.
-     * @return {@link CompletableFuture} с агрегированными результатами всех агентов.
-     */
     public CompletableFuture<List<AgentResult>> invokePipeline(String pipelineName, AgentContext initialContext) {
         List<QaAgent> agentsInPipeline = pipelines.get(pipelineName);
         if (agentsInPipeline == null || agentsInPipeline.isEmpty()) {
@@ -89,7 +74,6 @@ public class AgentOrchestratorService {
 
         log.info("Запуск конвейера '{}' с {} агентами.", pipelineName, agentsInPipeline.size());
 
-        // Создаем цепочку асинхронных вызовов
         CompletableFuture<PipelineExecutionState> executionChain = CompletableFuture.completedFuture(
                 new PipelineExecutionState(initialContext, List.of())
         );
@@ -105,12 +89,6 @@ public class AgentOrchestratorService {
         return executionChain.thenApply(PipelineExecutionState::getResults);
     }
 
-    /**
-     * Внутренний неизменяемый класс для хранения состояния выполнения конвейера.
-     * <p>
-     * Вместо изменения одного объекта, каждый шаг создает новый экземпляр,
-     * что делает логику более предсказуемой и безопасной в асинхронной среде.
-     */
     private static class PipelineExecutionState {
         private final AgentContext currentContext;
         private final List<AgentResult> results;

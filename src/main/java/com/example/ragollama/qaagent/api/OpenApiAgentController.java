@@ -3,6 +3,7 @@ package com.example.ragollama.qaagent.api;
 import com.example.ragollama.qaagent.AgentOrchestratorService;
 import com.example.ragollama.qaagent.AgentResult;
 import com.example.ragollama.qaagent.api.dto.OpenApiQueryRequest;
+import com.example.ragollama.qaagent.api.dto.SpecDriftAnalysisRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -38,5 +39,19 @@ public class OpenApiAgentController {
                     "на основе предоставленной спецификации для ответа на вопрос.")
     public CompletableFuture<List<AgentResult>> querySpec(@Valid @RequestBody OpenApiQueryRequest request) {
         return orchestratorService.invokePipeline("openapi-pipeline", request.toAgentContext());
+    }
+
+    /**
+     * Запускает агента для обнаружения расхождений между спецификацией и реализацией.
+     *
+     * @param request DTO с источником OpenAPI спецификации.
+     * @return {@link CompletableFuture} с отчетом о найденных расхождениях.
+     */
+    @PostMapping("/analyze-drift")
+    @Operation(summary = "Обнаружить расхождения (drift) между спецификацией и кодом",
+            description = "Запускает 'spec-drift-sentinel-pipeline', который сравнивает эндпоинты из " +
+                    "спецификации с реально существующими в приложении.")
+    public CompletableFuture<List<AgentResult>> analyzeSpecDrift(@Valid @RequestBody SpecDriftAnalysisRequest request) {
+        return orchestratorService.invokePipeline("spec-drift-sentinel-pipeline", request.toAgentContext());
     }
 }
