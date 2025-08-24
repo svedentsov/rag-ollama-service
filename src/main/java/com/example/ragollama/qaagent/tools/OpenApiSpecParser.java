@@ -3,6 +3,8 @@ package com.example.ragollama.qaagent.tools;
 import com.example.ragollama.qaagent.model.EndpointInfo;
 import com.example.ragollama.shared.exception.ProcessingException;
 import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import lombok.extern.slf4j.Slf4j;
@@ -10,6 +12,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Инфраструктурный сервис, инкапсулирующий логику парсинга OpenAPI спецификаций.
@@ -75,5 +78,48 @@ public class OpenApiSpecParser {
                             .map(httpMethod -> new EndpointInfo(path, HttpMethod.valueOf(httpMethod.name())));
                 })
                 .toList();
+    }
+
+    /**
+     * Находит операцию по ее идентификатору и форматирует ее детали в
+     * человекочитаемую строку для передачи в LLM.
+     *
+     * @param openApi            Распарсенный объект спецификации.
+     * @param endpointIdentifier Идентификатор в формате "METHOD /path".
+     * @return {@link Optional} с отформатированной строкой или пустой, если эндпоинт не найден.
+     */
+    public Optional<String> formatOperationDetails(OpenAPI openApi, String endpointIdentifier) {
+        String[] parts = endpointIdentifier.split("\\s+", 2);
+        if (parts.length != 2) {
+            return Optional.empty();
+        }
+
+        HttpMethod method = HttpMethod.valueOf(parts[0].toUpperCase());
+        String path = parts[1];
+
+        return Optional.ofNullable(openApi.getPaths())
+                .map(paths -> paths.get(path))
+                .flatMap(pathItem -> Optional.ofNullable(pathItem.readOperationsMap().get(PathItem.HttpMethod.valueOf(method.name()))))
+                .map(operation -> formatOperation(path, method.name(), operation));
+    }
+
+    /**
+     * Вспомогательный метод для форматирования деталей операции в текстовый вид.
+     *
+     * @param path      Путь эндпоинта.
+     * @param method    HTTP-метод.
+     * @param operation Объект операции из спецификации.
+     * @return Строка с описанием.
+     */
+    private String formatOperation(String path, String method, Operation operation) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("Endpoint: %s %s\n", method.toUpperCase(), path));
+        if (operation.getSummary() != null) {
+            sb.append(String.format("Summary: %s\n", operation.getSummary()));
+        }
+        if (operation.getDescription() != null) {
+            sb.append(String.format("Description: %s\n", operation.getDescription()));
+        }
+        return sb.toString();
     }
 }

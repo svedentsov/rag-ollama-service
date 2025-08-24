@@ -61,6 +61,26 @@ public class AgentOrchestratorService {
                 Map.entry("impact-analysis-pipeline", List.of(
                         agentMap.get("git-inspector"),
                         agentMap.get("impact-analyzer"))
+                ),
+                Map.entry("test-case-generation-pipeline", List.of(
+                        agentMap.get("test-case-generator"))
+                ),
+                Map.entry("spec-to-test-generation-pipeline", List.of(
+                        agentMap.get("spec-to-test-generator"))
+                ),
+                Map.entry("auth-test-generation-pipeline", List.of(
+                        agentMap.get("git-inspector"),
+                        agentMap.get("rbac-extractor"),
+                        agentMap.get("auth-test-builder"))
+                ),
+                Map.entry("bug-report-summarization-pipeline", List.of(
+                        agentMap.get("bug-report-summarizer"))
+                ),
+                Map.entry("release-notes-generation-pipeline", List.of(
+                        agentMap.get("release-notes-writer"))
+                ),
+                Map.entry("synthetic-data-generation-pipeline", List.of(
+                        agentMap.get("synthetic-data-builder"))
                 )
         );
     }

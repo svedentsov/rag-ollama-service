@@ -1,4 +1,4 @@
-package com.example.ragollama.buganalysis.api.dto;
+package com.example.ragollama.qaagent.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;

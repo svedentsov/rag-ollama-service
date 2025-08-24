@@ -4,6 +4,7 @@ import com.example.ragollama.qaagent.AgentOrchestratorService;
 import com.example.ragollama.qaagent.AgentResult;
 import com.example.ragollama.qaagent.api.dto.OpenApiQueryRequest;
 import com.example.ragollama.qaagent.api.dto.SpecDriftAnalysisRequest;
+import com.example.ragollama.qaagent.api.dto.SpecToTestRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -36,7 +37,7 @@ public class OpenApiAgentController {
     @PostMapping("/query")
     @Operation(summary = "Задать вопрос по OpenAPI спецификации",
             description = "Запускает 'openapi-pipeline', который динамически создает RAG-конвейер " +
-                    "на основе предоставленной спецификации для ответа на вопрос.")
+                          "на основе предоставленной спецификации для ответа на вопрос.")
     public CompletableFuture<List<AgentResult>> querySpec(@Valid @RequestBody OpenApiQueryRequest request) {
         return orchestratorService.invokePipeline("openapi-pipeline", request.toAgentContext());
     }
@@ -50,8 +51,22 @@ public class OpenApiAgentController {
     @PostMapping("/analyze-drift")
     @Operation(summary = "Обнаружить расхождения (drift) между спецификацией и кодом",
             description = "Запускает 'spec-drift-sentinel-pipeline', который сравнивает эндпоинты из " +
-                    "спецификации с реально существующими в приложении.")
+                          "спецификации с реально существующими в приложении.")
     public CompletableFuture<List<AgentResult>> analyzeSpecDrift(@Valid @RequestBody SpecDriftAnalysisRequest request) {
         return orchestratorService.invokePipeline("spec-drift-sentinel-pipeline", request.toAgentContext());
+    }
+
+    /**
+     * Запускает агента для генерации кода API-теста на основе спецификации.
+     *
+     * @param request DTO с источником спецификации и целевым эндпоинтом.
+     * @return {@link CompletableFuture} с результатом, содержащим сгенерированный Java-код.
+     */
+    @PostMapping("/generate-test")
+    @Operation(summary = "Сгенерировать код API-теста из спецификации",
+            description = "Запускает 'spec-to-test-generation-pipeline' для создания готового " +
+                          "Java/RestAssured/JUnit5 тест-класса для указанного эндпоинта.")
+    public CompletableFuture<List<AgentResult>> generateTestFromSpec(@Valid @RequestBody SpecToTestRequest request) {
+        return orchestratorService.invokePipeline("spec-to-test-generation-pipeline", request.toAgentContext());
     }
 }

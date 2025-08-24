@@ -1,6 +1,6 @@
 package com.example.ragollama.qaagent.impl;
 
-import com.example.ragollama.buganalysis.domain.BugAnalysisService;
+import com.example.ragollama.qaagent.domain.BugAnalysisService;
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
 import com.example.ragollama.qaagent.QaAgent;

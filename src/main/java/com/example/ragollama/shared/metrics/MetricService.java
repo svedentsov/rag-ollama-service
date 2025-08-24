@@ -13,7 +13,7 @@ import java.util.function.Supplier;
  * <p>
  * Предоставляет удобные методы для инкремента счетчиков и измерения времени выполнения
  * операций. Включает метрики для RAG-конвейера, такие как количество найденных
- * документов и результаты проверки "обоснованности" (grounding) ответов.
+ * документов и результаты проверки "обоснованности" (grounding) и цитирования ответов.
  */
 @Service
 public class MetricService {
@@ -26,6 +26,9 @@ public class MetricService {
     private final DistributionSummary retrievedDocumentsSummary;
     private final Counter groundedCounter;
     private final Counter ungroundedCounter;
+    private final Counter verificationPassedCounter;
+    private final Counter verificationFailedCounter;
+
 
     /**
      * Конструктор, который инициализирует реестр метрик и создает все необходимые счетчики.
@@ -67,6 +70,16 @@ public class MetricService {
         this.ungroundedCounter = Counter.builder("rag.grounding.checks")
                 .tag("result", "ungrounded")
                 .description("Количество ответов, которые не прошли проверку на 'обоснованность' (потенциальные галлюцинации).")
+                .register(meterRegistry);
+
+        this.verificationPassedCounter = Counter.builder("rag.verification.checks")
+                .tag("result", "passed")
+                .description("Количество RAG-ответов, успешно прошедших верификацию цитирования.")
+                .register(meterRegistry);
+
+        this.verificationFailedCounter = Counter.builder("rag.verification.checks")
+                .tag("result", "failed")
+                .description("Количество RAG-ответов, не прошедших верификацию (потенциальные галлюцинации).")
                 .register(meterRegistry);
     }
 
@@ -138,6 +151,19 @@ public class MetricService {
             groundedCounter.increment();
         } else {
             ungroundedCounter.increment();
+        }
+    }
+
+    /**
+     * Записывает результат проверки цитирования источников.
+     *
+     * @param isValid {@code true}, если проверка пройдена, иначе {@code false}.
+     */
+    public void recordVerificationResult(boolean isValid) {
+        if (isValid) {
+            verificationPassedCounter.increment();
+        } else {
+            verificationFailedCounter.increment();
         }
     }
 }

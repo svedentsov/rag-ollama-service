@@ -2,7 +2,7 @@ package com.example.ragollama.orchestration;
 
 import com.example.ragollama.agent.domain.CodeGenerationService;
 import com.example.ragollama.agent.domain.RouterAgentService;
-import com.example.ragollama.buganalysis.domain.BugAnalysisService;
+import com.example.ragollama.qaagent.domain.BugAnalysisService;
 import com.example.ragollama.orchestration.dto.UniversalRequest;
 import com.example.ragollama.orchestration.dto.UniversalResponse;
 import com.example.ragollama.orchestration.dto.UniversalSyncResponse;

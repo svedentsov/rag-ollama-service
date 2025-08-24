@@ -4,6 +4,7 @@ import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentOrchestratorService;
 import com.example.ragollama.qaagent.AgentResult;
 import com.example.ragollama.qaagent.api.dto.GitInspectRequest;
+import com.example.ragollama.qaagent.api.dto.ReleaseNotesRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -97,5 +98,38 @@ public class GitAgentController {
                 "newRef", request.newRef()
         ));
         return orchestratorService.invokePipeline("impact-analysis-pipeline", context);
+    }
+
+    /**
+     * Запускает полный конвейер для генерации тестов безопасности.
+     *
+     * @param request DTO с `oldRef` и `newRef`.
+     * @return {@link CompletableFuture} с результатом, содержащим сгенерированный код тестов.
+     */
+    @PostMapping("/generate-auth-tests")
+    @Operation(summary = "Сгенерировать тесты безопасности для измененных правил",
+            description = "Запускает 'auth-test-generation-pipeline', который находит изменения, " +
+                    "извлекает правила RBAC и генерирует для них код тестов.")
+    public CompletableFuture<List<AgentResult>> generateAuthTests(@Valid @RequestBody GitInspectRequest request) {
+        AgentContext context = new AgentContext(Map.of(
+                "oldRef", request.oldRef(),
+                "newRef", request.newRef()
+        ));
+        return orchestratorService.invokePipeline("auth-test-generation-pipeline", context);
+    }
+
+    /**
+     * Запускает конвейер для генерации заметок о выпуске.
+     *
+     * @param request DTO с `oldRef` и `newRef`.
+     * @return {@link CompletableFuture} с результатом, содержащим Markdown с заметками.
+     */
+    @PostMapping("/generate-release-notes")
+    @Operation(summary = "Сгенерировать заметки о выпуске (release notes)",
+            description = "Запускает 'release-notes-generation-pipeline', который анализирует " +
+                    "коммиты между двумя Git-ссылками и генерирует из них человекочитаемый отчет.")
+    public CompletableFuture<List<AgentResult>> generateReleaseNotes(@Valid @RequestBody ReleaseNotesRequest request) {
+        AgentContext context = request.toAgentContext();
+        return orchestratorService.invokePipeline("release-notes-generation-pipeline", context);
     }
 }

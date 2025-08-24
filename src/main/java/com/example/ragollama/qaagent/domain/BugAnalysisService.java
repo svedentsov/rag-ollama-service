@@ -1,6 +1,6 @@
-package com.example.ragollama.buganalysis.domain;
+package com.example.ragollama.qaagent.domain;
 
-import com.example.ragollama.buganalysis.api.dto.BugAnalysisResponse;
+import com.example.ragollama.qaagent.api.dto.BugAnalysisResponse;
 import com.example.ragollama.rag.agent.QueryProcessingPipeline;
 import com.example.ragollama.rag.retrieval.HybridRetrievalStrategy;
 import com.example.ragollama.rag.retrieval.RetrievalProperties;

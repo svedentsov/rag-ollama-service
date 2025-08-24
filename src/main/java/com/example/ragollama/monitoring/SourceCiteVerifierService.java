@@ -1,0 +1,95 @@
+package com.example.ragollama.monitoring;
+
+import com.example.ragollama.monitoring.model.VerificationResult;
+import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.metrics.MetricService;
+import com.example.ragollama.shared.prompts.PromptService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.document.Document;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * Асинхронный сервис для пост-проверки сгенерированных RAG-ответов.
+ * <p>
+ * Использует LLM в роли "аудитора" для верификации того, что ответ
+ * строго основан на предоставленном контексте и корректно цитирует источники.
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class SourceCiteVerifierService {
+
+    private final LlmClient llmClient;
+    private final PromptService promptService;
+    private final MetricService metricService;
+    private final ObjectMapper objectMapper;
+
+    /**
+     * Асинхронно выполняет проверку ответа.
+     * <p>
+     * Метод выполняется в отдельном потоке и не влияет на время ответа
+     * для пользователя. Результаты проверки используются для сбора метрик
+     * и логирования потенциальных проблем.
+     *
+     * @param contextDocuments Документы, использованные как контекст для генерации.
+     * @param generatedAnswer  Финальный ответ, сгенерированный RAG-системой.
+     */
+    @Async("applicationTaskExecutor")
+    public void verify(List<Document> contextDocuments, String generatedAnswer) {
+        if (contextDocuments == null || contextDocuments.isEmpty()) {
+            log.debug("Верификация пропущена: контекст для генерации ответа был пуст.");
+            return;
+        }
+
+        String contextAsString = contextDocuments.stream()
+                .map(doc -> String.format("<doc source=\"%s\">\n%s\n</doc>",
+                        doc.getMetadata().get("source"), doc.getText()))
+                .collect(Collectors.joining("\n\n"));
+
+        String promptString = promptService.render("sourceCiteVerifier", Map.of(
+                "context", contextAsString,
+                "answer", generatedAnswer
+        ));
+
+        llmClient.callChat(new Prompt(promptString))
+                .thenAccept(jsonResponse -> {
+                    VerificationResult result = parseLlmResponse(jsonResponse);
+                    metricService.recordVerificationResult(result.isValid());
+                    if (!result.isValid()) {
+                        log.warn("""
+                                
+                                !!! ПРОВЕРКА ЦИТИРОВАНИЯ НЕ ПРОЙДЕНА !!!
+                                Ответ: "{}"
+                                Причина: {}
+                                Отсутствующие цитаты: {}
+                                """, generatedAnswer, result.reasoning(), result.missingCitations());
+                    } else {
+                        log.info("Проверка цитирования успешно пройдена для ответа.");
+                    }
+                })
+                .exceptionally(ex -> {
+                    log.error("Ошибка во время выполнения асинхронной верификации ответа.", ex);
+                    return null; // Завершаем CompletableFuture
+                });
+    }
+
+    private VerificationResult parseLlmResponse(String jsonResponse) {
+        try {
+            String cleanedJson = jsonResponse.replaceAll("(?s)```json\\s*|\\s*```", "").trim();
+            return objectMapper.readValue(cleanedJson, VerificationResult.class);
+        } catch (JsonProcessingException e) {
+            log.error("Не удалось распарсить JSON-ответ от LLM-верификатора: {}", jsonResponse, e);
+            // В случае ошибки парсинга считаем, что проверка не пройдена
+            return new VerificationResult(false, List.of(), "LLM вернула невалидный JSON.");
+        }
+    }
+}

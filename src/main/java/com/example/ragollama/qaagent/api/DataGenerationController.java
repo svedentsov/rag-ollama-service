@@ -1,0 +1,44 @@
+package com.example.ragollama.qaagent.api;
+
+import com.example.ragollama.qaagent.AgentOrchestratorService;
+import com.example.ragollama.qaagent.AgentResult;
+import com.example.ragollama.qaagent.api.dto.SyntheticDataRequest;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * Контроллер для управления AI-агентами, генерирующими данные.
+ */
+@RestController
+@RequestMapping("/api/v1/agents/data")
+@RequiredArgsConstructor
+@Tag(name = "Data Generation Agents", description = "API для генерации синтетических данных и моков")
+public class DataGenerationController {
+
+    private final AgentOrchestratorService orchestratorService;
+
+    /**
+     * Запускает агента для генерации синтетических данных.
+     *
+     * @param request DTO с определением Java-класса и количеством моков.
+     * @return {@link CompletableFuture} с результатом, содержащим сгенерированный JSON.
+     */
+    @PostMapping("/generate-mock")
+    @Operation(summary = "Сгенерировать моковые данные для Java-класса",
+            description = "Принимает исходный код Java DTO или Entity и генерирует " +
+                    "указанное количество JSON-объектов с реалистичными данными.")
+    public CompletableFuture<List<AgentResult>> generateMockData(@Valid @RequestBody SyntheticDataRequest request) {
+        return orchestratorService.invokePipeline(
+                "synthetic-data-generation-pipeline", request.toAgentContext()
+        );
+    }
+}

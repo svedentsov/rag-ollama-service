@@ -26,6 +26,7 @@ import reactor.core.scheduler.Schedulers;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -138,6 +139,44 @@ public class GitApiClient {
                     }
                 })
                 .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /**
+     * Асинхронно получает список сообщений коммитов между двумя Git-ссылками.
+     *
+     * @param oldRef Исходная ссылка (исключая).
+     * @param newRef Конечная ссылка (включая).
+     * @return {@link Mono} со списком сообщений коммитов.
+     */
+    public Mono<List<String>> getCommitMessages(String oldRef, String newRef) {
+        return Mono.fromCallable(() -> {
+            try (Repository repo = new InMemoryRepository(new DfsRepositoryDescription("temp-repo-log"))) {
+                Git git = new Git(repo);
+                // Fetch'им обе нужные ссылки
+                git.fetch()
+                        .setRemote(gitProperties.repositoryUrl())
+                        .setCredentialsProvider(credentialsProvider)
+                        .setRefSpecs(
+                                new org.eclipse.jgit.transport.RefSpec("+" + "refs/heads/" + oldRef + ":refs/remotes/origin/" + oldRef),
+                                new org.eclipse.jgit.transport.RefSpec("+" + "refs/heads/" + newRef + ":refs/remotes/origin/" + newRef)
+                        )
+                        .call();
+
+                ObjectId oldId = repo.resolve("refs/remotes/origin/" + oldRef);
+                ObjectId newId = repo.resolve("refs/remotes/origin/" + newRef);
+
+                if (oldId == null || newId == null) {
+                    throw new IOException("Одна из Git-ссылок не найдена в удаленном репозитории.");
+                }
+
+                List<String> messages = new ArrayList<>();
+                Iterable<RevCommit> logs = git.log().addRange(oldId, newId).call();
+                for (RevCommit rev : logs) {
+                    messages.add(String.format("%s - %s", rev.getId().abbreviate(7).name(), rev.getShortMessage()));
+                }
+                return messages;
+            }
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     /**

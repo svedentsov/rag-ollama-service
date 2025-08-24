@@ -1,6 +1,7 @@
 package com.example.ragollama.rag.domain;
 
 import com.example.ragollama.monitoring.GroundingService;
+import com.example.ragollama.monitoring.SourceCiteVerifierService;
 import com.example.ragollama.rag.agent.QueryProcessingPipeline;
 import com.example.ragollama.rag.api.dto.StreamingResponsePart;
 import com.example.ragollama.rag.retrieval.HybridRetrievalStrategy;
@@ -20,6 +21,12 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * "Чистый" сервис-оркестратор RAG-конвейера.
+ * <p>
+ * Этот сервис инкапсулирует stateless-логику RAG-процесса. Он не управляет
+ * сессиями или персистентностью, а принимает на вход запрос и историю,
+ * выполняет полный RAG-цикл (улучшение запроса, извлечение, обогащение, генерация)
+ * и возвращает ответ. Эта версия интегрирована с асинхронными сервисами
+ * верификации, которые запускаются после успешной генерации ответа.
  */
 @Slf4j
 @Service
@@ -33,10 +40,26 @@ public class RagService {
     private final PromptGuardService promptGuardService;
     private final MetricService metricService;
     private final GroundingService groundingService;
+    private final SourceCiteVerifierService verifierService;
 
+    /**
+     * DTO для инкапсуляции результата работы RAG-сервиса.
+     *
+     * @param answer          Сгенерированный ответ.
+     * @param sourceCitations Список источников.
+     */
     public record RagAnswer(String answer, List<String> sourceCitations) {
     }
 
+    /**
+     * Асинхронно выполняет полный RAG-запрос (не-потоковый).
+     *
+     * @param query               Запрос пользователя.
+     * @param history             История чата для контекста.
+     * @param topK                Количество извлекаемых документов.
+     * @param similarityThreshold Порог схожести.
+     * @return {@link CompletableFuture} с финальным ответом.
+     */
     public CompletableFuture<RagAnswer> queryAsync(String query, List<Message> history, int topK, double similarityThreshold) {
         return metricService.recordTimer("rag.requests.async.pure",
                 () -> prepareRagFlow(query, history, topK, similarityThreshold)
@@ -44,7 +67,9 @@ public class RagService {
                             String promptContent = context.prompt().getContents();
                             return Mono.fromFuture(generationService.generate(context.prompt(), context.documents(), null))
                                     .doOnSuccess(response -> {
-                                        if (Math.random() < 0.1) {
+                                        // Асинхронно запускаем верификацию и grounding
+                                        verifierService.verify(context.documents(), response.answer());
+                                        if (Math.random() < 0.1) { // Сэмплируем grounding
                                             groundingService.verify(promptContent, response.answer());
                                         }
                                     });
@@ -54,6 +79,15 @@ public class RagService {
         );
     }
 
+    /**
+     * Выполняет полный RAG-запрос в потоковом режиме (Server-Sent Events).
+     *
+     * @param query               Запрос пользователя.
+     * @param history             История чата.
+     * @param topK                Количество извлекаемых документов.
+     * @param similarityThreshold Порог схожести.
+     * @return Реактивный поток {@link Flux} со структурированными частями ответа.
+     */
     public Flux<StreamingResponsePart> queryStream(String query, List<Message> history, int topK, double similarityThreshold) {
         return metricService.recordTimer("rag.requests.stream.pure",
                 () -> prepareRagFlow(query, history, topK, similarityThreshold)
@@ -65,6 +99,11 @@ public class RagService {
         );
     }
 
+    /**
+     * Внутренний метод, подготавливающий асинхронный конвейер до этапа генерации.
+     *
+     * @return {@link Mono}, который эммитит контекст, готовый для генерации.
+     */
     private Mono<RagFlowContext> prepareRagFlow(String query, List<Message> history, int topK, double similarityThreshold) {
         return Mono.fromRunnable(() -> promptGuardService.checkForInjection(query))
                 .then(Mono.defer(() ->
@@ -81,6 +120,9 @@ public class RagService {
                 });
     }
 
+    /**
+     * Внутренний DTO для передачи данных между этапами асинхронного потока.
+     */
     private record RagFlowContext(List<Document> documents, Prompt prompt) {
     }
 }

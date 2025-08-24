@@ -1,7 +1,7 @@
 package com.example.ragollama.orchestration.dto;
 
 import com.example.ragollama.agent.api.dto.CodeGenerationResponse;
-import com.example.ragollama.buganalysis.api.dto.BugAnalysisResponse;
+import com.example.ragollama.qaagent.api.dto.BugAnalysisResponse;
 import com.example.ragollama.rag.api.dto.StreamingResponsePart;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
