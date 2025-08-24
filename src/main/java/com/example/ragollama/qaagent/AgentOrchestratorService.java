@@ -10,7 +10,11 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Сервис-оркестратор, управляющий выполнением конвейеров из QA-агентов.
+ * Сервис-оркестратор, управляющий выполнением **статических, жестко
+ * заданных конвейеров** из QA-агентов.
+ * <p>
+ * Этот класс оставлен для поддержки простых, часто используемых
+ * сценариев, которые не требуют гибкости динамического планировщика.
  */
 @Slf4j
 @Service
@@ -27,6 +31,11 @@ public class AgentOrchestratorService {
                 agentMap.keySet(), pipelines.keySet());
     }
 
+    /**
+     * Определяет все доступные статические конвейеры.
+     *
+     * @return Карта с именами и последовательностями агентов.
+     */
     private Map<String, List<QaAgent>> definePipelines() {
         return Map.ofEntries(
                 Map.entry("git-inspector-pipeline", List.of(agentMap.get("git-inspector"))),
@@ -57,7 +66,6 @@ public class AgentOrchestratorService {
                         agentMap.get("git-inspector"),
                         agentMap.get("root-cause-analyzer"))
                 ),
-                // НОВЫЙ КОМПОЗИТНЫЙ КОНВЕЙЕР
                 Map.entry("impact-analysis-pipeline", List.of(
                         agentMap.get("git-inspector"),
                         agentMap.get("impact-analyzer"))
@@ -81,10 +89,22 @@ public class AgentOrchestratorService {
                 ),
                 Map.entry("synthetic-data-generation-pipeline", List.of(
                         agentMap.get("synthetic-data-builder"))
-                )
+                ),
+                Map.entry("regression-testing-pipeline", List.of(
+                        agentMap.get("git-inspector"),
+                        agentMap.get("test-prioritizer"),
+                        agentMap.get("ci-trigger")
+                ))
         );
     }
 
+    /**
+     * Запускает статический конвейер по его имени.
+     *
+     * @param pipelineName   Имя конвейера.
+     * @param initialContext Начальный контекст.
+     * @return {@link CompletableFuture} со списком результатов.
+     */
     public CompletableFuture<List<AgentResult>> invokePipeline(String pipelineName, AgentContext initialContext) {
         List<QaAgent> agentsInPipeline = pipelines.get(pipelineName);
         if (agentsInPipeline == null || agentsInPipeline.isEmpty()) {

@@ -5,9 +5,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Определяет универсальный контракт для всех QA-агентов в системе.
  * <p>
- * Каждый агент представляет собой самодостаточный компонент, способный
- * выполнять одну конкретную задачу. Этот интерфейс позволяет оркестратору
- * единообразно управлять ими, запрашивать их возможности и запускать на выполнение.
+ * Добавлен метод `requiresApproval` для поддержки Human-in-the-Loop.
  */
 public interface QaAgent {
 
@@ -47,4 +45,15 @@ public interface QaAgent {
      * результат работы агента в виде {@link AgentResult}.
      */
     CompletableFuture<AgentResult> execute(AgentContext context);
+
+    /**
+     * Указывает, требует ли выполнение этого агента предварительного
+     * утверждения человеком.
+     *
+     * @return {@code true}, если агент выполняет рискованные или дорогостоящие
+     * операции, иначе {@code false}.
+     */
+    default boolean requiresApproval() {
+        return false;
+    }
 }

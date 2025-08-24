@@ -9,6 +9,8 @@ import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Стратегия переранжирования, которая повышает оценку документов, содержащих ключевые слова из оригинального запроса.
@@ -29,21 +31,32 @@ public class KeywordBoostStrategy implements RerankingStrategy {
     @Override
     public List<Document> apply(List<Document> documents, String originalQuery) {
         final double boostFactor = properties.strategies().keywordBoost().boostFactor();
-        if (boostFactor == 0) {
+        if (boostFactor <= 0) {
             return documents;
         }
 
-        List<String> queryKeywords = Arrays.asList(originalQuery.toLowerCase().split("\\s+"));
-        log.debug("Применение KeywordBoostStrategy с фактором {}", boostFactor);
+        Set<String> queryKeywords = Arrays.stream(originalQuery.toLowerCase().split("\\s+"))
+                .filter(kw -> kw.length() > 2) // Игнорируем короткие слова (предлоги, союзы)
+                .collect(Collectors.toSet());
+
+        if (queryKeywords.isEmpty()) {
+            return documents;
+        }
+
+        log.debug("Применение KeywordBoostStrategy с фактором {} и ключевыми словами: {}", boostFactor, queryKeywords);
 
         documents.forEach(doc -> {
+            String docTextLower = doc.getText().toLowerCase();
             long matchCount = queryKeywords.stream()
-                    .filter(kw -> doc.getText().toLowerCase().contains(kw))
+                    .filter(docTextLower::contains)
                     .count();
+
             float boost = (float) (matchCount * boostFactor);
             if (boost > 0) {
                 float currentSimilarity = (float) doc.getMetadata().get("rerankedSimilarity");
-                doc.getMetadata().put("rerankedSimilarity", currentSimilarity + boost);
+                float newSimilarity = currentSimilarity + boost;
+                doc.getMetadata().put("rerankedSimilarity", newSimilarity);
+                log.trace("Документ ID {} получил буст: {} (было: {}, стало: {})", doc.getId(), boost, currentSimilarity, newSimilarity);
             }
         });
 

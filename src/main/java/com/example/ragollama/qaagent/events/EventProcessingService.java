@@ -3,12 +3,15 @@ package com.example.ragollama.qaagent.events;
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentOrchestratorService;
 import com.example.ragollama.qaagent.AgentResult;
+import com.example.ragollama.qaagent.dynamic.DynamicPipelineExecutionService;
+import com.example.ragollama.qaagent.dynamic.PlanningAgentService;
 import com.example.ragollama.qaagent.impl.JiraFetcherAgent;
 import com.example.ragollama.qaagent.impl.TestPrioritizerAgent;
 import com.example.ragollama.qaagent.tools.GitHubApiClient;
 import com.example.ragollama.qaagent.tools.JiraApiClient;
 import com.example.ragollama.qaagent.web.GitHubPullRequestPayload;
 import com.example.ragollama.qaagent.web.JiraIssuePayload;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,14 +24,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
- * Сервис-обработчик событий, который является ядром асинхронного конвейера.
+ * Сервис-обработчик, который является ядром асинхронного конвейера.
  * <p>
- * Этот сервис вызывается слушателями RabbitMQ ({@link EventConsumerService}).
- * Он отвечает за парсинг входящих сообщений, преобразование их в
- * {@link AgentContext}, взаимодействие с внешними API (GitHub, Jira) для
- * обогащения контекста и запуск соответствующего конвейера агентов через
- * {@link AgentOrchestratorService}. После выполнения конвейера, он форматирует
- * результаты и отправляет их обратно.
+ * Содержит всю бизнес-логику по парсингу входящих сообщений, обогащению
+ * контекста через API и запуску соответствующих конвейеров агентов.
  */
 @Slf4j
 @Service
@@ -39,17 +38,13 @@ public class EventProcessingService {
     private final GitHubApiClient gitHubApiClient;
     private final JiraApiClient jiraApiClient;
     private final AgentOrchestratorService agentOrchestratorService;
+    private final PlanningAgentService planningAgentService;
+    private final DynamicPipelineExecutionService executionService;
 
     /**
      * Обрабатывает событие открытия или синхронизации Pull Request из GitHub.
-     * <p>
-     * Реализует полный асинхронный конвейер:
-     * 1. Десериализует payload.
-     * 2. Асинхронно запрашивает diff из GitHub API.
-     * 3. Создает контекст и запускает конвейер 'github-pr-pipeline'.
-     * 4. Форматирует результат и асинхронно публикует комментарий в PR.
      *
-     * @param payloadRaw Сырой JSON payload, полученный из очереди.
+     * @param payloadRaw Сырой JSON payload.
      */
     public void processGitHubPullRequestEvent(String payloadRaw) {
         try {
@@ -73,25 +68,56 @@ public class EventProcessingService {
                             v -> log.info("Конвейер обработки для PR #{} успешно завершен.", prNumber),
                             error -> log.error("Ошибка в конвейере обработки события для PR #{}:", prNumber, error)
                     );
-
         } catch (Exception e) {
-            log.error("Не удалось распарсить или обработать GitHub webhook payload", e);
+            log.error("Не удалось распарсить или обработать GitHub PR webhook payload", e);
         }
     }
 
     /**
-     * Обрабатывает события, связанные с задачами в Jira.
-     * <p>
-     * В зависимости от типа события, запускает соответствующий конвейер:
-     * <ul>
-     *   <li><b>jira:issue_created</b>: Запускает 'jira-bug-creation-pipeline', используя данные из payload.</li>
-     *   <li><b>jira:issue_updated</b>: Запускает 'jira-update-analysis-pipeline', который сначала
-     *   извлекает актуальные данные через {@link JiraFetcherAgent}.</li>
-     * </ul>
+     * Обрабатывает событие push в репозиторий GitHub.
      *
-     * @param payloadRaw Сырой JSON payload, полученный из очереди.
+     * @param payloadRaw Сырой JSON payload.
      */
-    public void processJiraIssueEvent(String payloadRaw) {
+    public void processGitHubPushEvent(String payloadRaw) {
+        try {
+            JsonNode payload = objectMapper.readTree(payloadRaw);
+            String ref = payload.path("ref").asText();
+            String afterCommit = payload.path("after").asText();
+            String beforeCommit = payload.path("before").asText();
+
+            if (!"refs/heads/main".equals(ref) && !"refs/heads/develop".equals(ref)) {
+                log.info("Push в ветку '{}', не требующую запуска тестов. Пропуск.", ref);
+                return;
+            }
+
+            log.info("Обнаружен push в ветку '{}'. Инициирование планирования тестов...", ref);
+
+            String taskDescription = String.format(
+                    "Изменения были отправлены в ветку '%s'. Проанализируй эти изменения и спланируй запуск регрессионных тестов.", ref);
+
+            Map<String, Object> initialContext = Map.of(
+                    "oldRef", beforeCommit,
+                    "newRef", afterCommit,
+                    "jobName", "regression-test-suite"
+            );
+
+            planningAgentService.createPlan(taskDescription, initialContext)
+                    .flatMap(plan -> executionService.executePlan(plan, new AgentContext(initialContext), null))
+                    .subscribe(
+                            results -> log.info("Конвейер планирования тестов для push в '{}' успешно завершен.", ref),
+                            error -> log.error("Ошибка в конвейере планирования тестов:", error)
+                    );
+        } catch (Exception e) {
+            log.error("Не удалось обработать GitHub push webhook payload", e);
+        }
+    }
+
+    /**
+     * Создан новый публичный метод для обработки всех событий Jira.
+     *
+     * @param payloadRaw Сырой JSON payload.
+     */
+    public void processJiraEvent(String payloadRaw) {
         try {
             JiraIssuePayload payload = objectMapper.readValue(payloadRaw, JiraIssuePayload.class);
             String eventType = payload.webhookEvent();
@@ -104,7 +130,6 @@ public class EventProcessingService {
             } else {
                 log.trace("Пропускаем необрабатываемое событие Jira: {} для задачи {}", eventType, issueKey);
             }
-
         } catch (Exception e) {
             log.error("Не удалось распарсить или обработать Jira webhook payload", e);
         }

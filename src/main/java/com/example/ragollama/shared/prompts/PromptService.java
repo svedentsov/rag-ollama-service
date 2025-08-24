@@ -50,16 +50,13 @@ public class PromptService {
             Map.entry("authTestBuilder", "auth-test-builder-prompt.ftl"),
             Map.entry("rootCauseAnalysis", "root-cause-analysis-prompt.ftl"),
             Map.entry("syntheticDataBuilder", "synthetic-data-builder-prompt.ftl"),
-            Map.entry("sourceCiteVerifier", "source-cite-verifier-prompt.ftl")
+            Map.entry("sourceCiteVerifier", "source-cite-verifier-prompt.ftl"),
+            Map.entry("planningAgent", "planning-agent-prompt.ftl"),
+            Map.entry("copilotResultSummarizer", "copilot-result-summarizer-prompt.ftl")
     );
 
     /**
      * Загружает и кэширует все известные шаблоны FreeMarker при старте приложения.
-     * <p>
-     * Этот метод вызывается автоматически после создания бина благодаря аннотации
-     * {@code @PostConstruct}. Он итерируется по статической карте {@code TEMPLATE_PATHS},
-     * загружает каждый шаблон с помощью конфигурации FreeMarker и помещает его
-     * в потокобезопасный кэш для быстрого доступа в дальнейшем.
      *
      * @throws IllegalStateException если какой-либо из шаблонов не может быть загружен.
      */
@@ -73,7 +70,6 @@ public class PromptService {
                 log.debug("Шаблон FreeMarker '{}' успешно загружен из '{}'", name, path);
             } catch (IOException e) {
                 log.error("Критическая ошибка: не удалось загрузить шаблон '{}' из '{}'", name, path, e);
-                // Прерываем запуск приложения, так как без шаблонов оно неработоспособно.
                 throw new IllegalStateException("Ошибка инициализации PromptService", e);
             }
         });

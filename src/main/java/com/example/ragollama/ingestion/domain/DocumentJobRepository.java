@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,4 +42,14 @@ public interface DocumentJobRepository extends JpaRepository<DocumentJob, UUID> 
     @Modifying
     @Query("UPDATE DocumentJob j SET j.status = :status WHERE j.id IN :ids")
     int updateStatusForIds(@Param("ids") List<UUID> ids, @Param("status") JobStatus status);
+
+    /**
+     * Находит идентификаторы успешно завершенных задач, которые были обновлены
+     * до указанной временной метки. Используется для поиска устаревших документов.
+     *
+     * @param threshold Временная метка.
+     * @return Список UUID устаревших задач.
+     */
+    @Query("SELECT j.id FROM DocumentJob j WHERE j.status = 'COMPLETED' AND j.updatedAt < :threshold")
+    List<UUID> findCompletedJobsBefore(@Param("threshold") OffsetDateTime threshold);
 }

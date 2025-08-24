@@ -17,9 +17,8 @@ import static org.springframework.security.config.http.SessionCreationPolicy.STA
 /**
  * Конфигурация безопасности Spring Security.
  * <p>
- * В этой версии включается Basic Authentication для всех эндпоинтов,
- * начинающихся с `/api/`. Публично доступными остаются только Swagger UI,
- * документация API и эндпоинты Actuator.
+ * В этой версии явно разрешается анонимный доступ к ресурсам Swagger UI,
+ * в то время как все эндпоинты API остаются защищенными.
  */
 @Configuration
 @EnableWebSecurity
@@ -43,15 +42,12 @@ public class SecurityConfig {
                         .anyRequest().permitAll()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(STATELESS))
-                .httpBasic(withDefaults()); // Включаем Basic Authentication
+                .httpBasic(withDefaults());
         return http.build();
     }
 
     /**
      * Создает простой UserDetailsService с пользователями в памяти для демонстрационных целей.
-     * <p>
-     * В реальном приложении этот бин должен быть заменен реализацией,
-     * которая загружает данные пользователей из базы данных (например, через JDBC или JPA).
      *
      * @return Менеджер пользователей с двумя предопределенными пользователями.
      */

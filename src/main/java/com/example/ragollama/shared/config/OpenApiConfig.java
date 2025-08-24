@@ -1,5 +1,9 @@
 package com.example.ragollama.shared.config;
 
+import io.swagger.v3.oas.annotations.OpenAPIDefinition;
+import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.security.SecurityScheme;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
@@ -8,10 +12,18 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * Конфигурация для OpenAPI (Swagger) документации.
- * Этот класс определяет бин {@link OpenAPI}, который настраивает
- * метаданные для генерируемой API-документации, такие как заголовок, описание и лицензия.
+ * <p>
+ * Эта версия использует аннотации для полного определения метаданных API
+ * и, что самое важное, для описания схемы безопасности (Basic Authentication).
+ * Это позволяет Swagger UI отображать кнопку "Authorize" для интерактивной аутентификации.
  */
 @Configuration
+@SecurityScheme(
+        name = "basicAuth",
+        type = SecuritySchemeType.HTTP,
+        scheme = "basic")
+@OpenAPIDefinition(
+        security = @SecurityRequirement(name = "basicAuth"))
 public class OpenApiConfig {
 
     /**

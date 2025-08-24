@@ -8,6 +8,7 @@ import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
+import com.example.ragollama.shared.util.JsonExtractorUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -72,8 +73,9 @@ public class TestCaseGeneratorAgent implements QaAgent {
 
     private List<TestCase> parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = jsonResponse.replaceAll("(?s)```json\\s*|\\s*```", "").trim();
-            if (cleanedJson.isEmpty() || cleanedJson.equals("[]")) {
+            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            if (cleanedJson.isEmpty()) {
+                log.warn("Не удалось извлечь JSON из ответа LLM. Ответ: {}", jsonResponse);
                 return Collections.emptyList();
             }
             return objectMapper.readValue(cleanedJson, new TypeReference<>() {});

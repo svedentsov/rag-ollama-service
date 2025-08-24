@@ -3,6 +3,8 @@ package com.example.ragollama;
 import com.example.ragollama.crawler.confluence.ConfluenceProperties;
 import com.example.ragollama.evaluation.EvaluationProperties;
 import com.example.ragollama.ingestion.IngestionProperties;
+import com.example.ragollama.optimization.IndexOptimizerProperties;
+import com.example.ragollama.qaagent.config.CiProperties;
 import com.example.ragollama.qaagent.config.GitProperties;
 import com.example.ragollama.rag.domain.reranking.RerankingProperties;
 import com.example.ragollama.rag.retrieval.RetrievalProperties;
@@ -16,6 +18,12 @@ import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
+/**
+ * Главный класс приложения Spring Boot.
+ * <p>
+ * Активирует все основные возможности фреймворка и регистрирует все
+ * классы, управляемые через {@code @ConfigurationProperties}.
+ */
 @SpringBootApplication
 @EnableCaching
 @EnableAsync
@@ -29,7 +37,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         ConfluenceProperties.class,
         GitProperties.class,
         PiiRedactionService.PiiRedactionProperties.class,
-        LlmRouterService.LlmProperties.class})
+        LlmRouterService.LlmProperties.class,
+        IndexOptimizerProperties.class,
+        CiProperties.class
+})
 public class RagOllamaApplication {
     /**
      * Точка входа в приложение.

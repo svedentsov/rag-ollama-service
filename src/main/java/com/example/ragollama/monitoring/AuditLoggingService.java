@@ -1,5 +1,6 @@
 package com.example.ragollama.monitoring;
 
+import com.example.ragollama.monitoring.domain.RagAuditLogRepository;
 import com.example.ragollama.monitoring.model.RagAuditLog;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,13 +30,12 @@ public class AuditLoggingService {
      * Асинхронно сохраняет полную запись о RAG-взаимодействии в базу данных.
      * <p>
      * Метод выполняется в отдельном потоке, чтобы не влиять на задержку
-     * ответа основному пользователю. Добавлена отказоустойчивая логика
-     * для получения имени пользователя.
+     * ответа основному пользователю.
      *
      * @param requestId        Уникальный идентификатор HTTP-запроса из MDC.
      * @param sessionId        Идентификатор сессии диалога.
      * @param originalQuery    Исходный запрос пользователя.
-     * @param contextDocuments Список документов-источников, использованных в контексте.
+     * @param contextDocuments Список источников, использованных в контексте.
      * @param finalPrompt      Финальный промпт, отправленный в LLM.
      * @param llmAnswer        Ответ, сгенерированный LLM.
      */
@@ -49,7 +49,7 @@ public class AuditLoggingService {
             String finalPrompt,
             String llmAnswer) {
         try {
-            String username = "SYSTEM"; // Значение по умолчанию
+            String username = "SYSTEM";
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getPrincipal())) {
                 username = authentication.getName();

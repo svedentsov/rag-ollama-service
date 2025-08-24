@@ -55,9 +55,10 @@ spring:
       - vector_search_results # Кэш для результатов RAG-поиска.
       - token_counts # Кэш для подсчета токенов.
       - ollama_available_models # Кэш для списка доступных моделей
+      - copilot_sessions # Кэш для сессий
     caffeine:
-      # Настройки кэша: макс. 500 записей, время жизни записи 10 минут.
-      spec: maximumSize=500,expireAfterWrite=10m
+      # Общие настройки для всех кэшей. Для кэша сессий задаем время жизни.
+      spec: "maximumSize=500,expireAfterAccess=30m"
 
   # ===================================================================
   # AI & RAG Pipeline Configuration
@@ -194,6 +195,13 @@ resilience4j:
 # Custom Application Properties (app.*)
 # ===================================================================
 app:
+  optimization: # Конфигурация для агента оптимизации индекса
+    index:
+      enabled: true # Включает/выключает запуск оптимизатора по расписанию.
+      cron: "0 0 4 * * ?" # Cron-выражение. По умолчанию - каждый день в 4 утра.
+      stale-document-detection:
+        enabled: true # Включает/выключает этап очистки "осиротевших" чанков.
+
   # Конфигурация LLM Роутера
   llm:
     # Имя модели, которая будет использоваться, если основная модель недоступна.
@@ -212,7 +220,7 @@ app:
     strategies:
       keyword-boost:
         enabled: true
-        boost-factor: 0.1
+        boost-factor: 0.5
 
   rate-limiting:
     enabled: true
@@ -272,13 +280,10 @@ app:
       enabled: false
     retrieval:
       hybrid:
-        # Порог для адаптивной стратегии извлечения.
-        # Если после первого поиска найдено меньше этого числа документов,
-        # запускается вторая (расширенная) волна поиска.
         expansion-min-docs-threshold: 3
         vector-search:
           top-k: 5
-          similarity-threshold: 0.7
+          similarity-threshold: 0.8
         fts:
           top-k: 10
 
@@ -325,6 +330,10 @@ app:
       repository-url: "https://github.com/your-org/your-repo.git"
       # Персональный токен доступа (PAT) с правами на чтение репозитория
       personal-access-token: "ghp_YourGitPersonalAccessToken"
+    ci:
+      base-url: "http://your-jenkins-instance:8080"
+      username: "your-ci-user"
+      api-token: "YourCiApiTokenOrPassword"
 
   # Настройки безопасности
   security:

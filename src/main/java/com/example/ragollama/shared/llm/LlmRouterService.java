@@ -66,8 +66,6 @@ public class LlmRouterService {
     public static class OllamaModelManager {
         private final WebClient.Builder webClientBuilder;
         private final String ollamaBaseUrl;
-
-        // ИСПРАВЛЕНИЕ: Внедряем свойство напрямую через @Value.
         public OllamaModelManager(WebClient.Builder webClientBuilder,
                                   @Value("${spring.ai.ollama.base-url}") String ollamaBaseUrl) {
             this.webClientBuilder = webClientBuilder;
@@ -87,7 +85,6 @@ public class LlmRouterService {
         public Set<String> getAvailableModels() {
             log.info("Обновление списка доступных моделей из Ollama...");
             try {
-                // ИСПРАВЛЕНИЕ: Используем явно внедренный baseUrl.
                 WebClient client = webClientBuilder.baseUrl(this.ollamaBaseUrl).build();
                 OllamaTagResponse response = client.get()
                         .uri("/api/tags")
