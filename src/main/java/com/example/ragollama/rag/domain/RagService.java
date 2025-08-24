@@ -1,5 +1,6 @@
 package com.example.ragollama.rag.domain;
 
+import com.example.ragollama.monitoring.AuditLoggingService;
 import com.example.ragollama.monitoring.GroundingService;
 import com.example.ragollama.monitoring.SourceCiteVerifierService;
 import com.example.ragollama.rag.agent.QueryProcessingPipeline;
@@ -9,6 +10,7 @@ import com.example.ragollama.shared.metrics.MetricService;
 import com.example.ragollama.shared.security.PromptGuardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
@@ -17,16 +19,14 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
  * "Чистый" сервис-оркестратор RAG-конвейера.
  * <p>
- * Этот сервис инкапсулирует stateless-логику RAG-процесса. Он не управляет
- * сессиями или персистентностью, а принимает на вход запрос и историю,
- * выполняет полный RAG-цикл (улучшение запроса, извлечение, обогащение, генерация)
- * и возвращает ответ. Эта версия интегрирована с асинхронными сервисами
- * верификации, которые запускаются после успешной генерации ответа.
+ * Эта версия интегрирована с {@link AuditLoggingService} для сохранения
+ * полного аудиторского следа каждого RAG-взаимодействия.
  */
 @Slf4j
 @Service
@@ -41,6 +41,7 @@ public class RagService {
     private final MetricService metricService;
     private final GroundingService groundingService;
     private final SourceCiteVerifierService verifierService;
+    private final AuditLoggingService auditLoggingService;
 
     /**
      * DTO для инкапсуляции результата работы RAG-сервиса.
@@ -58,20 +59,29 @@ public class RagService {
      * @param history             История чата для контекста.
      * @param topK                Количество извлекаемых документов.
      * @param similarityThreshold Порог схожести.
+     * @param sessionId           Идентификатор сессии для аудита.
      * @return {@link CompletableFuture} с финальным ответом.
      */
-    public CompletableFuture<RagAnswer> queryAsync(String query, List<Message> history, int topK, double similarityThreshold) {
+    public CompletableFuture<RagAnswer> queryAsync(String query, List<Message> history, int topK, double similarityThreshold, UUID sessionId) {
         return metricService.recordTimer("rag.requests.async.pure",
                 () -> prepareRagFlow(query, history, topK, similarityThreshold)
                         .flatMap(context -> {
                             String promptContent = context.prompt().getContents();
-                            return Mono.fromFuture(generationService.generate(context.prompt(), context.documents(), null))
+                            return Mono.fromFuture(generationService.generate(context.prompt(), context.documents(), sessionId))
                                     .doOnSuccess(response -> {
-                                        // Асинхронно запускаем верификацию и grounding
+                                        // Асинхронно запускаем верификацию, grounding и аудит
                                         verifierService.verify(context.documents(), response.answer());
-                                        if (Math.random() < 0.1) { // Сэмплируем grounding
+                                        if (Math.random() < 0.1) {
                                             groundingService.verify(promptContent, response.answer());
                                         }
+                                        auditLoggingService.logInteractionAsync(
+                                                MDC.get("requestId"),
+                                                sessionId,
+                                                query,
+                                                response.sourceCitations(),
+                                                promptContent,
+                                                response.answer()
+                                        );
                                     });
                         })
                         .map(response -> new RagAnswer(response.answer(), response.sourceCitations()))
@@ -86,12 +96,15 @@ public class RagService {
      * @param history             История чата.
      * @param topK                Количество извлекаемых документов.
      * @param similarityThreshold Порог схожести.
+     * @param sessionId           Идентификатор сессии для аудита.
      * @return Реактивный поток {@link Flux} со структурированными частями ответа.
      */
-    public Flux<StreamingResponsePart> queryStream(String query, List<Message> history, int topK, double similarityThreshold) {
+    public Flux<StreamingResponsePart> queryStream(String query, List<Message> history, int topK, double similarityThreshold, UUID sessionId) {
+        // Примечание: полноценный аудит для потоковых ответов требует более сложной
+        // логики агрегации ответа. Для простоты здесь он не реализован.
         return metricService.recordTimer("rag.requests.stream.pure",
                 () -> prepareRagFlow(query, history, topK, similarityThreshold)
-                        .flatMapMany(context -> generationService.generateStructuredStream(context.prompt(), context.documents(), null))
+                        .flatMapMany(context -> generationService.generateStructuredStream(context.prompt(), context.documents(), sessionId))
                         .onErrorResume(e -> {
                             log.error("Ошибка в 'чистом' потоке RAG для запроса '{}': {}", query, e.getMessage());
                             return Flux.just(new StreamingResponsePart.Error("Произошла внутренняя ошибка."));

@@ -6,6 +6,7 @@ import com.example.ragollama.qaagent.QaAgent;
 import com.example.ragollama.qaagent.model.BugReportSummary;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,7 +53,7 @@ public class BugReportSummarizerAgent implements QaAgent {
 
         String promptString = promptService.render("bugReportSummarizer", Map.of("rawReport", rawReportText));
 
-        return llmClient.callChat(new Prompt(promptString))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(this::parseLlmResponse)
                 .thenApply(summary -> new AgentResult(
                         getName(),

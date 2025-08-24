@@ -10,6 +10,7 @@ import org.jsoup.Jsoup;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -79,14 +80,18 @@ public class ConfluenceCrawlerService {
         String cleanText = Jsoup.parse(page.body().storage().value()).text();
         String sourceName = String.format("Confluence-%s: %s", page.spaceKey(), page.title());
 
+        Map<String, Object> metadata = Map.of(
+                "doc_type", "confluence_page",
+                "confluence_id", page.id(),
+                "confluence_url", page.links().webui()
+        );
+
         DocumentIngestionRequest request = new DocumentIngestionRequest(
                 sourceName,
                 cleanText,
-                Map.of(
-                        "doc_type", "confluence_page",
-                        "confluence_id", page.id(),
-                        "confluence_url", page.links().webui()
-                )
+                metadata,
+                false, // isPublic
+                Collections.emptyList() // allowedRoles
         );
 
         documentIngestionService.scheduleDocumentIngestion(request);

@@ -6,6 +6,7 @@ import com.example.ragollama.ingestion.domain.model.DocumentJob;
 import com.example.ragollama.ingestion.domain.model.JobStatus;
 import com.example.ragollama.shared.caching.VectorCacheService;
 import com.example.ragollama.shared.exception.ProcessingException;
+import com.example.ragollama.shared.security.PiiRedactionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -21,6 +22,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Асинхронный воркер для обработки и индексации документов.
+ * <p>
+ * Эта версия интегрирована с {@link PiiRedactionService} для обеспечения
+ * безопасности данных. Маскирование PII и секретов теперь является
+ * первым шагом в конвейере обработки.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -31,7 +39,13 @@ public class DocumentProcessingWorker {
     private final TextSplitterService textSplitterService;
     private final VectorCacheService vectorCacheService;
     private final DataCleaningService dataCleaningService;
+    private final PiiRedactionService piiRedactionService;
 
+    /**
+     * Асинхронно выполняет полный цикл обработки одного документа.
+     *
+     * @param jobId Идентификатор задачи для обработки.
+     */
     @Async("applicationTaskExecutor")
     public void processDocument(UUID jobId) {
         try (MDC.MDCCloseable mdc = MDC.putCloseable("requestId", "ingest-" + jobId.toString().substring(0, 8))) {
@@ -39,7 +53,14 @@ public class DocumentProcessingWorker {
             updateJobStatus(jobId, JobStatus.PROCESSING, null);
             DocumentJob job = jobRepository.findById(jobId)
                     .orElseThrow(() -> new ProcessingException("Задача с ID " + jobId + " не найдена после захвата."));
-            String cleanedText = dataCleaningService.cleanDocumentText(job.getTextContent());
+
+            // ШАГ 1: Маскирование чувствительных данных.
+            String redactedText = piiRedactionService.redact(job.getTextContent());
+
+            // ШАГ 2: Очистка текста от HTML и прочего "шума".
+            String cleanedText = dataCleaningService.cleanDocumentText(redactedText);
+
+            // ШАГ 3: Подготовка метаданных и разбиение на чанки.
             Map<String, Object> metadata = new HashMap<>();
             if (job.getMetadata() != null) {
                 metadata.putAll(job.getMetadata());
@@ -48,6 +69,8 @@ public class DocumentProcessingWorker {
             metadata.put("documentId", job.getId().toString());
             List<Document> chunks = textSplitterService.split(new Document(cleanedText, metadata));
             log.info("Создано {} чанков для документа '{}' с помощью кастомного сплиттера.", chunks.size(), job.getSourceName());
+
+            // ШАГ 4: Индексация и очистка кэша.
             if (!chunks.isEmpty()) {
                 vectorStore.add(chunks);
                 vectorCacheService.evictAll();
@@ -62,6 +85,13 @@ public class DocumentProcessingWorker {
         }
     }
 
+    /**
+     * Обновляет статус задачи в отдельной транзакции.
+     *
+     * @param jobId        ID задачи.
+     * @param newStatus    Новый статус.
+     * @param errorMessage Сообщение об ошибке (если есть).
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void updateJobStatus(UUID jobId, JobStatus newStatus, String errorMessage) {
         jobRepository.findById(jobId).ifPresent(job -> {

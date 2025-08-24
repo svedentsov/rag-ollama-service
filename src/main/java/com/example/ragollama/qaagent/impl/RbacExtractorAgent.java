@@ -6,6 +6,7 @@ import com.example.ragollama.qaagent.QaAgent;
 import com.example.ragollama.qaagent.tools.GitApiClient;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -23,10 +24,6 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент для извлечения правил контроля доступа (RBAC/ACL) из исходного кода.
- * <p>
- * Агент использует LLM для семантического анализа Java-файлов и извлекает
- * информацию о том, какие роли или права требуются для доступа к различным
- * ресурсам (например, эндпоинтам).
  */
 @Slf4j
 @Component
@@ -50,7 +47,6 @@ public class RbacExtractorAgent implements QaAgent {
 
     @Override
     public boolean canHandle(AgentContext context) {
-        // Этот агент зависит от результатов работы GitInspectorAgent
         return context.payload().containsKey("changedFiles") && context.payload().containsKey("newRef");
     }
 
@@ -63,17 +59,15 @@ public class RbacExtractorAgent implements QaAgent {
         log.info("RbacExtractorAgent: анализ {} измененных файлов в ref '{}'", changedFiles.size(), newRef);
 
         return Flux.fromIterable(changedFiles)
-                // Фильтруем только релевантные файлы для анализа безопасности
                 .filter(filePath -> filePath.endsWith(".java") && filePath.contains("controller"))
                 .flatMap(filePath -> gitApiClient.getFileContent(filePath, newRef)
                         .flatMap(content -> extractRulesFromCode(content, filePath))
                         .onErrorResume(e -> {
                             log.error("Ошибка при обработке файла {}: {}", filePath, e.getMessage());
-                            return Mono.empty(); // Пропускаем файл в случае ошибки
+                            return Mono.empty();
                         }))
                 .collectList()
                 .map(allRules -> {
-                    // Агрегируем результаты
                     List<Map<String, String>> flattenedRules = allRules.stream()
                             .flatMap(List::stream)
                             .toList();
@@ -104,7 +98,7 @@ public class RbacExtractorAgent implements QaAgent {
         }
 
         String promptString = promptService.render("rbacExtractor", Map.of("code", code, "filePath", filePath));
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString)))
+        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
                 .map(this::parseLlmResponse);
     }
 

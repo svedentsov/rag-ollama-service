@@ -1,6 +1,7 @@
 package com.example.ragollama.rag.domain.retrieval;
 
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -13,11 +14,6 @@ import java.util.Map;
 /**
  * Сервис, отвечающий за трансформацию исходного запроса пользователя
  * в оптимизированную версию для векторного поиска (Query Extension).
- * <p>
- * Эта версия содержит улучшенный промпт, который явно указывает LLM
- * отвечать на том же языке, что и исходный запрос, и фокусируется
- * на извлечении ключевой идеи, а не на полном переформулировании.
- * Это предотвращает "языковой барьер" при поиске в одноязычной векторной базе.
  */
 @Service
 @Slf4j
@@ -44,15 +40,15 @@ public class QueryTransformationService {
      *
      * @param originalQuery Оригинальный, "сырой" запрос от пользователя.
      * @return {@link Mono}, который по завершении асинхронной операции эммитит
-     *         трансформированный запрос в виде строки.
+     * трансформированный запрос в виде строки.
      */
     public Mono<String> transform(String originalQuery) {
         log.debug("Начало трансформации запроса: '{}'", originalQuery);
         String promptString = queryRewriteTemplate.render(Map.of("query", originalQuery));
         Prompt prompt = new Prompt(promptString);
 
-        return Mono.fromFuture(llmClient.callChat(prompt))
-                .map(response -> response.replaceAll("\"", "").trim()) // Очищаем от кавычек и пробелов
+        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FAST))
+                .map(response -> response.replaceAll("\"", "").trim())
                 .doOnSuccess(transformedQuery -> log.info("Запрос '{}' трансформирован в '{}'", originalQuery, transformedQuery))
                 .doOnError(error -> log.error("Ошибка при трансформации запроса: '{}'", originalQuery, error));
     }

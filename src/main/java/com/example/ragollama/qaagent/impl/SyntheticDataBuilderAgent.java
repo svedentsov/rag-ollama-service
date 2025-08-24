@@ -5,6 +5,7 @@ import com.example.ragollama.qaagent.AgentResult;
 import com.example.ragollama.qaagent.QaAgent;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -59,7 +60,7 @@ public class SyntheticDataBuilderAgent implements QaAgent {
                 "count", count
         ));
 
-        return llmClient.callChat(new Prompt(promptString))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(this::parseLlmResponse)
                 .thenApply(mockData -> new AgentResult(
                         getName(),

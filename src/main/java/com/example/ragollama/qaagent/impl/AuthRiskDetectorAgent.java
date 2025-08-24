@@ -6,6 +6,7 @@ import com.example.ragollama.qaagent.QaAgent;
 import com.example.ragollama.qaagent.model.AuthRisk;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -23,11 +24,6 @@ import java.util.concurrent.CompletableFuture;
 /**
  * QA-агент, который анализирует извлеченные правила доступа на предмет
  * потенциальных рисков безопасности.
- * <p>
- * Этот агент является вторым шагом в конвейере аудита безопасности,
- * принимая на вход результаты работы {@link RbacExtractorAgent}. Он использует
- * LLM как "эксперта по безопасности" для выявления нарушений
- * принципа наименьших привилегий и других распространенных уязвимостей.
  */
 @Slf4j
 @Component
@@ -50,7 +46,6 @@ public class AuthRiskDetectorAgent implements QaAgent {
 
     @Override
     public boolean canHandle(AgentContext context) {
-        // Зависит от результатов предыдущего агента
         return context.payload().containsKey("extractedRules");
     }
 
@@ -61,7 +56,6 @@ public class AuthRiskDetectorAgent implements QaAgent {
                 .getOrDefault("extractedRules", Collections.emptyList());
 
         if (extractedRules.isEmpty()) {
-            log.info("AuthRiskDetectorAgent: нет правил для анализа, пропуск.");
             return CompletableFuture.completedFuture(new AgentResult(
                     getName(),
                     AgentResult.Status.SUCCESS,
@@ -74,7 +68,7 @@ public class AuthRiskDetectorAgent implements QaAgent {
             String rulesAsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(extractedRules);
             String promptString = promptService.render("authRiskDetector", Map.of("rulesAsJson", rulesAsJson));
 
-            return llmClient.callChat(new Prompt(promptString))
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                     .thenApply(this::parseLlmResponse)
                     .thenApply(risks -> {
                         String summary = String.format("Анализ рисков завершен. Найдено %d потенциальных проблем.", risks.size());

@@ -7,6 +7,7 @@ import com.example.ragollama.qaagent.model.ImpactAnalysis;
 import com.example.ragollama.qaagent.tools.GitApiClient;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -24,10 +25,6 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент для проведения анализа влияния (Impact Analysis) изменений в коде.
- * <p>
- * Агент использует LLM для семантического анализа измененных файлов и
- * прогнозирования того, какие части системы или внешние потребители могут
- * быть затронуты.
  */
 @Slf4j
 @Component
@@ -63,7 +60,6 @@ public class ImpactAnalyzerAgent implements QaAgent {
         log.info("ImpactAnalyzerAgent: анализ влияния для {} измененных файлов в ref '{}'", changedFiles.size(), newRef);
 
         return Flux.fromIterable(changedFiles)
-                // Анализируем только Java-файлы из основного исходного кода
                 .filter(filePath -> filePath.endsWith(".java") && filePath.contains("src/main/java"))
                 .flatMap(filePath -> gitApiClient.getFileContent(filePath, newRef)
                         .flatMap(content -> analyzeFileImpact(content, filePath))
@@ -96,7 +92,7 @@ public class ImpactAnalyzerAgent implements QaAgent {
         }
 
         String promptString = promptService.render("impactAnalysis", Map.of("code", code, "filePath", filePath));
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString)))
+        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
                 .map(this::parseLlmResponse);
     }
 

@@ -7,6 +7,7 @@ import com.example.ragollama.rag.domain.retrieval.DocumentFtsRepository;
 import com.example.ragollama.rag.domain.retrieval.FusionService;
 import com.example.ragollama.rag.domain.retrieval.VectorSearchService;
 import com.example.ragollama.shared.metrics.MetricService;
+import com.example.ragollama.shared.security.AccessControlService;
 import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,13 +22,12 @@ import reactor.core.scheduler.Schedulers;
 import java.util.List;
 
 /**
- * Реализует адаптивную гибридную стратегию извлечения документов.
+ * Реализует адаптивную гибридную стратегию извлечения документов с принудительным контролем доступа.
  * <p>
- * Эта версия использует по-настоящему параллельный подход. Она одновременно
- * выполняет точный поиск по основному запросу и расширяющие поиски по
- * альтернативным запросам, а затем интеллектуально объединяет все результаты.
- * Также добавлена поддержка опциональной фильтрации и логирование
- * "пробелов в знаниях".
+ * Эта версия интегрирована с {@link AccessControlService}. Перед каждым поиском
+ * она получает фильтр безопасности, соответствующий текущему пользователю, и
+ * объединяет его с любым другим фильтром, пришедшим из бизнес-логики.
+ * Это гарантирует, что ни один запрос не обойдет проверку прав доступа.
  */
 @Slf4j
 @Service
@@ -42,35 +42,40 @@ public class HybridRetrievalStrategy {
     private final AsyncTaskExecutor applicationTaskExecutor;
     private final MetricService metricService;
     private final KnowledgeGapService knowledgeGapService;
+    private final AccessControlService accessControlService;
 
     /**
-     * Асинхронно извлекает и ранжирует документы, используя параллельный гибридный поиск.
+     * Асинхронно извлекает и ранжирует документы, применяя фильтры безопасности.
      *
      * @param processedQueries    Объект с основным и расширенными запросами.
      * @param originalQuery       Оригинальный запрос пользователя для FTS и реранжирования.
      * @param topK                Количество документов для извлечения.
      * @param similarityThreshold Порог схожести.
-     * @param filter              Опциональное выражение для фильтрации по метаданным.
-     * @return {@link Mono} с финальным списком релевантных документов.
+     * @param businessFilter      Опциональный бизнес-фильтр (например, по типу документа).
+     * @return {@link Mono} с финальным списком релевантных и разрешенных для пользователя документов.
      */
     public Mono<List<Document>> retrieve(
             ProcessedQueries processedQueries,
             String originalQuery,
             int topK,
             double similarityThreshold,
-            @Nullable Filter.Expression filter) {
+            @Nullable Filter.Expression businessFilter) {
 
         if (processedQueries == null || processedQueries.primaryQuery().isBlank()) {
             knowledgeGapService.recordGap(originalQuery);
             return Mono.just(List.of());
         }
 
-        // 1. Параллельно запускаем все поиски: точный векторный, расширенный векторный и FTS
-        Mono<List<Document>> primaryVectorSearch = executeVectorSearch(List.of(processedQueries.primaryQuery()), topK, similarityThreshold, filter);
-        Mono<List<Document>> expansionVectorSearch = executeVectorSearch(processedQueries.expansionQueries(), topK, similarityThreshold, filter);
+        // ШАГ 1: Получаем обязательный фильтр безопасности.
+        Filter.Expression securityFilter = accessControlService.buildAccessFilter();
+
+        // ШАГ 2: Комбинируем фильтр безопасности с опциональным бизнес-фильтром.
+        Filter.Expression finalFilter = combineFilters(securityFilter, businessFilter);
+
+        Mono<List<Document>> primaryVectorSearch = executeVectorSearch(List.of(processedQueries.primaryQuery()), topK, similarityThreshold, finalFilter);
+        Mono<List<Document>> expansionVectorSearch = executeVectorSearch(processedQueries.expansionQueries(), topK, similarityThreshold, finalFilter);
         Mono<List<Document>> ftsSearch = executeFtsSearch(originalQuery);
 
-        // 2. Объединяем результаты всех трех потоков
         return Mono.zip(primaryVectorSearch, expansionVectorSearch, ftsSearch)
                 .map(tuple -> {
                     List<List<Document>> searchResults = List.of(tuple.getT1(), tuple.getT2(), tuple.getT3());
@@ -81,7 +86,6 @@ public class HybridRetrievalStrategy {
                 .doOnSuccess(finalList -> {
                     log.info("Гибридный поиск завершен. Финальный список содержит {} документов.", finalList.size());
                     metricService.recordRetrievedDocumentsCount(finalList.size());
-                    // 3. Если после всех усилий ничего не найдено, логируем "пробел в знаниях"
                     if (finalList.isEmpty()) {
                         knowledgeGapService.recordGap(originalQuery);
                     }
@@ -115,7 +119,7 @@ public class HybridRetrievalStrategy {
                                             vectorSearchService.search(requestBuilder.build())
                                     ).stream();
                                 })
-                                .distinct() // Убираем дубликаты документов, найденные по разным запросам
+                                .distinct()
                                 .toList()
                 )
                 .subscribeOn(Schedulers.fromExecutor(applicationTaskExecutor));
@@ -132,5 +136,20 @@ public class HybridRetrievalStrategy {
                         )
                 )
                 .subscribeOn(Schedulers.fromExecutor(applicationTaskExecutor));
+    }
+
+    /**
+     * Объединяет два фильтра с помощью логического 'AND'.
+     *
+     * @param securityFilter Обязательный фильтр безопасности.
+     * @param businessFilter Опциональный бизнес-фильтр.
+     * @return Комбинированный фильтр.
+     */
+    private Filter.Expression combineFilters(Filter.Expression securityFilter, @Nullable Filter.Expression businessFilter) {
+        if (businessFilter == null) {
+            return securityFilter;
+        }
+        // Итоговый фильтр: (securityFilter) AND (businessFilter)
+        return new Filter.Expression(Filter.ExpressionType.AND, securityFilter, businessFilter);
     }
 }

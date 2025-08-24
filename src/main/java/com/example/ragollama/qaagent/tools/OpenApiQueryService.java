@@ -2,6 +2,7 @@ package com.example.ragollama.qaagent.tools;
 
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import io.swagger.v3.oas.models.OpenAPI;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +18,6 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /**
  * Сервис-оркестратор, реализующий RAG-конвейер "на лету" для OpenAPI спецификаций.
@@ -38,6 +38,10 @@ public class OpenApiQueryService {
 
     /**
      * Выполняет RAG-запрос к спецификации, загруженной по URL.
+     *
+     * @param specUrl URL спецификации.
+     * @param query   Запрос пользователя.
+     * @return {@link CompletableFuture} с ответом.
      */
     public CompletableFuture<String> querySpecFromUrl(String specUrl, String query) {
         log.info("Загрузка и парсинг OpenAPI спецификации с URL: {}", specUrl);
@@ -47,6 +51,10 @@ public class OpenApiQueryService {
 
     /**
      * Выполняет RAG-запрос к спецификации, переданной в виде текста.
+     *
+     * @param specContent Содержимое спецификации.
+     * @param query       Запрос пользователя.
+     * @return {@link CompletableFuture} с ответом.
      */
     public CompletableFuture<String> querySpecFromContent(String specContent, String query) {
         log.info("Парсинг OpenAPI спецификации из предоставленного контента.");
@@ -54,37 +62,20 @@ public class OpenApiQueryService {
         return executeRagPipeline(openAPI, query);
     }
 
-    /**
-     * Основная логика RAG-конвейера.
-     */
     private CompletableFuture<String> executeRagPipeline(OpenAPI openAPI, String query) {
-        // Шаг 1: Разбиваем спецификацию на текстовые чанки
         List<Document> chunks = chunker.split(openAPI);
         if (chunks.isEmpty()) {
             throw new ProcessingException("Не удалось извлечь контент из OpenAPI спецификации.");
         }
         log.debug("Спецификация разделена на {} чанков.", chunks.size());
 
-        // Шаг 2: Создаем временное in-memory векторное хранилище (актуальный способ)
-        VectorStore inMemoryVectorStore = SimpleVectorStore
-                .builder(embeddingModel)
-                .build();
+        VectorStore inMemoryVectorStore = SimpleVectorStore.builder(embeddingModel).build();
         inMemoryVectorStore.add(chunks);
         log.debug("Временное in-memory хранилище создано и заполнено.");
 
-        // Шаг 3: Выполняем поиск по схожести (актуальные методы builder'а)
-        SearchRequest searchRequest = SearchRequest.builder()
-                .query(query)
-                .topK(5)
-                .build();
-
+        SearchRequest searchRequest = SearchRequest.builder().query(query).topK(5).build();
         List<Document> similarDocs = inMemoryVectorStore.similaritySearch(searchRequest);
         log.debug("Найдено {} релевантных чанков для запроса.", similarDocs.size());
-
-        // Шаг 4: Формируем контекст и промпт
-        String context = similarDocs.stream()
-                .map(Document::getText)
-                .collect(Collectors.joining("\n---\n"));
 
         String promptString = promptService.render("ragPrompt", Map.of(
                 "documents", similarDocs,
@@ -92,7 +83,6 @@ public class OpenApiQueryService {
                 "history", "Нет истории."
         ));
 
-        // Шаг 5: Вызываем LLM для генерации ответа
-        return llmClient.callChat(new Prompt(promptString));
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
     }
 }

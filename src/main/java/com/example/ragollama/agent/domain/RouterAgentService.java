@@ -1,11 +1,11 @@
 package com.example.ragollama.agent.domain;
 
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -26,11 +26,17 @@ public class RouterAgentService {
     private final LlmClient llmClient;
     private final PromptService promptService;
 
+    /**
+     * Асинхронно определяет намерение пользователя.
+     *
+     * @param query Запрос пользователя.
+     * @return {@link Mono} с определенным {@link QueryIntent}.
+     */
     public Mono<QueryIntent> route(String query) {
         String promptString = promptService.render("routerAgent", Map.of("query", query));
         Prompt prompt = new Prompt(promptString);
 
-        return Mono.fromFuture(llmClient.callChat(prompt))
+        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FAST))
                 .map(response -> parseIntentFromLlmResponse(response, query))
                 .doOnSuccess(intent -> log.info("Запрос '{}' классифицирован с намерением: {}", query, intent));
     }
@@ -47,9 +53,7 @@ public class RouterAgentService {
             log.warn("RouterAgent получил пустой ответ от LLM. Используется fallback.");
             return fallbackToRagIfQuestion(originalQuery);
         }
-
         String cleanedResponse = response.trim().toUpperCase().replaceAll("[^A-Z_]", "");
-
         try {
             return QueryIntent.valueOf(cleanedResponse);
         } catch (IllegalArgumentException e) {

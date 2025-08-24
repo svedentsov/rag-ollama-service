@@ -1,6 +1,7 @@
 package com.example.ragollama.rag.agent;
 
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,9 +17,6 @@ import java.util.Map;
 
 /**
  * AI-агент, отвечающий за управляемое извлечение сущностей из запроса.
- * <p>
- * Эта версия использует кастомный {@link PromptService} для рендеринга
- * шаблона, обходя зависимость от {@code PromptTemplate}.
  */
 @Slf4j
 @Component
@@ -39,7 +37,7 @@ public class QueryTransformationAgent implements QueryEnhancementAgent {
 
         String promptString = promptService.render("queryTransformation", Map.of("query", originalQuery));
 
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString)))
+        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.FAST))
                 .map(llmResponse -> {
                     try {
                         String cleanedJson = llmResponse.replaceAll("(?s)```json\\s*|\\s*```", "").trim();

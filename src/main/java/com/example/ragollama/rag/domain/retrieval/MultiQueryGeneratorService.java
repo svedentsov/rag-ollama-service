@@ -1,6 +1,7 @@
 package com.example.ragollama.rag.domain.retrieval;
 
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -34,17 +35,20 @@ public class MultiQueryGeneratorService {
 
     /**
      * Асинхронно генерирует список запросов (оригинал + 3 варианта).
+     *
+     * @param originalQuery Оригинальный запрос.
+     * @return {@link Mono} со списком запросов.
      */
     public Mono<List<String>> generate(String originalQuery) {
         String promptString = MULTI_QUERY_PROMPT_TEMPLATE.render(Map.of("query", originalQuery));
         Prompt prompt = new Prompt(promptString);
 
-        return Mono.fromFuture(llmClient.callChat(prompt)) // callChat возвращает CompletableFuture<String>
+        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FAST))
                 .map(this::parseToList)
                 .map(generatedQueries -> {
                     List<String> allQueries = new java.util.ArrayList<>();
-                    allQueries.add(originalQuery);        // добавляем оригинальный
-                    allQueries.addAll(generatedQueries);  // + сгенерированные
+                    allQueries.add(originalQuery); // добавляем оригинальный
+                    allQueries.addAll(generatedQueries); // + сгенерированные
                     return allQueries;
                 })
                 .doOnSuccess(queries ->

@@ -2,6 +2,7 @@ package com.example.ragollama.monitoring;
 
 import com.example.ragollama.monitoring.model.VerificationResult;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.metrics.MetricService;
 import com.example.ragollama.shared.prompts.PromptService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -35,10 +36,6 @@ public class SourceCiteVerifierService {
 
     /**
      * Асинхронно выполняет проверку ответа.
-     * <p>
-     * Метод выполняется в отдельном потоке и не влияет на время ответа
-     * для пользователя. Результаты проверки используются для сбора метрик
-     * и логирования потенциальных проблем.
      *
      * @param contextDocuments Документы, использованные как контекст для генерации.
      * @param generatedAnswer  Финальный ответ, сгенерированный RAG-системой.
@@ -60,7 +57,7 @@ public class SourceCiteVerifierService {
                 "answer", generatedAnswer
         ));
 
-        llmClient.callChat(new Prompt(promptString))
+        llmClient.callChat(new Prompt(promptString), ModelCapability.FAST)
                 .thenAccept(jsonResponse -> {
                     VerificationResult result = parseLlmResponse(jsonResponse);
                     metricService.recordVerificationResult(result.isValid());
@@ -78,7 +75,7 @@ public class SourceCiteVerifierService {
                 })
                 .exceptionally(ex -> {
                     log.error("Ошибка во время выполнения асинхронной верификации ответа.", ex);
-                    return null; // Завершаем CompletableFuture
+                    return null;
                 });
     }
 
@@ -88,7 +85,6 @@ public class SourceCiteVerifierService {
             return objectMapper.readValue(cleanedJson, VerificationResult.class);
         } catch (JsonProcessingException e) {
             log.error("Не удалось распарсить JSON-ответ от LLM-верификатора: {}", jsonResponse, e);
-            // В случае ошибки парсинга считаем, что проверка не пройдена
             return new VerificationResult(false, List.of(), "LLM вернула невалидный JSON.");
         }
     }

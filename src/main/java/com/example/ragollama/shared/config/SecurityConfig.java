@@ -5,13 +5,21 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 
+import static org.springframework.security.config.Customizer.withDefaults;
 import static org.springframework.security.config.http.SessionCreationPolicy.STATELESS;
 
 /**
  * Конфигурация безопасности Spring Security.
- * Этот класс настраивает правила доступа к HTTP-эндпоинтам, управляет сессиями и защитой от CSRF.
+ * <p>
+ * В этой версии включается Basic Authentication для всех эндпоинтов,
+ * начинающихся с `/api/`. Публично доступными остаются только Swagger UI,
+ * документация API и эндпоинты Actuator.
  */
 @Configuration
 @EnableWebSecurity
@@ -19,18 +27,6 @@ public class SecurityConfig {
 
     /**
      * Определяет цепочку фильтров безопасности для всех HTTP-запросов.
-     * <p>
-     * В данной конфигурации:
-     * <ul>
-     *   <li>Отключается защита от CSRF ({@code csrf(AbstractHttpConfigurer::disable)}),
-     *       что является стандартной практикой для stateless REST API, где аутентификация
-     *       происходит по токенам, а не по сессионным cookie.</li>
-     *   <li>Разрешаются все входящие запросы ({@code requestMatchers("/**").permitAll()}) для
-     *       упрощения демонстрации. В реальном приложении здесь будут настроены правила
-     *       аутентификации и авторизации (например, с использованием JWT).</li>
-     *   <li>Устанавливается политика управления сессиями в {@code STATELESS},
-     *       чтобы Spring Security не создавал и не использовал HTTP-сессии.</li>
-     * </ul>
      *
      * @param http объект {@link HttpSecurity} для текучей конфигурации правил безопасности.
      * @return Сконфигурированная и готовая к использованию цепочка фильтров {@link SecurityFilterChain}.
@@ -41,10 +37,36 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(req -> req
-                        .requestMatchers("/**").permitAll()
-                        .anyRequest().authenticated()
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/api-docs/**").permitAll()
+                        .requestMatchers("/actuator/**").permitAll()
+                        .requestMatchers("/api/**").authenticated() // Требуем аутентификацию для всех API
+                        .anyRequest().permitAll()
                 )
-                .sessionManagement(session -> session.sessionCreationPolicy(STATELESS));
+                .sessionManagement(session -> session.sessionCreationPolicy(STATELESS))
+                .httpBasic(withDefaults()); // Включаем Basic Authentication
         return http.build();
+    }
+
+    /**
+     * Создает простой UserDetailsService с пользователями в памяти для демонстрационных целей.
+     * <p>
+     * В реальном приложении этот бин должен быть заменен реализацией,
+     * которая загружает данные пользователей из базы данных (например, через JDBC или JPA).
+     *
+     * @return Менеджер пользователей с двумя предопределенными пользователями.
+     */
+    @Bean
+    public UserDetailsService userDetailsService() {
+        UserDetails user = User.withDefaultPasswordEncoder()
+                .username("user")
+                .password("password")
+                .roles("USER")
+                .build();
+        UserDetails admin = User.withDefaultPasswordEncoder()
+                .username("admin")
+                .password("admin")
+                .roles("ADMIN", "USER")
+                .build();
+        return new InMemoryUserDetailsManager(user, admin);
     }
 }

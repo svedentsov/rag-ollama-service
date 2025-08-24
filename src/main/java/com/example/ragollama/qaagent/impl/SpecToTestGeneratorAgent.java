@@ -5,6 +5,7 @@ import com.example.ragollama.qaagent.AgentResult;
 import com.example.ragollama.qaagent.QaAgent;
 import com.example.ragollama.qaagent.tools.OpenApiSpecParser;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import io.swagger.v3.oas.models.OpenAPI;
 import lombok.RequiredArgsConstructor;
@@ -42,7 +43,7 @@ public class SpecToTestGeneratorAgent implements QaAgent {
     @Override
     public boolean canHandle(AgentContext context) {
         return (context.payload().containsKey("specUrl") || context.payload().containsKey("specContent"))
-               && context.payload().containsKey("targetEndpoint");
+                && context.payload().containsKey("targetEndpoint");
     }
 
     @Override
@@ -51,7 +52,6 @@ public class SpecToTestGeneratorAgent implements QaAgent {
         String targetEndpoint = (String) context.payload().get("targetEndpoint");
         log.info("SpecToTestGeneratorAgent: запуск генерации теста для эндпоинта '{}'", targetEndpoint);
 
-        // Шаг 1: Находим и форматируем детали нужного эндпоинта
         Optional<String> endpointDetails = specParser.formatOperationDetails(openAPI, targetEndpoint);
 
         if (endpointDetails.isEmpty()) {
@@ -63,9 +63,8 @@ public class SpecToTestGeneratorAgent implements QaAgent {
             ));
         }
 
-        // Шаг 2: Генерируем промпт и вызываем LLM
         String promptString = promptService.render("specToTest", Map.of("endpointDetails", endpointDetails.get()));
-        return llmClient.callChat(new Prompt(promptString))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(generatedCode -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,

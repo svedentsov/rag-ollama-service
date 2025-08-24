@@ -27,11 +27,8 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Сервис-фасад, инкапсулирующий всю логику управления сессиями и историей чата.
  * <p>
- * Этот класс является единственной точкой входа для всех операций, требующих
- * сохранения контекста диалога. Он оркестрирует взаимодействие между "чистыми"
- * бизнес-сервисами ({@link RagService}, {@link ChatService}) и сервисом
- * персистентности ({@link ChatHistoryService}), следуя принципу единственной
- * ответственности (SRP).
+ * Эта версия обновлена для передачи `sessionId` в `RagService` для
+ * корректной работы аудиторского логирования.
  */
 @Service
 @Slf4j
@@ -54,7 +51,7 @@ public class ChatSessionService {
         final UUID sessionId = getOrCreateSessionId(request.sessionId());
 
         return saveMessageAndGetHistory(sessionId, request.query())
-                .thenCompose(history -> ragService.queryAsync(request.query(), history, request.topK(), request.similarityThreshold()))
+                .thenCompose(history -> ragService.queryAsync(request.query(), history, request.topK(), request.similarityThreshold(), sessionId)) // <-- ПЕРЕДАЕМ sessionId
                 .thenCompose(ragAnswer -> saveMessageAsync(sessionId, MessageRole.ASSISTANT, ragAnswer.answer())
                         .thenApply(v -> new RagQueryResponse(ragAnswer.answer(), ragAnswer.sourceCitations(), sessionId)));
     }
@@ -71,7 +68,7 @@ public class ChatSessionService {
         return Flux.defer(() -> Mono.fromFuture(() -> saveMessageAndGetHistory(sessionId, request.query()))
                 .flatMapMany(history -> {
                     final StringBuilder fullResponseBuilder = new StringBuilder();
-                    return ragService.queryStream(request.query(), history, request.topK(), request.similarityThreshold())
+                    return ragService.queryStream(request.query(), history, request.topK(), request.similarityThreshold(), sessionId) // <-- ПЕРЕДАЕМ sessionId
                             .doOnNext(part -> {
                                 if (part instanceof StreamingResponsePart.Content content) {
                                     fullResponseBuilder.append(content.text());
@@ -142,7 +139,6 @@ public class ChatSessionService {
         CompletableFuture<List<Message>> historyFuture = getHistoryAsync(sessionId);
 
         return saveFuture.thenCombine(historyFuture, (v, history) -> {
-            // ИЗМЕНЕНИЕ: Создаем новую, изменяемую копию списка.
             List<Message> mutableHistory = new ArrayList<>(history);
             mutableHistory.add(currentMessage);
             return mutableHistory;

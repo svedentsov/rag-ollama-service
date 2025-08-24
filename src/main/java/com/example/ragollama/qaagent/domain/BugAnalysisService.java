@@ -6,6 +6,7 @@ import com.example.ragollama.rag.retrieval.HybridRetrievalStrategy;
 import com.example.ragollama.rag.retrieval.RetrievalProperties;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,8 +46,6 @@ public class BugAnalysisService {
      * @param draftDescription Черновик описания бага от пользователя.
      * @return {@link Mono}, который по завершении будет содержать
      * структурированный {@link BugAnalysisResponse}.
-     * @throws ProcessingException если LLM возвращает невалидный JSON,
-     *                             ошибка будет передана по цепочке Mono.
      */
     public Mono<BugAnalysisResponse> analyzeBugReport(String draftDescription) {
         log.info("Запуск анализа бага для: '{}'", draftDescription);
@@ -68,7 +67,7 @@ public class BugAnalysisService {
                             "draft_report", draftDescription,
                             "context_bugs", context.isEmpty() ? "Похожих багов не найдено." : context
                     ));
-                    return Mono.fromFuture(llmClient.callChat(new Prompt(promptString)));
+                    return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED));
                 })
                 .map(this::parseLlmResponse);
     }
@@ -96,7 +95,6 @@ public class BugAnalysisService {
      */
     private BugAnalysisResponse parseLlmResponse(String llmResponse) {
         try {
-            // LLM иногда возвращает JSON внутри markdown-блока ```json ... ```. Очистим его.
             String cleanedResponse = llmResponse.replaceAll("(?s)```json\\s*|\\s*```", "").trim();
             return objectMapper.readValue(cleanedResponse, BugAnalysisResponse.class);
         } catch (JsonProcessingException e) {

@@ -13,6 +13,7 @@ import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
 import jakarta.annotation.PostConstruct;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.ollama.api.OllamaOptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -23,14 +24,15 @@ import java.util.concurrent.CompletableFuture;
  * Отказоустойчивый клиент, являющийся единственной точкой входа
  * для взаимодействия с LLM в приложении.
  * <p>
- * Этот компонент инкапсулирует применение паттернов отказоустойчивости
- * (Retry, Circuit Breaker, TimeLimiter), гарантируя, что все обращения
- * к внешнему сервису (Ollama) защищены от сбоев.
+ * Эта версия интегрирована с {@link LlmRouterService}. Она делегирует
+ * выбор конкретной модели роутеру, а сама фокусируется на применении
+ * паттернов отказоустойчивости (Retry, Circuit Breaker, TimeLimiter).
  */
 public class LlmClient {
 
     private final ChatClient chatClient;
     private final MetricService metricService;
+    private final LlmRouterService llmRouterService;
     private final CircuitBreakerRegistry circuitBreakerRegistry;
     private final RetryRegistry retryRegistry;
     private final TimeLimiterRegistry timeLimiterRegistry;
@@ -41,25 +43,21 @@ public class LlmClient {
     private Retry retry;
     private TimeLimiter timeLimiter;
 
-    /**
-     * Конструктор для внедрения зависимостей.
-     */
     public LlmClient(
-            ChatClient chatClient,
+            ChatClient.Builder chatClientBuilder,
             MetricService metricService,
+            LlmRouterService llmRouterService,
             CircuitBreakerRegistry circuitBreakerRegistry,
             RetryRegistry retryRegistry,
             TimeLimiterRegistry timeLimiterRegistry) {
-        this.chatClient = chatClient;
+        this.chatClient = chatClientBuilder.build();
         this.metricService = metricService;
+        this.llmRouterService = llmRouterService;
         this.circuitBreakerRegistry = circuitBreakerRegistry;
         this.retryRegistry = retryRegistry;
         this.timeLimiterRegistry = timeLimiterRegistry;
     }
 
-    /**
-     * Инициализирует компоненты Resilience4j после создания бина.
-     */
     @PostConstruct
     public void init() {
         this.circuitbreaker = circuitBreakerRegistry.circuitBreaker(OLLAMA_CONFIG_NAME);
@@ -70,11 +68,21 @@ public class LlmClient {
     /**
      * Асинхронно вызывает чат-модель для получения полного, не-потокового ответа.
      *
-     * @param prompt Промпт для отправки в модель.
+     * @param prompt     Промпт для отправки в модель.
+     * @param capability Требуемый уровень возможностей модели.
      * @return {@link CompletableFuture}, который будет завершен строковым ответом от LLM.
      */
-    public CompletableFuture<String> callChat(Prompt prompt) {
-        Mono<String> responseMono = Mono.fromCallable(() -> chatClient.prompt(prompt).call().content())
+    public CompletableFuture<String> callChat(Prompt prompt, ModelCapability capability) {
+        Mono<String> responseMono = Mono.fromCallable(() -> {
+                    String modelName = llmRouterService.getModelFor(capability);
+                    OllamaOptions options = OllamaOptions.builder()
+                            .model(modelName)
+                            .build();
+                    return chatClient.prompt(prompt)
+                            .options(options)
+                            .call()
+                            .content();
+                })
                 .subscribeOn(Schedulers.boundedElastic());
         Mono<String> resilientMono = applyResilienceToMono(responseMono);
         return metricService.recordTimer("llm.requests", resilientMono::toFuture);
@@ -83,11 +91,21 @@ public class LlmClient {
     /**
      * Вызывает чат-модель для получения ответа в виде непрерывного потока токенов.
      *
-     * @param prompt Промпт для отправки в модель.
+     * @param prompt     Промпт для отправки в модель.
+     * @param capability Требуемый уровень возможностей модели.
      * @return {@link Flux}, который асинхронно эмитит части ответа от LLM.
      */
-    public Flux<String> streamChat(Prompt prompt) {
-        Flux<String> responseFlux = chatClient.prompt(prompt).stream().content();
+    public Flux<String> streamChat(Prompt prompt, ModelCapability capability) {
+        Flux<String> responseFlux = Flux.defer(() -> {
+            String modelName = llmRouterService.getModelFor(capability);
+            OllamaOptions options = OllamaOptions.builder()
+                    .model(modelName)
+                    .build();
+            return chatClient.prompt(prompt)
+                    .options(options)
+                    .stream()
+                    .content();
+        });
         Flux<String> resilientFlux = applyResilienceToFlux(responseFlux);
         return metricService.recordTimer("llm.requests.stream", () -> resilientFlux);
     }

@@ -4,6 +4,7 @@ import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
 import com.example.ragollama.qaagent.QaAgent;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -19,10 +20,6 @@ import java.util.stream.Collectors;
 /**
  * QA-агент, который генерирует чек-лист для ручного тестирования
  * на основе описания функциональности.
- * <p>
- * Этот агент является примером чисто генеративной задачи, не использующей RAG.
- * Он демонстрирует, как платформа агентов может быть расширена для выполнения
- * разнообразных AI-задач.
  */
 @Slf4j
 @Component
@@ -32,14 +29,6 @@ public class ChecklistGeneratorAgent implements QaAgent {
     public static final String FEATURE_DESCRIPTION_KEY = "featureDescription";
     private final LlmClient llmClient;
 
-    /**
-     * Промпт для генерации чек-листа.
-     * Он содержит четкие инструкции и примеры (few-shot prompting)
-     * для получения структурированного и качественного ответа от LLM.
-     * <p>
-     * В production-системе этот шаблон следует вынести во внешний .ftl файл
-     * и управлять им через PromptService.
-     */
     private static final PromptTemplate PROMPT_TEMPLATE = new PromptTemplate("""
             ТЫ — ОПЫТНЫЙ QA-ИНЖЕНЕР. Твоя задача — составить детальный чек-лист для ручного тестирования,
             основываясь на предоставленном ОПИСАНИИ ФУНКЦИОНАЛЬНОСТИ.
@@ -55,39 +44,27 @@ public class ChecklistGeneratorAgent implements QaAgent {
             {feature_description}
             """);
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public String getName() {
         return "checklist-generator";
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public String getDescription() {
         return "Генерирует чек-лист для ручного тестирования по описанию функциональности.";
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey(FEATURE_DESCRIPTION_KEY);
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String featureDescription = (String) context.payload().get(FEATURE_DESCRIPTION_KEY);
         String promptString = PROMPT_TEMPLATE.render(Map.of("feature_description", featureDescription));
 
-        return llmClient.callChat(new Prompt(promptString))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(llmResponse -> {
                     List<String> checklistItems = parseToList(llmResponse);
                     String summary = "Чек-лист успешно сгенерирован. Найдено " + checklistItems.size() + " пунктов для проверки.";

@@ -1,6 +1,7 @@
 package com.example.ragollama.chat.domain;
 
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.Message;
@@ -36,7 +37,7 @@ public class ChatService {
     public CompletableFuture<String> processChatRequestAsync(String userMessage, List<Message> history) {
         log.info("Обработка 'чистого' асинхронного запроса в чат.");
         Prompt prompt = new Prompt(history);
-        return llmClient.callChat(prompt);
+        return llmClient.callChat(prompt, ModelCapability.BALANCED);
     }
 
     /**
@@ -49,6 +50,6 @@ public class ChatService {
     public Flux<String> processChatRequestStream(String userMessage, List<Message> history) {
         log.info("Обработка 'чистого' потокового запроса в чат.");
         Prompt prompt = new Prompt(history);
-        return llmClient.streamChat(prompt);
+        return llmClient.streamChat(prompt, ModelCapability.BALANCED);
     }
 }

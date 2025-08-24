@@ -6,6 +6,7 @@ import com.example.ragollama.qaagent.QaAgent;
 import com.example.ragollama.qaagent.model.TestCase;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -23,10 +24,6 @@ import java.util.concurrent.CompletableFuture;
 /**
  * QA-агент, который генерирует структурированные тест-кейсы
  * на основе текстового описания требований.
- * <p>
- * Использует LLM для семантического анализа требований и преобразования
- * их в набор проверяемых сценариев, покрывающих позитивные,
- * негативные и пограничные случаи.
  */
 @Slf4j
 @Component
@@ -59,7 +56,7 @@ public class TestCaseGeneratorAgent implements QaAgent {
 
         String promptString = promptService.render("testCaseGeneration", Map.of("requirements", requirementsText));
 
-        return llmClient.callChat(new Prompt(promptString))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(this::parseLlmResponse)
                 .thenApply(testCases -> {
                     String summary = String.format("Генерация завершена. Создано %d тест-кейсов.", testCases.size());

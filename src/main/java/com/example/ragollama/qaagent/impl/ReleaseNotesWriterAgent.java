@@ -5,6 +5,7 @@ import com.example.ragollama.qaagent.AgentResult;
 import com.example.ragollama.qaagent.QaAgent;
 import com.example.ragollama.qaagent.tools.GitApiClient;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -69,7 +70,7 @@ public class ReleaseNotesWriterAgent implements QaAgent {
             String commitLog = String.join("\n", commitMessages);
             String promptString = promptService.render("releaseNotesWriter", Map.of("commitMessages", commitLog));
 
-            return Mono.fromFuture(llmClient.callChat(new Prompt(promptString)))
+            return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
                     .map(releaseNotes -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,

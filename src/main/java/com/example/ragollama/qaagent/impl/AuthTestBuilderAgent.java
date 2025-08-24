@@ -6,6 +6,7 @@ import com.example.ragollama.qaagent.QaAgent;
 import com.example.ragollama.qaagent.model.EndpointInfo;
 import com.example.ragollama.qaagent.model.GeneratedTestFile;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +32,7 @@ public class AuthTestBuilderAgent implements QaAgent {
 
     private final LlmClient llmClient;
     private final PromptService promptService;
-    private static final String INSUFFICIENT_PRINCIPAL = "ROLE_USER"; // Эту роль используем для негативных тестов
+    private static final String INSUFFICIENT_PRINCIPAL = "ROLE_USER";
 
     @Override
     public String getName() {
@@ -53,9 +54,8 @@ public class AuthTestBuilderAgent implements QaAgent {
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         List<Map<String, String>> rules = (List<Map<String, String>>) context.payload().get("extractedRules");
 
-        // Группируем правила по эндпоинтам, чтобы для каждого эндпоинта сгенерировать один тестовый класс
         Map<EndpointInfo, List<String>> endpointsToPrincipals = rules.stream()
-                .filter(rule -> !"PUBLIC".equals(rule.get("principal"))) // Исключаем публичные эндпоинты
+                .filter(rule -> !"PUBLIC".equals(rule.get("principal")))
                 .collect(Collectors.groupingBy(
                         rule -> new EndpointInfo(rule.get("resource"), HttpMethod.valueOf(rule.get("action"))),
                         Collectors.mapping(rule -> rule.get("principal"), Collectors.toList())
@@ -76,7 +76,7 @@ public class AuthTestBuilderAgent implements QaAgent {
     }
 
     private Mono<GeneratedTestFile> generateTestForEndpoint(EndpointInfo endpoint, List<String> requiredPrincipals) {
-        String requiredPrincipal = requiredPrincipals.getFirst(); // Берем любую из требуемых ролей для позитивного теста
+        String requiredPrincipal = requiredPrincipals.getFirst();
         String testClassName = generateTestClassName(endpoint);
         String fileName = testClassName + ".java";
 
@@ -88,7 +88,7 @@ public class AuthTestBuilderAgent implements QaAgent {
                 "insufficientPrincipal", INSUFFICIENT_PRINCIPAL
         ));
 
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString)))
+        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
                 .map(code -> new GeneratedTestFile(fileName, code));
     }
 

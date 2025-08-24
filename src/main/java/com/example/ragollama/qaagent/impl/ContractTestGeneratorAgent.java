@@ -5,6 +5,7 @@ import com.example.ragollama.qaagent.AgentResult;
 import com.example.ragollama.qaagent.QaAgent;
 import com.example.ragollama.qaagent.tools.OpenApiParser;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -62,15 +63,12 @@ public class ContractTestGeneratorAgent implements QaAgent {
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String openApiContent = (String) context.payload().get(OPENAPI_CONTENT_KEY);
         String endpointName = (String) context.payload().get(ENDPOINT_NAME_KEY);
-
         // Шаг 1: Извлекаем детали эндпоинта с помощью парсера
         String endpointDetails = openApiParser.extractEndpointDetails(openApiContent, endpointName);
-
         // Шаг 2: Формируем промпт для LLM
         String promptString = PROMPT_TEMPLATE.render(Map.of("endpoint_details", endpointDetails));
-
         // Шаг 3: Вызываем LLM для генерации кода
-        return llmClient.callChat(new Prompt(promptString))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(generatedCode -> {
                     log.info("Успешно сгенерирован API-тест для эндпоинта '{}'", endpointName);
                     String summary = "API-тест для '" + endpointName + "' успешно сгенерирован.";

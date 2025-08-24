@@ -2,9 +2,10 @@ package com.example.ragollama.rag.domain;
 
 import com.example.ragollama.rag.api.dto.RagQueryResponse;
 import com.example.ragollama.rag.api.dto.StreamingResponsePart;
-import com.example.ragollama.shared.exception.GenerationException;
 import com.example.ragollama.rag.domain.generation.NoContextStrategy;
+import com.example.ragollama.shared.exception.GenerationException;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -28,12 +29,20 @@ public class GenerationService {
     private final LlmClient llmClient;
     private final NoContextStrategy noContextStrategy;
 
+    /**
+     * Асинхронно генерирует полный ответ.
+     *
+     * @param prompt    Промпт для LLM.
+     * @param documents Документы, использованные в контексте.
+     * @param sessionId Идентификатор сессии.
+     * @return {@link CompletableFuture} с {@link RagQueryResponse}.
+     */
     public CompletableFuture<RagQueryResponse> generate(Prompt prompt, List<Document> documents, UUID sessionId) {
         if (documents == null || documents.isEmpty()) {
             log.warn("На этап Generation не передано документов. Применяется стратегия '{}'.", noContextStrategy.getClass().getSimpleName());
             return noContextStrategy.handle(prompt, sessionId).toFuture();
         }
-        return llmClient.callChat(prompt)
+        return llmClient.callChat(prompt, ModelCapability.BALANCED)
                 .thenApply(generatedAnswer -> {
                     List<String> sourceCitations = extractCitations(documents);
                     return new RagQueryResponse(generatedAnswer, sourceCitations, sessionId);
@@ -44,6 +53,14 @@ public class GenerationService {
                 });
     }
 
+    /**
+     * Генерирует ответ в виде структурированного потока.
+     *
+     * @param prompt    Промпт для LLM.
+     * @param documents Документы, использованные в контексте.
+     * @param sessionId Идентификатор сессии.
+     * @return {@link Flux} со {@link StreamingResponsePart}.
+     */
     public Flux<StreamingResponsePart> generateStructuredStream(Prompt prompt, List<Document> documents, UUID sessionId) {
         if (documents == null || documents.isEmpty()) {
             log.warn("В потоковом запросе на этап Generation не передано документов.");
@@ -54,13 +71,11 @@ public class GenerationService {
                     ));
         }
 
-        Flux<StreamingResponsePart> contentStream = llmClient.streamChat(prompt)
+        Flux<StreamingResponsePart> contentStream = llmClient.streamChat(prompt, ModelCapability.BALANCED)
                 .map(StreamingResponsePart.Content::new);
 
         Mono<StreamingResponsePart> sourcesPart = Mono.fromSupplier(() ->
                 new StreamingResponsePart.Sources(extractCitations(documents)));
-
-        Mono<StreamingResponsePart> donePart = Mono.just(new StreamingResponsePart.Done("Успешно завершено"));
 
         Mono<StreamingResponsePart> doneWithSessionPart = Mono.just(new StreamingResponsePart.Done("Успешно завершено. SessionID: " + sessionId));
         return Flux.concat(contentStream, sourcesPart, doneWithSessionPart)

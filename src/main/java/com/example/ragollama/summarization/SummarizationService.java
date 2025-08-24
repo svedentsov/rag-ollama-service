@@ -1,6 +1,7 @@
 package com.example.ragollama.summarization;
 
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,7 +45,7 @@ public class SummarizationService {
                 "style", style
         ));
 
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString)));
+        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED));
     }
 
     /**

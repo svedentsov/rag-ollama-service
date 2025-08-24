@@ -3,6 +3,7 @@ package com.example.ragollama.agent.domain;
 import com.example.ragollama.agent.api.dto.CodeGenerationRequest;
 import com.example.ragollama.agent.api.dto.CodeGenerationResponse;
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,7 +42,7 @@ public class CodeGenerationService {
         ));
         Prompt prompt = new Prompt(promptString);
 
-        return Mono.fromFuture(llmClient.callChat(prompt))
+        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.BALANCED))
                 .map(generatedCode -> new CodeGenerationResponse(generatedCode, "java"));
     }
 }

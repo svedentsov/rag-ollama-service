@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.security.task.DelegatingSecurityContextAsyncTaskExecutor;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Hooks;
 import reactor.netty.http.client.HttpClient;
@@ -23,10 +24,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * Основной конфигурационный класс приложения.
  * <p>
- * В этой версии конфигурация дополнена автоматической передачей контекста
- * (например, MDC) в асинхронные потоки Project Reactor с помощью библиотеки
- * `micrometer-context-propagation`. Это обеспечивает сквозную трассировку
- * запросов в логах без необходимости ручной настройки декораторов.
+ * В этой версии конфигурация пула потоков обернута в {@link DelegatingSecurityContextAsyncTaskExecutor}
+ * для корректного проброса контекста Spring Security в асинхронные задачи.
  */
 @Configuration
 @RequiredArgsConstructor
@@ -34,28 +33,11 @@ public class AppConfig {
 
     private final AppProperties appProperties;
 
-    /**
-     * Инициализирует глобальный хук Project Reactor для автоматического
-     * проброса контекста (MDC) во все реактивные цепочки.
-     * <p>
-     * Этот метод вызывается один раз при старте приложения и делает
-     * контекст доступным во всех операторах, таких как map, flatMap,
-     * doOnNext и т.д., даже при переключении потоков.
-     */
     @PostConstruct
     void initializeReactorContext() {
         Hooks.enableAutomaticContextPropagation();
     }
 
-    /**
-     * Создает и настраивает главный бин {@link WebClient.Builder} для всех HTTP-взаимодействий.
-     * Этот метод не создает конечный {@link WebClient}, а настраивает и возвращает
-     * {@link WebClient.Builder}, который затем может быть внедрен в другие компоненты
-     * (например, в конфигурацию Spring AI) для создания экземпляров WebClient с единой, централизованной конфигурацией.
-     * Конфигурация является production-ready, так как включает все необходимые таймауты для обеспечения отказоустойчивости.
-     *
-     * @return Сконфигурированный и готовый к использованию {@link WebClient.Builder}.
-     */
     @Bean
     @Primary
     public WebClient.Builder webClientBuilder() {
@@ -71,15 +53,14 @@ public class AppConfig {
     }
 
     /**
-     * Создает единый пул потоков для всех асинхронных задач.
-     * Конфигурация пула полностью управляется через {@link AppProperties},
-     * что позволяет гибко настраивать его без изменения кода.
+     * Создает единый пул потоков для всех асинхронных задач с поддержкой Security Context.
      * <p>
-     * <b>Примечание:</b> Ручной {@code MdcTaskDecorator} больше не нужен,
-     * так как библиотека {@code micrometer-context-propagation} автоматически
-     * оборачивает все бины типа {@code TaskExecutor} для проброса контекста.
+     * Базовый {@link ThreadPoolTaskExecutor} оборачивается в {@link DelegatingSecurityContextAsyncTaskExecutor}.
+     * Этот декоратор гарантирует, что {@code SecurityContext} из вызывающего потока
+     * (например, HTTP-потока) будет автоматически передан в поток, выполняющий
+     * задачу, аннотированную {@code @Async}.
      *
-     * @return Сконфигурированный и управляемый Spring'om {@link AsyncTaskExecutor}.
+     * @return Сконфигурированный и безопасный для Spring Security {@link AsyncTaskExecutor}.
      */
     @Bean
     public AsyncTaskExecutor applicationTaskExecutor() {
@@ -90,7 +71,7 @@ public class AppConfig {
         executor.setQueueCapacity(executorProps.queueCapacity());
         executor.setThreadNamePrefix(executorProps.threadNamePrefix());
         executor.initialize();
-        return executor;
+        return new DelegatingSecurityContextAsyncTaskExecutor(executor);
     }
 
     /**

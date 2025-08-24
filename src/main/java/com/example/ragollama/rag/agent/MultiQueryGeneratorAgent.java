@@ -1,6 +1,7 @@
 package com.example.ragollama.rag.agent;
 
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,8 +18,6 @@ import java.util.stream.Collectors;
 
 /**
  * AI-агент, реализующий стратегию Multi-Query.
- * <p>
- * Эта версия использует кастомный {@link PromptService} для рендеринга шаблона.
  */
 @Slf4j
 @Component
@@ -34,7 +33,7 @@ public class MultiQueryGeneratorAgent implements QueryEnhancementAgent {
         String promptString = promptService.render("multiQuery", Map.of("query", originalQuery));
         Prompt prompt = new Prompt(promptString);
 
-        return Mono.fromFuture(llmClient.callChat(prompt))
+        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FAST))
                 .map(this::parseToList)
                 .map(generatedQueries -> {
                     List<String> uniqueGenerated = generatedQueries.stream()
