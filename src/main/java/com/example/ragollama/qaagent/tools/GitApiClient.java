@@ -2,8 +2,10 @@ package com.example.ragollama.qaagent.tools;
 
 import com.example.ragollama.qaagent.config.GitProperties;
 import lombok.extern.slf4j.Slf4j;
+import org.eclipse.jgit.api.BlameCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.blame.BlameResult;
 import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.diff.DiffFormatter;
 import org.eclipse.jgit.internal.storage.dfs.DfsRepositoryDescription;
@@ -52,12 +54,7 @@ public class GitApiClient {
      */
     public GitApiClient(GitProperties gitProperties) {
         this.gitProperties = gitProperties;
-        // Для аутентификации по PAT, как правило, токен используется в качестве пароля,
-        // а имя пользователя может быть любым непустым значением или специальным,
-        // как 'x-access-token' для GitHub.
-        this.credentialsProvider = new UsernamePasswordCredentialsProvider(
-                gitProperties.personalAccessToken(), ""
-        );
+        this.credentialsProvider = new UsernamePasswordCredentialsProvider(gitProperties.personalAccessToken(), "");
     }
 
     /**
@@ -71,7 +68,6 @@ public class GitApiClient {
         return Mono.fromCallable(() -> {
             try (Repository repo = new InMemoryRepository(new DfsRepositoryDescription("temp-repo-content"))) {
                 Git git = new Git(repo);
-                // Выполняем fetch только для одной нужной нам ссылки
                 git.fetch()
                         .setRemote(gitProperties.repositoryUrl())
                         .setCredentialsProvider(credentialsProvider)
@@ -85,7 +81,7 @@ public class GitApiClient {
                     RevCommit commit = revWalk.parseCommit(refId);
                     RevTree tree = commit.getTree();
                     try (TreeWalk treeWalk = TreeWalk.forPath(repo, filePath, tree)) {
-                        if (treeWalk == null) return ""; // Файл не найден в этом коммите
+                        if (treeWalk == null) return "";
                         ObjectId objectId = treeWalk.getObjectId(0);
                         ObjectLoader loader = repo.open(objectId);
                         return new String(loader.getBytes(), StandardCharsets.UTF_8);
@@ -94,7 +90,6 @@ public class GitApiClient {
             }
         }).subscribeOn(Schedulers.boundedElastic());
     }
-
 
     /**
      * Асинхронно получает список измененных файлов между двумя Git-ссылками.
@@ -105,11 +100,9 @@ public class GitApiClient {
      */
     public Mono<List<String>> getChangedFiles(String oldRef, String newRef) {
         return Mono.fromCallable(() -> {
-                    // JGit операции блокирующие, поэтому выполняем их в отдельном потоке.
                     try (Repository repo = new InMemoryRepository(new DfsRepositoryDescription("temp-repo"))) {
                         Git git = new Git(repo);
 
-                        // 1. Выполняем fetch только для двух нужных нам ссылок
                         log.debug("Выполнение fetch для refs: {} и {}", oldRef, newRef);
                         git.fetch()
                                 .setRemote(gitProperties.repositoryUrl())
@@ -120,11 +113,9 @@ public class GitApiClient {
                                 )
                                 .call();
 
-                        // 2. Получаем ObjectId для обеих ссылок
                         AbstractTreeIterator oldTree = getTreeIterator(repo, "refs/remotes/origin/" + oldRef);
                         AbstractTreeIterator newTree = getTreeIterator(repo, "refs/remotes/origin/" + newRef);
 
-                        // 3. Сравниваем деревья и форматируем результат
                         ByteArrayOutputStream out = new ByteArrayOutputStream();
                         try (DiffFormatter formatter = new DiffFormatter(out)) {
                             formatter.setRepository(repo);
@@ -152,7 +143,6 @@ public class GitApiClient {
         return Mono.fromCallable(() -> {
             try (Repository repo = new InMemoryRepository(new DfsRepositoryDescription("temp-repo-log"))) {
                 Git git = new Git(repo);
-                // Fetch'им обе нужные ссылки
                 git.fetch()
                         .setRemote(gitProperties.repositoryUrl())
                         .setCredentialsProvider(credentialsProvider)
@@ -190,7 +180,6 @@ public class GitApiClient {
         return Mono.fromCallable(() -> {
             try (Repository repo = new InMemoryRepository(new DfsRepositoryDescription("temp-repo-diff"))) {
                 Git git = new Git(repo);
-                // Fetch'им обе нужные ссылки
                 git.fetch()
                         .setRemote(gitProperties.repositoryUrl())
                         .setCredentialsProvider(credentialsProvider)
@@ -213,15 +202,34 @@ public class GitApiClient {
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
-
     /**
-     * Вспомогательный метод для получения итератора по дереву файлов для указанной ссылки.
+     * Асинхронно выполняет `git blame` для файла и возвращает информацию о коммитах для каждой строки.
      *
-     * @param repository Репозиторий JGit.
-     * @param ref        Строковое представление ссылки.
-     * @return Итератор по дереву файлов.
-     * @throws IOException если ссылка не найдена или произошла ошибка чтения.
+     * @param filePath Путь к файлу.
+     * @param ref      Git-ссылка (коммит, ветка, тег).
+     * @return {@link Mono} с результатом `blame`.
      */
+    public Mono<BlameResult> blameFile(String filePath, String ref) {
+        return Mono.fromCallable(() -> {
+            try (Repository repo = new InMemoryRepository(new DfsRepositoryDescription("temp-repo-blame"))) {
+                Git git = new Git(repo);
+                git.fetch()
+                        .setRemote(gitProperties.repositoryUrl())
+                        .setCredentialsProvider(credentialsProvider)
+                        .setRefSpecs(new org.eclipse.jgit.transport.RefSpec("+" + "refs/heads/" + ref + ":refs/remotes/origin/" + ref))
+                        .call();
+
+                ObjectId refId = repo.resolve("refs/remotes/origin/" + ref);
+                if (refId == null) throw new IOException("Ref not found: " + ref);
+
+                BlameCommand blameCommand = new BlameCommand(repo);
+                blameCommand.setStartCommit(refId);
+                blameCommand.setFilePath(filePath);
+                return blameCommand.call();
+            }
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
     private AbstractTreeIterator getTreeIterator(Repository repository, String ref) throws IOException {
         final ObjectId id = repository.resolve(ref);
         if (id == null) {
@@ -233,14 +241,7 @@ public class GitApiClient {
         }
     }
 
-    /**
-     * Форматирует объект DiffEntry в путь к измененному файлу.
-     *
-     * @param entry Объект, представляющий одно изменение.
-     * @return Строка с путем к файлу.
-     */
     private String formatDiffEntry(DiffEntry entry) {
-        // Возвращаем только путь к файлу, тип изменения не так важен для потребителей
         return entry.getNewPath().equals(DiffEntry.DEV_NULL) ? entry.getOldPath() : entry.getNewPath();
     }
 }

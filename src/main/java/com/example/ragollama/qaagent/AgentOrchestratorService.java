@@ -23,6 +23,12 @@ public class AgentOrchestratorService {
     private final Map<String, QaAgent> agentMap;
     private final Map<String, List<QaAgent>> pipelines;
 
+    /**
+     * Конструктор, который автоматически обнаруживает все бины {@link QaAgent}
+     * и инициализирует реестр агентов и статических конвейеров.
+     *
+     * @param agents Список всех реализаций {@link QaAgent}, найденных Spring'ом.
+     */
     public AgentOrchestratorService(List<QaAgent> agents) {
         this.agentMap = agents.stream()
                 .collect(Collectors.toMap(QaAgent::getName, Function.identity()));
@@ -94,7 +100,9 @@ public class AgentOrchestratorService {
                         agentMap.get("git-inspector"),
                         agentMap.get("test-prioritizer"),
                         agentMap.get("ci-trigger")
-                ))
+                )),
+                Map.entry("test-verifier-pipeline", List.of(
+                        agentMap.get("test-verifier")))
         );
     }
 
@@ -138,12 +146,6 @@ public class AgentOrchestratorService {
             this.results = new java.util.ArrayList<>(results);
         }
 
-        /**
-         * Добавляет новый результат и обогащает контекст для следующего шага.
-         *
-         * @param newResult Результат работы предыдущего агента.
-         * @return Новый экземпляр {@link PipelineExecutionState}.
-         */
         public PipelineExecutionState addResult(AgentResult newResult) {
             List<AgentResult> newResults = new java.util.ArrayList<>(this.results);
             newResults.add(newResult);

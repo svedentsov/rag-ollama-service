@@ -52,7 +52,9 @@ public class PromptService {
             Map.entry("syntheticDataBuilder", "synthetic-data-builder-prompt.ftl"),
             Map.entry("sourceCiteVerifier", "source-cite-verifier-prompt.ftl"),
             Map.entry("planningAgent", "planning-agent-prompt.ftl"),
-            Map.entry("copilotResultSummarizer", "copilot-result-summarizer-prompt.ftl")
+            Map.entry("copilotResultSummarizer", "copilot-result-summarizer-prompt.ftl"),
+            Map.entry("testVerifier", "test-verifier-prompt.ftl"),
+            Map.entry("testTrendAnalyzer", "test-trend-analyzer-prompt.ftl")
     );
 
     /**

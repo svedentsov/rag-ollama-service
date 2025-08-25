@@ -6,6 +6,7 @@ import com.example.ragollama.qaagent.AgentResult;
 import com.example.ragollama.qaagent.api.dto.FlakyTestAnalysisRequest;
 import com.example.ragollama.qaagent.api.dto.RootCauseAnalysisRequest;
 import com.example.ragollama.qaagent.api.dto.TestCaseGenerationRequest;
+import com.example.ragollama.qaagent.api.dto.TestVerificationRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -19,12 +20,16 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Контроллер для управления AI-агентами, анализирующими результаты тестов.
+ * Контроллер для управления AI-агентами, анализирующими тесты и требования.
+ * <p>
+ * Предоставляет API для выполнения различных задач, связанных с качеством
+ * программного обеспечения, таких как обнаружение "плавающих" тестов,
+ * анализ первопричин, генерация тест-кейсов и проверка качества кода тестов.
  */
 @RestController
 @RequestMapping("/api/v1/agents/tests")
 @RequiredArgsConstructor
-@Tag(name = "Test Analysis Agents", description = "API для анализа результатов тестирования")
+@Tag(name = "Test Analysis & Generation Agents", description = "API для анализа и генерации артефактов тестирования")
 public class TestAnalysisController {
 
     private final AgentOrchestratorService orchestratorService;
@@ -33,7 +38,8 @@ public class TestAnalysisController {
      * Запускает агента для обнаружения "плавающих" тестов.
      *
      * @param request DTO с содержимым двух JUnit XML отчетов для сравнения.
-     * @return {@link CompletableFuture} с результатом анализа.
+     * @return {@link CompletableFuture} с результатом анализа, содержащим
+     * список потенциально "плавающих" тестов.
      */
     @PostMapping("/detect-flaky")
     @Operation(summary = "Обнаружить 'плавающие' тесты",
@@ -66,11 +72,21 @@ public class TestAnalysisController {
      * @return {@link CompletableFuture} с результатом, содержащим список сгенерированных тест-кейсов.
      */
     @PostMapping("/generate-test-cases")
-    @Operation(summary = "Сгенерировать тест-кейсы из требований",
-            description = "Запускает 'test-case-generation-pipeline' для автоматического создания " +
-                    "набора тест-кейсов на основе предоставленного текста.")
+    @Operation(summary = "Сгенерировать тест-кейсы из требований")
     public CompletableFuture<List<AgentResult>> generateTestCases(@Valid @RequestBody TestCaseGenerationRequest request) {
-        AgentContext context = request.toAgentContext();
-        return orchestratorService.invokePipeline("test-case-generation-pipeline", context);
+        return orchestratorService.invokePipeline("test-case-generation-pipeline", request.toAgentContext());
+    }
+
+    /**
+     * Запускает агента для проверки качества и полноты существующего теста.
+     *
+     * @param request DTO, содержащее исходный код теста для анализа.
+     * @return {@link CompletableFuture} с результатом, содержащим структурированную оценку теста.
+     */
+    @PostMapping("/verify")
+    @Operation(summary = "Проверить качество существующего автотеста",
+            description = "Принимает исходный код Java-теста и использует LLM для его анализа на соответствие лучшим практикам.")
+    public CompletableFuture<List<AgentResult>> verifyTestCode(@Valid @RequestBody TestVerificationRequest request) {
+        return orchestratorService.invokePipeline("test-verifier-pipeline", request.toAgentContext());
     }
 }
