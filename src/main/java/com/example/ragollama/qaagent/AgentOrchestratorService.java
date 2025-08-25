@@ -102,7 +102,12 @@ public class AgentOrchestratorService {
                         agentMap.get("ci-trigger")
                 )),
                 Map.entry("test-verifier-pipeline", List.of(
-                        agentMap.get("test-verifier")))
+                        agentMap.get("test-verifier"))
+                ),
+                Map.entry("coverage-audit-pipeline", List.of(
+                        agentMap.get("git-inspector"),
+                        agentMap.get("coverage-auditor"))
+                )
         );
     }
 

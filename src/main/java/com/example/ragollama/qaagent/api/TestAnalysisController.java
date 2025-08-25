@@ -52,8 +52,13 @@ public class TestAnalysisController {
 
     /**
      * Запускает полный конвейер для анализа первопричины падения тестов.
+     * <p>
+     * Этот эндпоинт принимает все необходимые "улики" (отчеты о тестах,
+     * Git-ссылки для получения diff и логи приложения), запускает
+     * многошаговый конвейер и возвращает структурированную гипотезу
+     * о первопричине сбоя.
      *
-     * @param request DTO, содержащее отчеты, Git-ссылки и логи приложения.
+     * @param request DTO, содержащее все данные для анализа.
      * @return {@link CompletableFuture} с результатом, включающим вердикт RCA-агента.
      */
     @PostMapping("/analyze-root-cause")
@@ -61,8 +66,7 @@ public class TestAnalysisController {
             description = "Запускает 'root-cause-analysis-pipeline', который находит 'плавающие' тесты, " +
                     "измененный код и анализирует их вместе с логами для поиска первопричины.")
     public CompletableFuture<List<AgentResult>> analyzeRootCause(@Valid @RequestBody RootCauseAnalysisRequest request) {
-        AgentContext context = request.toAgentContext();
-        return orchestratorService.invokePipeline("root-cause-analysis-pipeline", context);
+        return orchestratorService.invokePipeline("root-cause-analysis-pipeline", request.toAgentContext());
     }
 
     /**

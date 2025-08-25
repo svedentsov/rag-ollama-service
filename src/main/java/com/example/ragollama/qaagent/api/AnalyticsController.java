@@ -1,7 +1,10 @@
 package com.example.ragollama.qaagent.api;
 
+import com.example.ragollama.qaagent.AgentOrchestratorService;
 import com.example.ragollama.qaagent.AgentResult;
+import com.example.ragollama.qaagent.api.dto.CustomerImpactAnalysisRequest;
 import com.example.ragollama.qaagent.api.dto.DefectTrendAnalysisRequest;
+import com.example.ragollama.qaagent.api.dto.RegressionPredictionRequest;
 import com.example.ragollama.qaagent.api.dto.TestMetricsAnalysisRequest;
 import com.example.ragollama.qaagent.impl.DefectTrendMinerAgent;
 import com.example.ragollama.qaagent.impl.TestMetricsAnalyzerAgent;
@@ -9,10 +12,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -30,6 +32,7 @@ public class AnalyticsController {
 
     private final TestMetricsAnalyzerAgent testMetricsAnalyzerAgent;
     private final DefectTrendMinerAgent defectTrendMinerAgent;
+    private final AgentOrchestratorService orchestratorService;
 
     /**
      * Запускает анализ исторических метрик тестов и генерирует отчет о трендах.
@@ -63,5 +66,29 @@ public class AnalyticsController {
     @Operation(summary = "Проанализировать и сгруппировать тренды в дефектах")
     public CompletableFuture<AgentResult> analyzeDefectTrends(@Valid DefectTrendAnalysisRequest request) {
         return defectTrendMinerAgent.execute(request.toAgentContext());
+    }
+
+    /**
+     * Запускает конвейер для прогнозирования регрессионных рисков.
+     *
+     * @param request DTO с Git-ссылками и отчетом о покрытии.
+     * @return {@link CompletableFuture} с отчетом о рисках.
+     */
+    @PostMapping("/predict-regression")
+    @Operation(summary = "Спрогнозировать риск регрессии для изменений в коде")
+    public CompletableFuture<List<AgentResult>> predictRegressionRisk(@Valid @RequestBody RegressionPredictionRequest request) {
+        return orchestratorService.invokePipeline("regression-prediction-pipeline", request.toAgentContext());
+    }
+
+    /**
+     * Запускает конвейер для анализа влияния изменений на конечных пользователей.
+     *
+     * @param request DTO с Git-ссылками.
+     * @return {@link CompletableFuture} с отчетом о влиянии на клиентов.
+     */
+    @PostMapping("/customer-impact")
+    @Operation(summary = "Проанализировать влияние изменений на пользователей (Customer Impact)")
+    public CompletableFuture<List<AgentResult>> analyzeCustomerImpact(@Valid @RequestBody CustomerImpactAnalysisRequest request) {
+        return orchestratorService.invokePipeline("customer-impact-analysis-pipeline", request.toAgentContext());
     }
 }

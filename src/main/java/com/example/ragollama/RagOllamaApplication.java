@@ -5,6 +5,7 @@ import com.example.ragollama.evaluation.EvaluationProperties;
 import com.example.ragollama.ingestion.IngestionProperties;
 import com.example.ragollama.optimization.IndexOptimizerProperties;
 import com.example.ragollama.qaagent.config.CiProperties;
+import com.example.ragollama.qaagent.config.FlakinessProperties;
 import com.example.ragollama.qaagent.config.GitProperties;
 import com.example.ragollama.rag.domain.reranking.RerankingProperties;
 import com.example.ragollama.rag.retrieval.RetrievalProperties;
@@ -39,7 +40,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         PiiRedactionService.PiiRedactionProperties.class,
         LlmRouterService.LlmProperties.class,
         IndexOptimizerProperties.class,
-        CiProperties.class
+        CiProperties.class,
+        FlakinessProperties.class
 })
 public class RagOllamaApplication {
     /**

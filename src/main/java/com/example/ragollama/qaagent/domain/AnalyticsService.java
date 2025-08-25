@@ -15,6 +15,8 @@ import java.util.List;
  * <p>
  * Этот сервис является "Data Layer" для аналитических агентов, предоставляя им
  * готовые, пред-агрегированные данные для последующей интерпретации с помощью LLM.
+ * Использование `JdbcTemplate` для сложных `GROUP BY` запросов часто более
+ * производительно и гибко, чем JPQL.
  */
 @Service
 @RequiredArgsConstructor
@@ -24,6 +26,12 @@ public class AnalyticsService {
 
     /**
      * DTO для хранения агрегированных метрик за один день.
+     *
+     * @param date          Дата.
+     * @param totalRuns     Общее количество запусков сьютов.
+     * @param totalTests    Общее количество выполненных тестов.
+     * @param totalFailures Общее количество падений.
+     * @param passRate      Процент успешно пройденных тестов.
      */
     public record DailyTestMetrics(
             LocalDate date,
@@ -32,6 +40,16 @@ public class AnalyticsService {
             long totalFailures,
             double passRate
     ) {
+    }
+
+    /**
+     * DTO для хранения информации о медленных тестах.
+     *
+     * @param className         Имя класса теста.
+     * @param testName          Имя метода теста.
+     * @param averageDurationMs Среднее время выполнения в миллисекундах.
+     */
+    public record SlowTestInfo(String className, String testName, double averageDurationMs) {
     }
 
     /**
@@ -60,6 +78,28 @@ public class AnalyticsService {
                 """;
 
         return jdbcTemplate.query(sql, this::mapRowToDailyTestMetrics, since);
+    }
+
+    /**
+     * Находит N самых медленных тестов по среднему времени выполнения за все время.
+     *
+     * @param limit Количество самых медленных тестов для возврата.
+     * @return Список {@link SlowTestInfo}, отсортированный по убыванию среднего времени.
+     */
+    public List<SlowTestInfo> findSlowestTests(int limit) {
+        String sql = """
+                SELECT class_name, test_name, AVG(duration_ms) as avg_duration
+                FROM test_case_run_results
+                GROUP BY class_name, test_name
+                HAVING AVG(duration_ms) > 0
+                ORDER BY avg_duration DESC
+                LIMIT ?;
+                """;
+        return jdbcTemplate.query(sql, (rs, rowNum) -> new SlowTestInfo(
+                rs.getString("class_name"),
+                rs.getString("test_name"),
+                rs.getDouble("avg_duration")
+        ), limit);
     }
 
     private DailyTestMetrics mapRowToDailyTestMetrics(ResultSet rs, int rowNum) throws SQLException {

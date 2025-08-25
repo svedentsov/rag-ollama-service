@@ -18,8 +18,9 @@ import java.util.List;
 /**
  * Инфраструктурный сервис для парсинга XML-отчетов в формате JUnit.
  * <p>
- * В этой версии парсер был улучшен для извлечения полного текста ошибки
- * и стек-трейса из тегов `<failure>` и `<error>`.
+ * Преобразует XML-структуру в список типизированных Java-объектов,
+ * извлекая всю необходимую информацию о каждом тест-кейсе, включая
+ * статус, детали ошибки и время выполнения.
  */
 @Slf4j
 @Service
@@ -49,6 +50,9 @@ public class JUnitXmlParser {
                 Element testcase = (Element) testcaseNodes.item(i);
                 String className = testcase.getAttribute("classname");
                 String testName = testcase.getAttribute("name");
+                String timeStr = testcase.getAttribute("time");
+                // Преобразуем время из секунд (с точкой или запятой) в миллисекунды
+                long durationMs = (long) (Double.parseDouble(timeStr.replace(",", ".")) * 1000);
                 String failureDetails = null;
                 TestResult.Status status = TestResult.Status.PASSED;
 
@@ -69,7 +73,7 @@ public class JUnitXmlParser {
                     status = TestResult.Status.SKIPPED;
                 }
 
-                results.add(new TestResult(className, testName, status, failureDetails));
+                results.add(new TestResult(className, testName, status, failureDetails, durationMs));
             }
         } catch (Exception e) {
             log.error("Не удалось распарсить JUnit XML отчет", e);

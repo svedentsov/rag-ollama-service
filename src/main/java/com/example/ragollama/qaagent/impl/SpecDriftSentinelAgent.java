@@ -20,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
  * <p>
  * Он сравнивает эндпоинты, определенные в OpenAPI спецификации, с эндпоинтами,
  * фактически реализованными в коде, и сообщает о любых расхождениях (дрифте).
+ * Этот агент работает полностью детерминированно, без использования LLM.
  */
 @Slf4j
 @Component
@@ -29,21 +30,33 @@ public class SpecDriftSentinelAgent implements QaAgent {
     private final OpenApiSpecParser specParser;
     private final SpringEndpointInspector endpointInspector;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "spec-drift-sentinel";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Обнаруживает расхождения между OpenAPI спецификацией и реализованными в коде эндпоинтами.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey("specUrl") || context.payload().containsKey("specContent");
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         return CompletableFuture.supplyAsync(() -> {
@@ -54,7 +67,7 @@ public class SpecDriftSentinelAgent implements QaAgent {
             // Шаг 2: Получаем эндпоинты из кода (из рантайм-контекста Spring)
             Set<EndpointInfo> codeEndpoints = new HashSet<>(endpointInspector.getImplementedEndpoints());
 
-            // Шаг 3: Находим расхождения
+            // Шаг 3: Находим расхождения с помощью операций над множествами
             Set<EndpointInfo> missingInCode = new HashSet<>(specEndpoints);
             missingInCode.removeAll(codeEndpoints);
 
@@ -73,6 +86,12 @@ public class SpecDriftSentinelAgent implements QaAgent {
         });
     }
 
+    /**
+     * Определяет источник спецификации и парсит ее.
+     *
+     * @param context Контекст с `specUrl` или `specContent`.
+     * @return Распарсенный объект {@link OpenAPI}.
+     */
     private OpenAPI getOpenApi(AgentContext context) {
         String specUrl = (String) context.payload().get("specUrl");
         if (specUrl != null) {

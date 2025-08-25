@@ -128,7 +128,6 @@ public class DefectTrendMinerAgent implements QaAgent {
 
     private Mono<DefectCluster> summarizeCluster(DefectCluster cluster) {
         String defectsText = cluster.getDefects().stream()
-                // ИСПРАВЛЕНИЕ: Используем прямой доступ к полям record'а: defect.sourceName() и defect.content()
                 .map(defect -> String.format("ID: %s\nТекст: %s\n", defect.sourceName(), defect.content()))
                 .collect(Collectors.joining("---\n"));
 

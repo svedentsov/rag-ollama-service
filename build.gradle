@@ -65,11 +65,9 @@ dependencies {
     runtimeOnly "org.postgresql:postgresql:${postgresqlVersion}"
 
     // JAXB / XML (для OpenAPI/Jackson/JAXB-совместимости)
-    // Если в приложении уже есть jakarta.xml.bind:... (4.x) — это совместимость Jakarta; ниже добавлены
-    // старые javax-совместимые артефакты в качестве runtime-резерва.
     runtimeOnly 'javax.xml.bind:jaxb-api:2.3.1'
     runtimeOnly 'org.glassfish.jaxb:jaxb-runtime:2.3.3'
-    implementation 'com.fasterxml.jackson.module:jackson-module-jaxb-annotations' // чтоб Jackson понимал JAXB-аннотации
+    implementation 'com.fasterxml.jackson.module:jackson-module-jaxb-annotations'
 
     // Утилиты и Code Generation
     compileOnly "org.projectlombok:lombok:${lombokVersion}"
@@ -78,6 +76,7 @@ dependencies {
     annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
     annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
     implementation 'com.github.javaparser:javaparser-core:3.27.0'
+    implementation 'net.sourceforge.pmd:pmd-java:7.16.0'
 
     // Observability & Docs
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
