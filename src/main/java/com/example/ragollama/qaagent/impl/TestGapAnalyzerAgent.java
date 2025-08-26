@@ -2,7 +2,7 @@ package com.example.ragollama.qaagent.impl;
 
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.qaagent.ToolAgent;
 import com.example.ragollama.qaagent.tools.CodebaseMappingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class TestGapAnalyzerAgent implements QaAgent {
+public class TestGapAnalyzerAgent implements ToolAgent {
 
     private final CodebaseMappingService codebaseMappingService;
 

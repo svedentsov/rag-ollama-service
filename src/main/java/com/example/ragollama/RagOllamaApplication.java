@@ -4,9 +4,7 @@ import com.example.ragollama.crawler.confluence.ConfluenceProperties;
 import com.example.ragollama.evaluation.EvaluationProperties;
 import com.example.ragollama.ingestion.IngestionProperties;
 import com.example.ragollama.optimization.IndexOptimizerProperties;
-import com.example.ragollama.qaagent.config.CiProperties;
-import com.example.ragollama.qaagent.config.FlakinessProperties;
-import com.example.ragollama.qaagent.config.GitProperties;
+import com.example.ragollama.qaagent.config.*;
 import com.example.ragollama.rag.domain.reranking.RerankingProperties;
 import com.example.ragollama.rag.retrieval.RetrievalProperties;
 import com.example.ragollama.shared.config.properties.AppProperties;
@@ -41,7 +39,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         LlmRouterService.LlmProperties.class,
         IndexOptimizerProperties.class,
         CiProperties.class,
-        FlakinessProperties.class
+        Neo4jProperties.class,
+        FlakinessProperties.class,
+        CostProperties.class,
+        FederationProperties.class
 })
 public class RagOllamaApplication {
     /**

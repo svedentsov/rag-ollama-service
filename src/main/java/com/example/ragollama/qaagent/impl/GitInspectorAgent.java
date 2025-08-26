@@ -2,7 +2,7 @@ package com.example.ragollama.qaagent.impl;
 
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.qaagent.ToolAgent;
 import com.example.ragollama.qaagent.tools.GitApiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +22,7 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class GitInspectorAgent implements QaAgent {
+public class GitInspectorAgent implements ToolAgent {
 
     public static final String OLD_REF_KEY = "oldRef";
     public static final String NEW_REF_KEY = "newRef";

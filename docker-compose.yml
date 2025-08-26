@@ -67,21 +67,38 @@ services:
     image: rabbitmq:3.13-management
     container_name: rag-rabbitmq
     ports:
-      # Порт для подключения клиентов (наше Spring приложение)
-      - "5672:5672"
-      # Порт для веб-интерфейса управления
-      - "15672:15672"
-    # Том для сохранения состояния RabbitMQ
-    volumes:
+      - "5672:5672" # Порт для подключения клиентов (наше Spring приложение)
+      - "15672:15672" # Порт для веб-интерфейса управления
+    volumes: # Том для сохранения состояния RabbitMQ
       - rabbitmq-data:/var/lib/rabbitmq
-    # Настройки по умолчанию (можно переопределить)
-    environment:
+    environment: # Настройки по умолчанию (можно переопределить)
       - RABBITMQ_DEFAULT_USER=guest
       - RABBITMQ_DEFAULT_PASS=guest
     restart: unless-stopped
     healthcheck:
       # Проверяем, что брокер доступен и работает
       test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - rag-net
+
+  neo4j: # Графовая база данных Neo4j
+    image: neo4j:5
+    container_name: rag-neo4j
+    ports:
+      - "7474:7474" # HTTP-интерфейс (браузер)
+      - "7687:7687" # Bolt-протокол для драйверов
+    volumes:
+      - neo4j-data:/data
+    environment:
+      # Устанавливаем пароль. В production использовать секреты.
+      - NEO4J_AUTH=neo4j/password
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -O /dev/null --post-data='{}' --header='Content-Type:application/json' --header='Authorization: Basic bmVvNGo6cGFzc3dvcmQ=' http://localhost:7474/db/data/transaction/commit' || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -96,6 +113,8 @@ volumes:
   ollama-data:
     driver: local
   rabbitmq-data:
+    driver: local
+  neo4j-data:
     driver: local
 
 # Определение сетей

@@ -1,9 +1,9 @@
 package com.example.ragollama.qaagent.impl;
 
-import com.example.ragollama.qaagent.domain.BugAnalysisService;
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.qaagent.ToolAgent;
+import com.example.ragollama.qaagent.domain.BugAnalysisService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -22,7 +22,7 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class BugDuplicateDetectorAgent implements QaAgent {
+public class BugDuplicateDetectorAgent implements ToolAgent {
 
     private static final String BUG_REPORT_TEXT_KEY = "bugReportText";
     private final BugAnalysisService bugAnalysisService;

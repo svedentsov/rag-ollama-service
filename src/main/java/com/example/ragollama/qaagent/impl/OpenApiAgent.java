@@ -2,7 +2,7 @@ package com.example.ragollama.qaagent.impl;
 
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.qaagent.ToolAgent;
 import com.example.ragollama.qaagent.tools.OpenApiQueryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +22,7 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class OpenApiAgent implements QaAgent {
+public class OpenApiAgent implements ToolAgent {
 
     private final OpenApiQueryService openApiQueryService;
 
@@ -39,7 +39,7 @@ public class OpenApiAgent implements QaAgent {
     @Override
     public boolean canHandle(AgentContext context) {
         return (context.payload().containsKey("specUrl") || context.payload().containsKey("specContent"))
-               && context.payload().containsKey("query");
+                && context.payload().containsKey("query");
     }
 
     @Override

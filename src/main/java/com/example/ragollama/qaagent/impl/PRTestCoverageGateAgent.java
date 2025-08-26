@@ -2,7 +2,7 @@ package com.example.ragollama.qaagent.impl;
 
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.qaagent.ToolAgent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -18,7 +18,7 @@ import java.util.concurrent.CompletableFuture;
  */
 @Slf4j
 @Component
-public class PRTestCoverageGateAgent implements QaAgent {
+public class PRTestCoverageGateAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}

@@ -2,7 +2,7 @@ package com.example.ragollama.qaagent.impl;
 
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.qaagent.ToolAgent;
 import com.example.ragollama.qaagent.model.RcaResult;
 import com.example.ragollama.qaagent.model.TestResult;
 import com.example.ragollama.qaagent.tools.JUnitXmlParser;
@@ -33,7 +33,7 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class RootCauseAnalyzerAgent implements QaAgent {
+public class RootCauseAnalyzerAgent implements ToolAgent {
 
     private final JUnitXmlParser jUnitXmlParser;
     private final LlmClient llmClient;

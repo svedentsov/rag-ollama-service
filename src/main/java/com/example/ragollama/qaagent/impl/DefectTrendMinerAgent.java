@@ -2,7 +2,7 @@ package com.example.ragollama.qaagent.impl;
 
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.qaagent.ToolAgent;
 import com.example.ragollama.qaagent.domain.DefectRepository;
 import com.example.ragollama.qaagent.model.Defect;
 import com.example.ragollama.qaagent.model.DefectCluster;
@@ -33,7 +33,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class DefectTrendMinerAgent implements QaAgent {
+public class DefectTrendMinerAgent implements ToolAgent {
 
     private final DefectRepository defectRepository;
     private final VectorStore vectorStore;

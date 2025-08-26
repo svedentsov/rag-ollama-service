@@ -2,7 +2,7 @@ package com.example.ragollama.qaagent.impl;
 
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.qaagent.ToolAgent;
 import com.example.ragollama.qaagent.model.TestCase;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
@@ -29,7 +29,7 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class TestCaseGeneratorAgent implements QaAgent {
+public class TestCaseGeneratorAgent implements ToolAgent {
 
     private final LlmClient llmClient;
     private final PromptService promptService;
@@ -78,7 +78,8 @@ public class TestCaseGeneratorAgent implements QaAgent {
                 log.warn("Не удалось извлечь JSON из ответа LLM. Ответ: {}", jsonResponse);
                 return Collections.emptyList();
             }
-            return objectMapper.readValue(cleanedJson, new TypeReference<>() {});
+            return objectMapper.readValue(cleanedJson, new TypeReference<>() {
+            });
         } catch (JsonProcessingException e) {
             log.error("Не удалось распарсить JSON-ответ от LLM для TestCase: {}", jsonResponse, e);
             throw new ProcessingException("LLM вернула невалидный JSON для TestCase.", e);

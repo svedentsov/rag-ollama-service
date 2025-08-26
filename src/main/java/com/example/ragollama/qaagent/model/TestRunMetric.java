@@ -69,4 +69,7 @@ public class TestRunMetric {
      */
     @Column(nullable = false, updatable = false)
     private OffsetDateTime runTimestamp;
+
+    @Column(nullable = false)
+    private String projectId;
 }

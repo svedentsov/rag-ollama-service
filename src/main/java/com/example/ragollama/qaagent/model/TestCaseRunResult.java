@@ -2,7 +2,6 @@ package com.example.ragollama.qaagent.model;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -28,6 +27,9 @@ public class TestCaseRunResult {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
+
+    @Column(nullable = false)
+    private String projectId;
 
     /**
      * Ссылка на общий тестовый прогон, к которому относится этот результат.
@@ -62,10 +64,11 @@ public class TestCaseRunResult {
     @Column(columnDefinition = "TEXT")
     private String failureDetails;
 
+    private long durationMs;
+
     /**
      * Временная метка создания записи.
      */
-    @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 }

@@ -2,7 +2,7 @@ package com.example.ragollama.qaagent.impl;
 
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.qaagent.ToolAgent;
 import com.example.ragollama.qaagent.model.TestResult;
 import com.example.ragollama.qaagent.tools.JUnitXmlParser;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class TestFlakyDetectorAgent implements QaAgent {
+public class TestFlakyDetectorAgent implements ToolAgent {
 
     private final JUnitXmlParser jUnitXmlParser;
 

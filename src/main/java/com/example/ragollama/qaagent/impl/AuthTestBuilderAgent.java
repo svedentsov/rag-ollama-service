@@ -2,7 +2,7 @@ package com.example.ragollama.qaagent.impl;
 
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.qaagent.ToolAgent;
 import com.example.ragollama.qaagent.model.EndpointInfo;
 import com.example.ragollama.qaagent.model.GeneratedTestFile;
 import com.example.ragollama.shared.llm.LlmClient;
@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class AuthTestBuilderAgent implements QaAgent {
+public class AuthTestBuilderAgent implements ToolAgent {
 
     private final LlmClient llmClient;
     private final PromptService promptService;

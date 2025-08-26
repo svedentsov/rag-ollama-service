@@ -88,6 +88,9 @@ dependencies {
     implementation 'jakarta.xml.bind:jakarta.xml.bind-api:4.0.2'
     runtimeOnly 'org.glassfish.jaxb:jaxb-runtime:4.0.5'
 
+    // Графовая база данных Neo4j
+    implementation 'org.springframework.boot:spring-boot-starter-data-neo4j'
+
     // Отказоустойчивость и RAG-компоненты
     implementation 'io.github.resilience4j:resilience4j-spring-boot3'
     implementation 'io.github.resilience4j:resilience4j-reactor'

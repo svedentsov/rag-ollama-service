@@ -1,7 +1,9 @@
 package com.example.ragollama.qaagent.copilot;
 
 import com.example.ragollama.qaagent.AgentContext;
+import com.example.ragollama.qaagent.AgentResult;
 import lombok.Getter;
+import lombok.Setter;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -13,13 +15,22 @@ import java.util.Map;
  * Представляет состояние одной диалоговой сессии с QA Copilot.
  * <p>
  * Этот объект хранится в кэше и содержит всю необходимую "память"
- * для ведения контекстуального диалога.
+ * для ведения контекстуального диалога, включая историю сообщений
+ * и результаты работы выполненных агентов.
  */
 @Getter
 public class CopilotSession implements Serializable {
 
     private final List<ChatMessage> history = new ArrayList<>();
     private final Map<String, Object> accumulatedContext = new HashMap<>();
+
+    /**
+     * Последний результат работы агента, сохраненный для возможных
+     * последующих запросов на объяснение (XAI). Поле помечено как transient,
+     * чтобы избежать проблем с сериализацией в кэш.
+     */
+    @Setter
+    private transient AgentResult lastAgentResult;
 
     /**
      * Добавляет новое сообщение в историю диалога.
@@ -51,6 +62,9 @@ public class CopilotSession implements Serializable {
 
     /**
      * Внутренний record для представления одного сообщения в сессии.
+     *
+     * @param role    Роль отправителя (USER или ASSISTANT).
+     * @param content Текст сообщения.
      */
     public record ChatMessage(Role role, String content) implements Serializable {
     }

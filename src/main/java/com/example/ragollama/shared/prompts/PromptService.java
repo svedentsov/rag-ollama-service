@@ -54,7 +54,8 @@ public class PromptService {
             Map.entry("planningAgent", "planning-agent-prompt.ftl"),
             Map.entry("copilotResultSummarizer", "copilot-result-summarizer-prompt.ftl"),
             Map.entry("testVerifier", "test-verifier-prompt.ftl"),
-            Map.entry("testTrendAnalyzer", "test-trend-analyzer-prompt.ftl")
+            Map.entry("testTrendAnalyzer", "test-trend-analyzer-prompt.ftl"),
+            Map.entry("defectEconomics", "defect-economics-prompt.ftl")
     );
 
     /**

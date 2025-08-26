@@ -2,7 +2,7 @@ package com.example.ragollama.qaagent.impl;
 
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.qaagent.ToolAgent;
 import com.example.ragollama.qaagent.tools.JiraApiClient;
 import com.example.ragollama.qaagent.tools.JiraIssueDto;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +23,7 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class JiraFetcherAgent implements QaAgent {
+public class JiraFetcherAgent implements ToolAgent {
 
     /**
      * Ключ в {@link AgentContext}, по которому агент ищет идентификатор задачи Jira.

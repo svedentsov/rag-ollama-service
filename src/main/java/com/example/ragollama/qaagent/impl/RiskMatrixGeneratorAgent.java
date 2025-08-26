@@ -2,7 +2,7 @@ package com.example.ragollama.qaagent.impl;
 
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.qaagent.ToolAgent;
 import com.example.ragollama.qaagent.domain.RiskScoringService;
 import com.example.ragollama.qaagent.model.*;
 import com.example.ragollama.shared.exception.ProcessingException;
@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class RiskMatrixGeneratorAgent implements QaAgent {
+public class RiskMatrixGeneratorAgent implements ToolAgent {
 
     private final RiskScoringService riskScoringService;
     private final LlmClient llmClient;

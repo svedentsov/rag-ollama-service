@@ -1,6 +1,7 @@
 package com.example.ragollama.qaagent.dynamic;
 
 import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.qaagent.ToolAgent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -16,22 +17,22 @@ import java.util.stream.Collectors;
 
 /**
  * Сервис-реестр, который обнаруживает все доступные в приложении
- * бины {@link QaAgent} и предоставляет информацию о них.
+ * **инструментальные** агенты и предоставляет информацию о них.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ToolRegistryService {
 
-    private final List<QaAgent> allAgents;
+    private final List<ToolAgent> allToolAgents;
     private final ObjectMapper objectMapper;
     private Map<String, QaAgent> agentMap;
 
     @PostConstruct
     public void init() {
-        agentMap = allAgents.stream()
+        agentMap = allToolAgents.stream()
                 .collect(Collectors.toMap(QaAgent::getName, Function.identity()));
-        log.info("ToolRegistryService инициализирован. Зарегистрировано {} агентов: {}", agentMap.size(), agentMap.keySet());
+        log.info("ToolRegistryService инициализирован. Зарегистрировано {} инструментов: {}", agentMap.size(), agentMap.keySet());
     }
 
     /**
@@ -50,7 +51,7 @@ public class ToolRegistryService {
      * @return JSON-строка с "каталогом инструментов" для LLM-планировщика.
      */
     public String getToolDescriptionsAsJson() {
-        List<Map<String, String>> toolDescriptions = allAgents.stream()
+        List<Map<String, String>> toolDescriptions = allToolAgents.stream()
                 .map(agent -> Map.of(
                         "name", agent.getName(),
                         "description", agent.getDescription()

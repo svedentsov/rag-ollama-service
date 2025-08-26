@@ -2,7 +2,7 @@ package com.example.ragollama.qaagent.impl;
 
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.qaagent.ToolAgent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class FailureClustererAgent implements QaAgent {
+public class FailureClustererAgent implements ToolAgent {
 
     private static final String LOG_CONTENT_KEY = "logContent";
     // Простое регулярное выражение для извлечения первой значащей строки ошибки
@@ -45,14 +45,10 @@ public class FailureClustererAgent implements QaAgent {
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         return CompletableFuture.supplyAsync(() -> {
             String logContent = (String) context.payload().get(LOG_CONTENT_KEY);
-
-            // Группируем ошибки по первой строке исключения
             Map<String, Long> clusters = Arrays.stream(logContent.split("(?=\\n\\s*at )")) // Делим лог на стек-трейсы
                     .map(trace -> EXCEPTION_PATTERN.matcher(trace).results().findFirst().map(match -> match.group(0)).orElse("Unknown Error"))
                     .collect(Collectors.groupingBy(errorLine -> errorLine, Collectors.counting()));
-
             String summary = "Найдено " + clusters.size() + " уникальных кластеров ошибок.";
-
             return new AgentResult(
                     getName(),
                     AgentResult.Status.SUCCESS,

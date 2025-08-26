@@ -2,7 +2,7 @@ package com.example.ragollama.qaagent.impl;
 
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.qaagent.ToolAgent;
 import com.example.ragollama.qaagent.model.CodeAnalysisResult;
 import com.example.ragollama.qaagent.model.LastCommitInfo;
 import com.example.ragollama.qaagent.model.MethodDetails;
@@ -37,7 +37,7 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class CodeParserAgent implements QaAgent {
+public class CodeParserAgent implements ToolAgent {
 
     private final GitApiClient gitApiClient;
     private final JavaParser javaParser = new JavaParser(new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21));

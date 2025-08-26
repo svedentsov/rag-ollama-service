@@ -2,7 +2,7 @@ package com.example.ragollama.qaagent.impl;
 
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.qaagent.ToolAgent;
 import com.example.ragollama.qaagent.domain.HistoricalDefectService;
 import com.example.ragollama.qaagent.model.FileCoverageRisk;
 import com.example.ragollama.qaagent.model.RegressionRiskReport;
@@ -33,7 +33,7 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class RegressionPredictorAgent implements QaAgent {
+public class RegressionPredictorAgent implements ToolAgent {
 
     private final HistoricalDefectService historicalDefectService;
     private final LlmClient llmClient;
@@ -83,7 +83,6 @@ public class RegressionPredictorAgent implements QaAgent {
         // Собираем "досье" для LLM
         String dataForLlm;
         try {
-            // ИСПРАВЛЕНИЕ: Используем HashMap для явного указания типа Map<String, Object>.
             List<Map<String, Object>> riskProfiles = coverageRisks.stream()
                     .map(risk -> {
                         Map<String, Object> profile = new HashMap<>();

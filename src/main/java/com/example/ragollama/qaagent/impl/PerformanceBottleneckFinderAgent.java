@@ -2,7 +2,7 @@ package com.example.ragollama.qaagent.impl;
 
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.qaagent.ToolAgent;
 import com.example.ragollama.qaagent.model.PerformanceBottleneckReport;
 import com.example.ragollama.qaagent.model.PerformanceFinding;
 import com.example.ragollama.qaagent.tools.GitApiClient;
@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class PerformanceBottleneckFinderAgent implements QaAgent {
+public class PerformanceBottleneckFinderAgent implements ToolAgent {
 
     private final GitApiClient gitApiClient;
     private final PerformanceAntiPatternDetector antiPatternDetector;
@@ -87,7 +87,6 @@ public class PerformanceBottleneckFinderAgent implements QaAgent {
                 )
                 .collectList()
                 .map(allFindings -> {
-                    // ИСПРАВЛЕНИЕ: Тип теперь корректно выводится как List<PerformanceFinding>
                     List<PerformanceFinding> flattenedFindings = allFindings.stream()
                             .flatMap(List::stream)
                             .collect(Collectors.toList());
