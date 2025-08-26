@@ -2,10 +2,7 @@ package com.example.ragollama.qaagent.api;
 
 import com.example.ragollama.qaagent.AgentOrchestratorService;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.api.dto.CustomerImpactAnalysisRequest;
-import com.example.ragollama.qaagent.api.dto.DefectTrendAnalysisRequest;
-import com.example.ragollama.qaagent.api.dto.RegressionPredictionRequest;
-import com.example.ragollama.qaagent.api.dto.TestMetricsAnalysisRequest;
+import com.example.ragollama.qaagent.api.dto.*;
 import com.example.ragollama.qaagent.impl.DefectTrendMinerAgent;
 import com.example.ragollama.qaagent.impl.TestMetricsAnalyzerAgent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -90,5 +87,17 @@ public class AnalyticsController {
     @Operation(summary = "Проанализировать влияние изменений на пользователей (Customer Impact)")
     public CompletableFuture<List<AgentResult>> analyzeCustomerImpact(@Valid @RequestBody CustomerImpactAnalysisRequest request) {
         return orchestratorService.invokePipeline("customer-impact-analysis-pipeline", request.toAgentContext());
+    }
+
+    /**
+     * Запускает полный конвейер для оценки готовности релиза.
+     *
+     * @param request DTO со всеми необходимыми данными для анализа (Git-ссылки, отчет о покрытии).
+     * @return {@link CompletableFuture} с финальным отчетом о готовности релиза.
+     */
+    @PostMapping("/release-readiness")
+    @Operation(summary = "Получить комплексную оценку готовности релиза")
+    public CompletableFuture<List<AgentResult>> assessReleaseReadiness(@Valid @RequestBody ReleaseReadinessRequest request) {
+        return orchestratorService.invokePipeline("release-readiness-pipeline", request.toAgentContext());
     }
 }
