@@ -9,6 +9,7 @@ import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
@@ -24,11 +25,6 @@ import java.util.stream.Collectors;
 /**
  * Продвинутый AI-агент, который генерирует unit-тесты, обучаясь на
  * существующих примерах из кодовой базы проекта.
- * <p>
- * Реализует RAG-подход для задачи генерации кода: сначала находит
- * релевантные примеры тестов в векторной базе, а затем использует их
- * для обогащения промпта, что значительно повышает качество и
- * идиоматичность сгенерированного кода.
  */
 @Slf4j
 @Component
@@ -59,12 +55,8 @@ public class SelfImprovingTestDesignerAgent implements ToolAgent {
         String classCode = (String) context.payload().get("classCode");
         String methodName = (String) context.payload().get("methodName");
 
-        // Этап 1: Retrieval - ищем похожие тесты в нашей базе знаний
         return findRelevantTestExamples(classCode, methodName)
-                .flatMap(examples -> {
-                    // Этап 2: Augmented Generation - генерируем новый тест с учетом найденных примеров
-                    return generateTest(classCode, methodName, examples);
-                })
+                .flatMap(examples -> generateTest(classCode, methodName, examples))
                 .map(generatedTest -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,
@@ -75,12 +67,10 @@ public class SelfImprovingTestDesignerAgent implements ToolAgent {
     }
 
     private Mono<List<Document>> findRelevantTestExamples(String classCode, String methodName) {
-        // Создаем семантический запрос, описывающий код, для которого нужен тест
         String searchQuery = "unit test for method " + methodName + " in class: " + classCode;
         SearchRequest request = SearchRequest.builder()
                 .query(searchQuery)
                 .topK(3)
-                // Ищем только среди документов, помеченных как тесты
                 .filterExpression("metadata.doc_type == 'unit_test'")
                 .build();
 
@@ -98,8 +88,8 @@ public class SelfImprovingTestDesignerAgent implements ToolAgent {
                 "methodName", methodName,
                 "examples", examplesAsString.isBlank() ? "Примеры не найдены." : examplesAsString
         ));
-
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+        Prompt prompt = new Prompt(new UserMessage(promptString));
+        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.BALANCED))
                 .map(generatedCode -> {
                     String className = classCode.substring(classCode.indexOf("class ") + 6, classCode.indexOf("{")).trim();
                     String testFileName = className + "Test.java";

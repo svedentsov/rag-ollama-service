@@ -3,8 +3,10 @@ package com.example.ragollama.qaagent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -43,10 +45,6 @@ public class AgentOrchestratorService {
 
     /**
      * Определяет все доступные статические конвейеры в системе.
-     * <p>
-     * Каждый конвейер представляет собой упорядоченный список агентов,
-     * которые выполняются последовательно, передавая обогащенный
-     * контекст от одного к другому.
      *
      * @return Карта, где ключ - уникальное имя конвейера, а значение -
      * список агентов для выполнения.
@@ -106,36 +104,26 @@ public class AgentOrchestratorService {
                         agentMap.get("code-graph-builder"),
                         agentMap.get("requirement-linker"),
                         agentMap.get("test-linker")
-                )),
-                Map.entry("release-readiness-pipeline", List.of(
-                        agentMap.get("git-inspector"),
-                        agentMap.get("coverage-auditor"),
-                        agentMap.get("code-quality-impact-estimator"),
-                        agentMap.get("flakiness-tracker"),
-                        agentMap.get("release-readiness-assessor")
-                )),
-                Map.entry("risk-matrix-generation-pipeline", List.of(
-                        agentMap.get("git-inspector"),
-                        agentMap.get("customer-impact-analyzer"),
-                        agentMap.get("code-quality-impact-estimator"),
-                        agentMap.get("risk-matrix-generator")
-                )),
-                Map.entry("economic-impact-pipeline", List.of(agentMap.get("defect-economics-modeler")))
+                ))
         );
     }
 
     /**
-     * Асинхронно запускает статический конвейер по его имени.
-     * <p>
-     * Метод находит предопределенную последовательность агентов и выполняет их
-     * один за другим, используя {@link CompletableFuture} для построения
-     * асинхронной цепочки. Контекст (`AgentContext`) обогащается результатами
-     * работы каждого агента и передается следующему.
+     * Предоставляет публичный доступ к списку имен всех
+     * определенных статических конвейеров.
      *
-     * @param pipelineName   Уникальное имя конвейера, определенное в {@code definePipelines}.
-     * @param initialContext Начальный контекст с входными данными для первого агента.
-     * @return {@link CompletableFuture}, который по завершении всего конвейера
-     * будет содержать полный список результатов от каждого выполненного агента.
+     * @return Неизменяемое множество имен конвейеров.
+     */
+    public Set<String> getAvailablePipelines() {
+        return Collections.unmodifiableSet(pipelines.keySet());
+    }
+
+    /**
+     * Асинхронно запускает статический конвейер по его имени.
+     *
+     * @param pipelineName   Уникальное имя конвейера.
+     * @param initialContext Начальный контекст с входными данными.
+     * @return {@link CompletableFuture} с полным списком результатов.
      */
     public CompletableFuture<List<AgentResult>> invokePipeline(String pipelineName, AgentContext initialContext) {
         List<QaAgent> agentsInPipeline = pipelines.get(pipelineName);
@@ -168,9 +156,6 @@ public class AgentOrchestratorService {
     /**
      * Внутренний вспомогательный класс для хранения текущего состояния
      * выполнения конвейера.
-     * <p>
-     * Он является неизменяемым (immutable) и на каждом шаге создает новый
-     * экземпляр с обновленным контекстом и списком результатов.
      */
     private static class PipelineExecutionState {
         private final AgentContext currentContext;

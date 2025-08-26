@@ -13,11 +13,12 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Сервис для ручного управления и рендеринга шаблонов FreeMarker.
+ * Сервис для централизованного управления и рендеринга шаблонов FreeMarker.
  * <p>
  * Этот сервис является нашей собственной реализацией рендерера,
  * обходя ограничения стандартного PromptTemplate в Spring AI. Он загружает
- * все шаблоны при старте и предоставляет единый метод для их обработки.
+ * все шаблоны при старте приложения и предоставляет единый метод для их
+ * безопасной и эффективной обработки.
  */
 @Slf4j
 @Service
@@ -28,38 +29,63 @@ public class PromptService {
     private final Map<String, Template> templateCache = new ConcurrentHashMap<>();
 
     /**
-     * Централизованная карта всех используемых в приложении промптов.
-     * Ключ - логическое имя, значение - путь к файлу.
+     * Централизованный каталог всех используемых в приложении промптов.
+     * Ключ - логическое имя, используемое в коде. Значение - путь к файлу в ресурсах.
      */
     private static final Map<String, String> TEMPLATE_PATHS = Map.ofEntries(
+            // RAG & Chat
             Map.entry("ragPrompt", "rag-prompt.ftl"),
+            Map.entry("routerAgent", "router-agent-prompt.ftl"),
+
+            // RAG Agents
             Map.entry("queryTransformation", "query-transformation-prompt.ftl"),
             Map.entry("multiQuery", "multi-query-prompt.ftl"),
+
+            // Code Generation & Remediation
             Map.entry("codeGeneration", "code-generation-prompt.ftl"),
-            Map.entry("routerAgent", "router-agent-prompt.ftl"),
+            Map.entry("codeRemediation", "code-remediation-prompt.ftl"),
+            Map.entry("testGenerator", "test-generator-prompt.ftl"),
+            Map.entry("selfImprovingTest", "self-improving-test-prompt.ftl"),
+
+            // Analysis Agents
             Map.entry("bugAnalysis", "bug-analysis-prompt.ftl"),
-            Map.entry("grounding", "grounding-prompt.ftl"),
-            Map.entry("summarization", "summarization-prompt.ftl"),
-            Map.entry("releaseNotesWriter", "release-notes-writer-prompt.ftl"),
-            Map.entry("bugReportSummarizer", "bug-report-summarizer-prompt.ftl"),
             Map.entry("impactAnalysis", "impact-analysis-prompt.ftl"),
-            Map.entry("rbacExtractor", "rbac-extractor-prompt.ftl"),
-            Map.entry("authRiskDetector", "auth-risk-detector-prompt.ftl"),
-            Map.entry("testCaseGeneration", "test-case-generation-prompt.ftl"),
-            Map.entry("specToTest", "spec-to-test-prompt.ftl"),
-            Map.entry("authTestBuilder", "auth-test-builder-prompt.ftl"),
             Map.entry("rootCauseAnalysis", "root-cause-analysis-prompt.ftl"),
-            Map.entry("syntheticDataBuilder", "synthetic-data-builder-prompt.ftl"),
-            Map.entry("sourceCiteVerifier", "source-cite-verifier-prompt.ftl"),
-            Map.entry("planningAgent", "planning-agent-prompt.ftl"),
-            Map.entry("copilotResultSummarizer", "copilot-result-summarizer-prompt.ftl"),
             Map.entry("testVerifier", "test-verifier-prompt.ftl"),
+            Map.entry("codeQualityImpact", "code-quality-impact-prompt.ftl"),
+            Map.entry("defectEconomics", "defect-economics-prompt.ftl"),
+            Map.entry("securityRiskScorer", "security-risk-scorer-prompt.ftl"),
+
+            // Summarization & Data Generation
+            Map.entry("summarization", "summarization-prompt.ftl"),
+            Map.entry("bugReportSummarizer", "bug-report-summarizer-prompt.ftl"),
+            Map.entry("releaseNotesWriter", "release-notes-writer-prompt.ftl"),
+            Map.entry("syntheticDataBuilder", "synthetic-data-builder-prompt.ftl"),
+            Map.entry("testCaseGeneration", "test-case-generation-prompt.ftl"),
+
+            // Validation & Explanation
+            Map.entry("grounding", "grounding-prompt.ftl"),
+            Map.entry("sourceCiteVerifier", "source-cite-verifier-prompt.ftl"),
+            Map.entry("explainerAgent", "explainer-agent-prompt.ftl"),
+
+            // Strategic & Planning Agents
+            Map.entry("planningAgent", "planning-agent-prompt.ftl"),
+            Map.entry("autonomousTriage", "autonomous-triage-prompt.ftl"),
+            Map.entry("qaLeadStrategy", "qa-lead-strategy-prompt.ftl"),
+            Map.entry("sdlcStrategy", "sdlc-strategy-prompt.ftl"),
             Map.entry("testTrendAnalyzer", "test-trend-analyzer-prompt.ftl"),
-            Map.entry("defectEconomics", "defect-economics-prompt.ftl")
+            Map.entry("regressionPredictor", "regression-predictor-prompt.ftl"),
+            Map.entry("testDebtSummary", "test-debt-summary-prompt.ftl"),
+            Map.entry("riskMatrixSummary", "risk-matrix-summary-prompt.ftl")
     );
 
     /**
      * Загружает и кэширует все известные шаблоны FreeMarker при старте приложения.
+     * <p>
+     * Этот метод вызывается автоматически после создания бина благодаря аннотации
+     * {@code @PostConstruct}. Он итерируется по статической карте {@code TEMPLATE_PATHS},
+     * загружает каждый шаблон и помещает его в потокобезопасный кэш для
+     * быстрого доступа в дальнейшем.
      *
      * @throws IllegalStateException если какой-либо из шаблонов не может быть загружен.
      */

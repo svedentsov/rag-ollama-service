@@ -14,6 +14,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -23,9 +24,6 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который генерирует исправления для обнаруженных проблем в коде.
- * <p>
- * Выступает в роли "парного программиста", предлагая конкретные
- * рефакторинги для улучшения качества, производительности или безопасности кода.
  */
 @Slf4j
 @Component
@@ -49,7 +47,6 @@ public class CodeRemediationAgent implements ToolAgent {
 
     @Override
     public boolean canHandle(AgentContext context) {
-        // Ожидает "досье" на проблему: файл, описание и опционально фрагмент кода
         return context.payload().containsKey("filePath") &&
                 context.payload().containsKey("problemDescription");
     }
@@ -57,11 +54,10 @@ public class CodeRemediationAgent implements ToolAgent {
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String filePath = (String) context.payload().get("filePath");
-        String ref = (String) context.payload().getOrDefault("ref", "main"); // По умолчанию берем из main
+        String ref = (String) context.payload().getOrDefault("ref", "main");
         String problemDescription = (String) context.payload().get("problemDescription");
-        String codeSnippet = (String) context.payload().get("codeSnippet"); // Может быть null
+        String codeSnippet = (String) context.payload().get("codeSnippet");
 
-        // Получаем полный контент файла для предоставления LLM максимального контекста
         return gitApiClient.getFileContent(filePath, ref)
                 .flatMap(fullCode -> {
                     String promptString = promptService.render("codeRemediation", Map.of(
@@ -69,7 +65,8 @@ public class CodeRemediationAgent implements ToolAgent {
                             "problemDescription", problemDescription,
                             "problemSnippet", codeSnippet != null ? codeSnippet : "N/A"
                     ));
-                    return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED));
+                    Prompt prompt = new Prompt(new UserMessage(promptString));
+                    return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.BALANCED));
                 })
                 .map(this::parseLlmResponse)
                 .map(patch -> new AgentResult(
