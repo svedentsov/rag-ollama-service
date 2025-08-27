@@ -28,6 +28,8 @@ public class TestGapAnalyzerAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
+     *
+     * @return Уникальное имя агента.
      */
     @Override
     public String getName() {
@@ -36,6 +38,8 @@ public class TestGapAnalyzerAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
+     *
+     * @return Человекочитаемое описание назначения агента.
      */
     @Override
     public String getDescription() {
@@ -46,6 +50,9 @@ public class TestGapAnalyzerAgent implements ToolAgent {
      * {@inheritDoc}
      * <p>
      * Агент ожидает, что в контексте уже будет результат работы {@link GitInspectorAgent}.
+     *
+     * @param context Контекст, который должен содержать 'changedFiles'.
+     * @return {@code true}, если все необходимые ключи присутствуют.
      */
     @Override
     public boolean canHandle(AgentContext context) {
@@ -53,7 +60,10 @@ public class TestGapAnalyzerAgent implements ToolAgent {
     }
 
     /**
-     * {@inheritDoc}
+     * Асинхронно выполняет анализ пробелов в тестовом покрытии.
+     *
+     * @param context Контекст, содержащий список измененных файлов от предыдущего агента.
+     * @return {@link CompletableFuture} с результатом, содержащим список "непокрытых" файлов.
      */
     @Override
     @SuppressWarnings("unchecked")
@@ -72,9 +82,9 @@ public class TestGapAnalyzerAgent implements ToolAgent {
 
             // Шаг 2: Находим "пробелы" - исходные файлы без соответствующих изменений в тестах
             List<String> gaps = changedSourceFiles.stream()
-                    .flatMap(sourceFile -> codebaseMappingService.findTestForAppFile(sourceFile).stream())
-                    .filter(expectedTestFile -> !changedTestFiles.contains(expectedTestFile))
-                    .map(this::getOriginalSourceFileFromTestPath) // Возвращаем имя исходного файла для отчета
+                    .filter(sourceFile -> codebaseMappingService.findTestForAppFile(sourceFile)
+                            .map(expectedTestFile -> !changedTestFiles.contains(expectedTestFile))
+                            .orElse(true)) // Если тест не найден, считаем это пробелом
                     .distinct()
                     .toList();
 
@@ -94,14 +104,5 @@ public class TestGapAnalyzerAgent implements ToolAgent {
                     Map.of("untestedSourceFiles", gaps)
             );
         });
-    }
-
-    /**
-     * Вспомогательный метод для обратного преобразования пути к тесту в путь к исходному файлу.
-     */
-    private String getOriginalSourceFileFromTestPath(String testFilePath) {
-        return testFilePath
-                .replace("src/test/java", "src/main/java")
-                .replace("Test.java", ".java");
     }
 }

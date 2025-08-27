@@ -127,6 +127,9 @@ public class HybridRetrievalStrategy {
 
     /**
      * Выполняет полнотекстовый поиск.
+     *
+     * @param query Текст запроса.
+     * @return {@link Mono} со списком документов.
      */
     private Mono<List<Document>> executeFtsSearch(String query) {
         int ftsTopK = retrievalProperties.hybrid().fts().topK();

@@ -46,6 +46,7 @@ public class PromptService {
             Map.entry("codeRemediation", "code-remediation-prompt.ftl"),
             Map.entry("testGenerator", "test-generator-prompt.ftl"),
             Map.entry("selfImprovingTest", "self-improving-test-prompt.ftl"),
+            Map.entry("contractTestGenerator", "contract-test-generator-prompt.ftl"),
 
             // Analysis Agents
             Map.entry("bugAnalysis", "bug-analysis-prompt.ftl"),
@@ -55,6 +56,9 @@ public class PromptService {
             Map.entry("codeQualityImpact", "code-quality-impact-prompt.ftl"),
             Map.entry("defectEconomics", "defect-economics-prompt.ftl"),
             Map.entry("securityRiskScorer", "security-risk-scorer-prompt.ftl"),
+            Map.entry("testCaseDeduplication", "test-case-deduplication-prompt.ftl"),
+            Map.entry("accessibilityAudit", "accessibility-audit-prompt.ftl"),
+            Map.entry("testSmellRefactorer", "test-smell-refactorer-prompt.ftl"),
 
             // Summarization & Data Generation
             Map.entry("summarization", "summarization-prompt.ftl"),
@@ -62,6 +66,7 @@ public class PromptService {
             Map.entry("releaseNotesWriter", "release-notes-writer-prompt.ftl"),
             Map.entry("syntheticDataBuilder", "synthetic-data-builder-prompt.ftl"),
             Map.entry("testCaseGeneration", "test-case-generation-prompt.ftl"),
+            Map.entry("checklistGenerator", "checklist-generator-prompt.ftl"),
 
             // Validation & Explanation
             Map.entry("grounding", "grounding-prompt.ftl"),

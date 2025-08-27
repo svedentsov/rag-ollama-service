@@ -3,10 +3,7 @@ package com.example.ragollama.qaagent.api;
 import com.example.ragollama.qaagent.AgentContext;
 import com.example.ragollama.qaagent.AgentOrchestratorService;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.api.dto.FlakyTestAnalysisRequest;
-import com.example.ragollama.qaagent.api.dto.RootCauseAnalysisRequest;
-import com.example.ragollama.qaagent.api.dto.TestCaseGenerationRequest;
-import com.example.ragollama.qaagent.api.dto.TestVerificationRequest;
+import com.example.ragollama.qaagent.api.dto.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -82,6 +79,18 @@ public class TestAnalysisController {
     }
 
     /**
+     * Запускает агента для генерации чек-листа для ручного тестирования.
+     *
+     * @param request DTO с текстовым описанием функциональности.
+     * @return {@link CompletableFuture} с результатом, содержащим сгенерированный чек-лист.
+     */
+    @PostMapping("/generate-checklist")
+    @Operation(summary = "Сгенерировать чек-лист для ручного тестирования из описания")
+    public CompletableFuture<List<AgentResult>> generateChecklist(@Valid @RequestBody ChecklistGenerationRequest request) {
+        return orchestratorService.invokePipeline("checklist-generation-pipeline", request.toAgentContext());
+    }
+
+    /**
      * Запускает агента для проверки качества и полноты существующего теста.
      *
      * @param request DTO, содержащее исходный код теста для анализа.
@@ -92,5 +101,18 @@ public class TestAnalysisController {
             description = "Принимает исходный код Java-теста и использует LLM для его анализа на соответствие лучшим практикам.")
     public CompletableFuture<List<AgentResult>> verifyTestCode(@Valid @RequestBody TestVerificationRequest request) {
         return orchestratorService.invokePipeline("test-verifier-pipeline", request.toAgentContext());
+    }
+
+    /**
+     * Запускает агента для анализа и рефакторинга кода автотеста.
+     *
+     * @param request DTO, содержащее исходный код теста для анализа.
+     * @return {@link CompletableFuture} с результатом, содержащим предложения по улучшению.
+     */
+    @PostMapping("/refactor")
+    @Operation(summary = "Проанализировать и предложить рефакторинг для автотеста",
+            description = "Принимает исходный код Java-теста, находит в нем 'запахи' и генерирует улучшенную версию.")
+    public CompletableFuture<List<AgentResult>> refactorTestCode(@Valid @RequestBody TestRefactoringRequest request) {
+        return orchestratorService.invokePipeline("test-smell-refactoring-pipeline", request.toAgentContext());
     }
 }

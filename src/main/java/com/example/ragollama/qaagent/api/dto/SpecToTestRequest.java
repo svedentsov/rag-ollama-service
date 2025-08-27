@@ -11,11 +11,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * DTO для запроса на генерацию кода API-теста.
+ * DTO для запроса на генерацию кода API-теста из OpenAPI спецификации.
  *
- * @param specUrl         URL OpenAPI спецификации.
- * @param specContent     Содержимое OpenAPI спецификации в виде строки.
- * @param targetEndpoint  Идентификатор целевого эндпоинта в формате "METHOD /path".
+ * @param specUrl        URL для загрузки OpenAPI спецификации.
+ * @param specContent    Содержимое OpenAPI спецификации в виде строки.
+ * @param targetEndpoint Идентификатор целевого эндпоинта в формате "METHOD /path".
  */
 @Schema(description = "DTO для запроса на генерацию кода API-теста из спецификации")
 public record SpecToTestRequest(
@@ -31,21 +31,31 @@ public record SpecToTestRequest(
         @Pattern(regexp = "^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|TRACE)\\s[/\\w\\-_{}]+$", message = "Неверный формат эндпоинта. Пример: 'POST /api/v1/users'")
         String targetEndpoint
 ) {
+    /**
+     * Валидатор, проверяющий, что предоставлен ровно один источник спецификации.
+     *
+     * @return {@code true}, если валидация пройдена.
+     */
     @AssertTrue(message = "Необходимо указать либо specUrl, либо specContent, но не оба одновременно")
     private boolean isSourceProvided() {
         boolean urlProvided = specUrl != null && !specUrl.isBlank();
         boolean contentProvided = specContent != null && !specContent.isBlank();
-        return urlProvided ^ contentProvided;
+        return urlProvided ^ contentProvided; // XOR
     }
-    
+
+    /**
+     * Преобразует DTO в {@link AgentContext} для передачи в конвейер агентов.
+     *
+     * @return Контекст для запуска агента.
+     */
     public AgentContext toAgentContext() {
         Map<String, Object> payload = new HashMap<>();
-        payload.put("targetEndpoint", targetEndpoint);
+        payload.put("endpointName", targetEndpoint);
         if (specUrl != null) {
             payload.put("specUrl", specUrl);
         }
         if (specContent != null) {
-            payload.put("specContent", specContent);
+            payload.put("openApiContent", specContent);
         }
         return new AgentContext(payload);
     }

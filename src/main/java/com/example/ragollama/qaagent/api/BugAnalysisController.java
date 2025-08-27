@@ -51,17 +51,17 @@ public class BugAnalysisController {
     }
 
     /**
-     * Принимает "сырой" текст баг-репорта и преобразует его в структурированный формат.
+     * Принимает "сырой" текст баг-репорта, структурирует его и проверяет на дубликаты.
      *
      * @param request DTO с текстом отчета от пользователя.
-     * @return {@link CompletableFuture} с результатом, содержащим структурированный отчет.
+     * @return {@link CompletableFuture} с результатом, содержащим структурированный отчет и список дубликатов.
      */
-    @PostMapping("/summarize")
-    @Operation(summary = "Структурировать и обобщить баг-репорт",
-            description = "Принимает неструктурированный текст, описывающий проблему, и использует LLM для " +
-                    "извлечения заголовка, шагов воспроизведения, ожидаемого и фактического результатов.")
-    public CompletableFuture<List<AgentResult>> summarizeBugReport(@Valid @RequestBody BugReportSummaryRequest request) {
+    @PostMapping("/summarize-and-check")
+    @Operation(summary = "Структурировать отчет и проверить на дубликаты",
+            description = "Принимает неструктурированный текст, описывающий проблему, использует LLM для " +
+                    "его структурирования, а затем по улучшенному тексту ищет дубликаты.")
+    public CompletableFuture<List<AgentResult>> summarizeAndCheckBugReport(@Valid @RequestBody BugReportSummaryRequest request) {
         AgentContext context = request.toAgentContext();
-        return orchestratorService.invokePipeline("bug-report-summarization-pipeline", context);
+        return orchestratorService.invokePipeline("bug-report-analysis-pipeline", context);
     }
 }

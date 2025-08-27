@@ -58,7 +58,16 @@ public class AgentOrchestratorService {
                 Map.entry("github-pr-pipeline", List.of(agentMap.get("test-prioritizer"))),
                 Map.entry("jira-bug-creation-pipeline", List.of(agentMap.get("bug-duplicate-detector"))),
                 Map.entry("test-case-generation-pipeline", List.of(agentMap.get("test-case-generator"))),
+                Map.entry("checklist-generation-pipeline", List.of(agentMap.get("checklist-generator"))),
                 Map.entry("test-verifier-pipeline", List.of(agentMap.get("test-verifier"))),
+                Map.entry("test-case-deduplication-pipeline", List.of(agentMap.get("test-case-deduplicator"))),
+                Map.entry("contract-test-generation-pipeline", List.of(agentMap.get("contract-test-generator"))),
+                Map.entry("accessibility-audit-pipeline", List.of(agentMap.get("accessibility-auditor"))),
+                Map.entry("test-smell-refactoring-pipeline", List.of(agentMap.get("test-smell-refactorer"))),
+                Map.entry("bug-report-analysis-pipeline", List.of(
+                        agentMap.get("bug-report-summarizer"),
+                        agentMap.get("bug-duplicate-detector"))
+                ),
                 Map.entry("jira-update-analysis-pipeline", List.of(
                         agentMap.get("jira-fetcher"),
                         agentMap.get("bug-duplicate-detector"))
