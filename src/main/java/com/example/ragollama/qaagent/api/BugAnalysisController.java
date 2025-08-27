@@ -64,4 +64,19 @@ public class BugAnalysisController {
         AgentContext context = request.toAgentContext();
         return orchestratorService.invokePipeline("bug-report-analysis-pipeline", context);
     }
+
+    /**
+     * Принимает "сырой" текст бага и генерирует для него исполняемый API-тест для воспроизведения.
+     *
+     * @param request DTO с текстом отчета от пользователя.
+     * @return {@link CompletableFuture} с результатом, содержащим сгенерированный Java-код.
+     */
+    @PostMapping("/generate-repro-script")
+    @Operation(summary = "Сгенерировать скрипт для воспроизведения бага",
+            description = "Принимает неструктурированный текст, описывающий проблему, структурирует его " +
+                    "и генерирует Java/RestAssured тест, который воспроизводит ошибку.")
+    public CompletableFuture<List<AgentResult>> generateReproScript(@Valid @RequestBody BugReportSummaryRequest request) {
+        AgentContext context = request.toAgentContext();
+        return orchestratorService.invokePipeline("bug-reproduction-pipeline", context);
+    }
 }

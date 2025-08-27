@@ -2,6 +2,7 @@ package com.example.ragollama.qaagent.api;
 
 import com.example.ragollama.qaagent.AgentOrchestratorService;
 import com.example.ragollama.qaagent.AgentResult;
+import com.example.ragollama.qaagent.api.dto.DataSubsetRequest;
 import com.example.ragollama.qaagent.api.dto.SyntheticDataRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -40,5 +41,19 @@ public class DataGenerationController {
         return orchestratorService.invokePipeline(
                 "synthetic-data-generation-pipeline", request.toAgentContext()
         );
+    }
+
+    /**
+     * Запускает агента для создания подмножества данных из БД с маскированием PII.
+     *
+     * @param request DTO со схемой таблицы и целью выборки.
+     * @return {@link CompletableFuture} с результатом, содержащим сгенерированный SQL и замаскированные данные.
+     */
+    @PostMapping("/create-subset")
+    @Operation(summary = "Создать и замаскировать подмножество данных из БД",
+            description = "Принимает DDL таблицы и цель на естественном языке. AI генерирует SQL, " +
+                    "который выполняется после вашего одобрения, а результат маскируется.")
+    public CompletableFuture<List<AgentResult>> createDataSubset(@Valid @RequestBody DataSubsetRequest request) {
+        return orchestratorService.invokePipeline("data-subset-masking-pipeline", request.toAgentContext());
     }
 }

@@ -64,6 +64,13 @@ public class AgentOrchestratorService {
                 Map.entry("contract-test-generation-pipeline", List.of(agentMap.get("contract-test-generator"))),
                 Map.entry("accessibility-audit-pipeline", List.of(agentMap.get("accessibility-auditor"))),
                 Map.entry("test-smell-refactoring-pipeline", List.of(agentMap.get("test-smell-refactorer"))),
+                Map.entry("data-subset-masking-pipeline", List.of(agentMap.get("data-subset-masker"))),
+                Map.entry("synthetic-data-generation-pipeline", List.of(agentMap.get("synthetic-data-builder"))),
+                Map.entry("e2e-flow-synthesis-pipeline", List.of(agentMap.get("e2e-flow-synthesizer"))),
+                Map.entry("bug-reproduction-pipeline", List.of(
+                        agentMap.get("bug-report-summarizer"),
+                        agentMap.get("bug-repro-script-generator"))
+                ),
                 Map.entry("bug-report-analysis-pipeline", List.of(
                         agentMap.get("bug-report-summarizer"),
                         agentMap.get("bug-duplicate-detector"))
