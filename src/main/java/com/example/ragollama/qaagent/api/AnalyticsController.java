@@ -100,4 +100,17 @@ public class AnalyticsController {
     public CompletableFuture<List<AgentResult>> assessReleaseReadiness(@Valid @RequestBody ReleaseReadinessRequest request) {
         return orchestratorService.invokePipeline("release-readiness-pipeline", request.toAgentContext());
     }
+
+    /**
+     * Выполняет канареечный анализ на основе предоставленных метрик.
+     *
+     * @param request DTO с данными метрик для baseline и canary.
+     * @return {@link CompletableFuture} с финальным отчетом и Go/No-Go решением.
+     */
+    @PostMapping("/canary")
+    @Operation(summary = "Провести канареечный анализ (Kayenta-like)",
+            description = "Принимает наборы метрик, выполняет статистический анализ и использует AI для вынесения Go/No-Go вердикта.")
+    public CompletableFuture<List<AgentResult>> analyzeCanaryDeployment(@Valid @RequestBody CanaryAnalysisRequest request) {
+        return orchestratorService.invokePipeline("canary-analysis-pipeline", request.toAgentContext());
+    }
 }

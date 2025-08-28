@@ -3,6 +3,7 @@ package com.example.ragollama.qaagent.api;
 import com.example.ragollama.qaagent.AgentOrchestratorService;
 import com.example.ragollama.qaagent.AgentResult;
 import com.example.ragollama.qaagent.api.dto.DataSubsetRequest;
+import com.example.ragollama.qaagent.api.dto.SyntheticDataDpRequest;
 import com.example.ragollama.qaagent.api.dto.SyntheticDataRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,6 +19,10 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для управления AI-агентами, генерирующими данные.
+ * <p>
+ * Предоставляет API для создания различных видов тестовых данных:
+ * от простых моков до сложных, статистически-релевантных и анонимных
+ * наборов данных с гарантиями дифференциальной приватности.
  */
 @RestController
 @RequestMapping("/api/v1/agents/data")
@@ -55,5 +60,17 @@ public class DataGenerationController {
                     "который выполняется после вашего одобрения, а результат маскируется.")
     public CompletableFuture<List<AgentResult>> createDataSubset(@Valid @RequestBody DataSubsetRequest request) {
         return orchestratorService.invokePipeline("data-subset-masking-pipeline", request.toAgentContext());
+    }
+
+    /**
+     * Запускает конвейер для создания синтетических данных с дифференциальной приватностью.
+     *
+     * @param request DTO с SQL-запросом для исходных данных и параметрами генерации.
+     * @return {@link CompletableFuture} с финальным отчетом, содержащим данные.
+     */
+    @PostMapping("/create-dp-subset")
+    @Operation(summary = "Создать синтетические данные с дифференциальной приватностью (DP)")
+    public CompletableFuture<List<AgentResult>> createDpDataSubset(@Valid @RequestBody SyntheticDataDpRequest request) {
+        return orchestratorService.invokePipeline("dp-synthetic-data-pipeline", request.toAgentContext());
     }
 }

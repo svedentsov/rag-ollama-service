@@ -4,23 +4,23 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * DTO для представления одной конкретной проблемы безопасности.
+ * DTO для представления одной конкретной проблемы безопасности, обнаруженной любым из сканеров.
  *
- * @param filePath       Путь к файлу, содержащему уязвимость.
- * @param lines          Диапазон строк, где обнаружена проблема.
- * @param riskCategory   Категория риска (например, "PII Exposure").
+ * @param findingId      Уникальный идентификатор находки.
+ * @param source         Источник обнаружения (SAST, DAST, LOGS).
  * @param severity       Серьезность ("Critical", "High", "Medium", "Low").
- * @param description    Подробное описание проблемы.
- * @param recommendation Конкретная рекомендация по исправлению, возможно, с примером кода.
+ * @param description    Подробное описание уязвимости.
+ * @param location       Местоположение (например, путь к файлу и строка).
+ * @param recommendation Конкретная рекомендация по исправлению.
  */
-@Schema(description = "Описание одной найденной проблемы безопасности")
+@Schema(description = "Стандартизированное описание одной найденной уязвимости")
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record SecurityFinding(
-        String filePath,
-        String lines,
-        String riskCategory,
+        String findingId,
+        String source,
         String severity,
         String description,
+        String location,
         String recommendation
 ) {
 }

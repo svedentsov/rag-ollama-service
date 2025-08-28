@@ -49,6 +49,8 @@ public class PromptService {
             Map.entry("contractTestGenerator", "contract-test-generator-prompt.ftl"),
             Map.entry("bugReproScriptGenerator", "bug-repro-script-generator-prompt.ftl"),
             Map.entry("e2eFlowSynthesizer", "e2e-flow-synthesizer-prompt.ftl"),
+            Map.entry("dastTestGenerator", "dast-test-generator-prompt.ftl"),
+            Map.entry("fuzzingTestGenerator", "fuzzing-test-generator-prompt.ftl"),
 
             // Analysis Agents
             Map.entry("bugAnalysis", "bug-analysis-prompt.ftl"),
@@ -61,6 +63,12 @@ public class PromptService {
             Map.entry("testCaseDeduplication", "test-case-deduplication-prompt.ftl"),
             Map.entry("accessibilityAudit", "accessibility-audit-prompt.ftl"),
             Map.entry("testSmellRefactorer", "test-smell-refactorer-prompt.ftl"),
+            Map.entry("canaryAnalysis", "canary-analysis-prompt.ftl"),
+            Map.entry("sastAgent", "sast-agent-prompt.ftl"),
+            Map.entry("securityLogAnalyzer", "security-log-analyzer-prompt.ftl"),
+            Map.entry("securityReportAggregator", "security-report-aggregator-prompt.ftl"),
+            Map.entry("personaGenerator", "persona-generator-prompt.ftl"),
+            Map.entry("complianceReportGenerator", "compliance-report-generator-prompt.ftl"),
 
             // Summarization & Data Generation
             Map.entry("summarization", "summarization-prompt.ftl"),
@@ -68,6 +76,7 @@ public class PromptService {
             Map.entry("releaseNotesWriter", "release-notes-writer-prompt.ftl"),
             Map.entry("syntheticDataBuilder", "synthetic-data-builder-prompt.ftl"),
             Map.entry("dataSubsetSqlGenerator", "data-subset-sql-generator-prompt.ftl"),
+            Map.entry("dpSyntheticDataGenerator", "dp-synthetic-data-generator-prompt.ftl"),
             Map.entry("testCaseGeneration", "test-case-generation-prompt.ftl"),
             Map.entry("checklistGenerator", "checklist-generator-prompt.ftl"),
 

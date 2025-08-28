@@ -67,6 +67,8 @@ public class AgentOrchestratorService {
                 Map.entry("data-subset-masking-pipeline", List.of(agentMap.get("data-subset-masker"))),
                 Map.entry("synthetic-data-generation-pipeline", List.of(agentMap.get("synthetic-data-builder"))),
                 Map.entry("e2e-flow-synthesis-pipeline", List.of(agentMap.get("e2e-flow-synthesizer"))),
+                Map.entry("canary-analysis-pipeline", List.of(agentMap.get("canary-analyzer"))),
+                Map.entry("dp-synthetic-data-pipeline", List.of(agentMap.get("dp-synthetic-data-generator"))),
                 Map.entry("bug-reproduction-pipeline", List.of(
                         agentMap.get("bug-report-summarizer"),
                         agentMap.get("bug-repro-script-generator"))
@@ -87,6 +89,19 @@ public class AgentOrchestratorService {
                         agentMap.get("git-inspector"),
                         agentMap.get("rbac-extractor"),
                         agentMap.get("security-risk-scorer")
+                )),
+                Map.entry("full-security-audit-pipeline", List.of(
+                        agentMap.get("git-inspector"),
+                        agentMap.get("sast-agent"),
+                        agentMap.get("dast-test-generator"),
+                        agentMap.get("security-log-analyzer"),
+                        agentMap.get("security-report-aggregator")
+                )),
+                Map.entry("compliance-evidence-pipeline", List.of(
+                        agentMap.get("git-inspector"),
+                        agentMap.get("test-gap-analyzer"),
+                        agentMap.get("sast-agent"),
+                        agentMap.get("compliance-report-generator")
                 )),
                 Map.entry("root-cause-analysis-pipeline", List.of(
                         agentMap.get("flaky-test-detector"),
