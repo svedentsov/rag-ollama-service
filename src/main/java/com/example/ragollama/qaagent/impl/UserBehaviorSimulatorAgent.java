@@ -1,0 +1,131 @@
+package com.example.ragollama.qaagent.impl;
+
+import com.example.ragollama.qaagent.AgentContext;
+import com.example.ragollama.qaagent.AgentResult;
+import com.example.ragollama.qaagent.ToolAgent;
+import com.example.ragollama.qaagent.model.AgentCommand;
+import com.example.ragollama.qaagent.model.SimulationReport;
+import com.example.ragollama.qaagent.tools.PlaywrightActionService;
+import com.example.ragollama.shared.exception.ProcessingException;
+import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
+import com.example.ragollama.shared.prompts.PromptService;
+import com.example.ragollama.shared.util.JsonExtractorUtil;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * Автономный AI-агент, который симулирует поведение пользователя в веб-браузере.
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class UserBehaviorSimulatorAgent implements ToolAgent {
+
+    private final PlaywrightActionService playwright;
+    private final LlmClient llmClient;
+    private final PromptService promptService;
+    private final ObjectMapper objectMapper;
+    private static final int MAX_STEPS = 10;
+
+    @Override
+    public String getName() {
+        return "user-behavior-simulator";
+    }
+
+    @Override
+    public String getDescription() {
+        return "Симулирует E2E-сценарий, управляя браузером на основе высокоуровневой цели.";
+    }
+
+    @Override
+    public boolean canHandle(AgentContext context) {
+        return context.payload().containsKey("startUrl") && context.payload().containsKey("goal");
+    }
+
+    @Override
+    public CompletableFuture<AgentResult> execute(AgentContext context) {
+        String startUrl = (String) context.payload().get("startUrl");
+        String goal = (String) context.payload().get("goal");
+        List<AgentCommand> history = new ArrayList<>();
+
+        playwright.startSession();
+        playwright.goTo(startUrl);
+
+        CompletableFuture<AgentResult> simulationFuture = new CompletableFuture<>();
+
+        runNextStep(goal, history, 0, simulationFuture);
+
+        return simulationFuture.whenComplete((res, err) -> playwright.closeSession());
+    }
+
+    private void runNextStep(String goal, List<AgentCommand> history, int step, CompletableFuture<AgentResult> future) {
+        if (step >= MAX_STEPS) {
+            finishSimulation(goal, history, "FAILURE", "Достигнут максимальный лимит шагов.", future);
+            return;
+        }
+
+        String dom = playwright.getDom();
+        String promptString = promptService.render("userBehaviorSimulator", Map.of(
+                "goal", goal, "history", history, "current_dom", dom
+        ));
+
+        llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
+                .thenAccept(llmResponse -> {
+                    try {
+                        AgentCommand command = parseLlmResponse(llmResponse);
+                        history.add(command);
+                        executeCommand(command);
+
+                        if ("finish".equalsIgnoreCase(command.command())) {
+                            finishSimulation(goal, history, "SUCCESS", command.thought(), future);
+                        } else {
+                            runNextStep(goal, history, step + 1, future);
+                        }
+                    } catch (Exception e) {
+                        log.error("Ошибка на шаге {} симуляции: {}", step, e.getMessage(), e);
+                        finishSimulation(goal, history, "FAILURE", "Ошибка выполнения: " + e.getMessage(), future);
+                    }
+                }).exceptionally(ex -> {
+                    log.error("Ошибка при вызове LLM на шаге {}: {}", step, ex.getMessage(), ex);
+                    finishSimulation(goal, history, "FAILURE", "Ошибка AI: " + ex.getMessage(), future);
+                    return null;
+                });
+    }
+
+    private void executeCommand(AgentCommand command) {
+        Map<String, Object> args = command.arguments();
+        switch (command.command().toLowerCase()) {
+            case "click" -> playwright.click((String) args.get("selector"));
+            case "fill" -> playwright.fill((String) args.get("selector"), (String) args.get("text"));
+            case "assert" -> playwright.assertText((String) args.get("selector"), (String) args.get("text"));
+            case "finish" -> {
+            }
+            default -> throw new IllegalArgumentException("Неизвестная команда: " + command.command());
+        }
+    }
+
+    private void finishSimulation(String goal, List<AgentCommand> history, String outcome, String summary, CompletableFuture<AgentResult> future) {
+        SimulationReport report = new SimulationReport(goal, history, outcome, summary);
+        AgentResult result = new AgentResult(getName(), "SUCCESS".equals(outcome) ? AgentResult.Status.SUCCESS : AgentResult.Status.FAILURE, summary, Map.of("simulationReport", report));
+        future.complete(result);
+    }
+
+    private AgentCommand parseLlmResponse(String jsonResponse) {
+        try {
+            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            return objectMapper.readValue(cleanedJson, AgentCommand.class);
+        } catch (JsonProcessingException e) {
+            throw new ProcessingException("User Simulator LLM вернул невалидный JSON.", e);
+        }
+    }
+}

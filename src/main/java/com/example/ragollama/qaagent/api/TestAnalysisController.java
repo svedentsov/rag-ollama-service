@@ -141,4 +141,16 @@ public class TestAnalysisController {
     public CompletableFuture<List<AgentResult>> analyzeTestCoverage(@Valid @RequestBody TestOracleRequest request) {
         return orchestratorService.invokePipeline("xai-test-oracle-pipeline", request.toAgentContext());
     }
+
+    /**
+     * Запускает агента-наставника для проведения детального ревью автотеста.
+     *
+     * @param request DTO с требованиями и кодом теста.
+     * @return {@link CompletableFuture} с результатом, содержащим полный отчет-ревью.
+     */
+    @PostMapping("/mentor-review")
+    @Operation(summary = "Получить менторское ревью для автотеста (XAI)")
+    public CompletableFuture<List<AgentResult>> getMentorshipReview(@Valid @RequestBody TestMentorshipRequest request) {
+        return orchestratorService.invokePipeline("test-mentor-pipeline", request.toAgentContext());
+    }
 }

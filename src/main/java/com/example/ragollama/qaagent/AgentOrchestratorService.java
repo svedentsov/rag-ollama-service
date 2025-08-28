@@ -78,6 +78,8 @@ public class AgentOrchestratorService {
                 Map.entry("xai-test-oracle-pipeline", List.of(agentMap.get("xai-test-oracle"))),
                 Map.entry("arch-consistency-mapping-pipeline", List.of(agentMap.get("arch-consistency-mapper"))),
                 Map.entry("sca-compliance-pipeline", List.of(agentMap.get("sca-compliance-agent"))),
+                Map.entry("user-behavior-simulation-pipeline", List.of(agentMap.get("user-behavior-simulator"))),
+                Map.entry("privacy-compliance-check-pipeline", List.of(agentMap.get("privacy-compliance-checker"))),
 
                 // --- Multi-Agent Composite Pipelines ---
                 Map.entry("bug-reproduction-pipeline", List.of(

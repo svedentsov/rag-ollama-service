@@ -2,6 +2,7 @@ package com.example.ragollama.qaagent.api;
 
 import com.example.ragollama.qaagent.AgentOrchestratorService;
 import com.example.ragollama.qaagent.AgentResult;
+import com.example.ragollama.qaagent.api.dto.UserSimulationRequest;
 import com.example.ragollama.qaagent.api.dto.UxHeuristicsRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,5 +37,17 @@ public class UxAgentController {
     @Operation(summary = "Оценить HTML на соответствие эвристикам юзабилити")
     public CompletableFuture<List<AgentResult>> evaluateUxHeuristics(@Valid @RequestBody UxHeuristicsRequest request) {
         return orchestratorService.invokePipeline("ux-heuristics-evaluation-pipeline", request.toAgentContext());
+    }
+
+    /**
+     * Запускает автономного AI-агента для симуляции поведения пользователя.
+     *
+     * @param request DTO с начальным URL и целью.
+     * @return {@link CompletableFuture} с отчетом о выполненной симуляции.
+     */
+    @PostMapping("/simulate-user-behavior")
+    @Operation(summary = "Запустить AI-агента для симуляции E2E-сценария")
+    public CompletableFuture<List<AgentResult>> simulateUserBehavior(@Valid @RequestBody UserSimulationRequest request) {
+        return orchestratorService.invokePipeline("user-behavior-simulation-pipeline", request.toAgentContext());
     }
 }

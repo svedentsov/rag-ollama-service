@@ -91,9 +91,6 @@ dependencies {
     // Графовая база данных Neo4j
     implementation 'org.springframework.boot:spring-boot-starter-data-neo4j'
 
-    // Библиотека для статистического анализа
-    implementation 'org.apache.commons:commons-math3:3.6.1'
-
     // Отказоустойчивость и RAG-компоненты
     implementation 'io.github.resilience4j:resilience4j-spring-boot3'
     implementation 'io.github.resilience4j:resilience4j-reactor'
@@ -104,6 +101,8 @@ dependencies {
     // Инструменты агентов
     implementation "org.eclipse.jgit:org.eclipse.jgit:${jgitVersion}"
     implementation "io.swagger.parser.v3:swagger-parser:${swaggerParserVersion}"
+    implementation 'com.microsoft.playwright:playwright:1.44.0'
+    implementation 'org.apache.commons:commons-math3:3.6.1'
 
     // Тестирование
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

@@ -77,6 +77,11 @@ public class PromptService {
             Map.entry("xaiTestOracle", "xai-test-oracle-prompt.ftl"),
             Map.entry("testDesigner", "test-designer-prompt.ftl"),
             Map.entry("adversarialTester", "adversarial-tester-prompt.ftl"),
+            Map.entry("uxHeuristicsEvaluator", "ux-heuristics-evaluator-prompt.ftl"),
+            Map.entry("userBehaviorSimulator", "user-behavior-simulator-prompt.ftl"),
+            Map.entry("privacyComplianceChecker", "privacy-compliance-checker-prompt.ftl"),
+            Map.entry("testMentorBot", "test-mentor-bot-prompt.ftl"),
+            Map.entry("cypherQueryGenerator", "cypher-query-generator-prompt.ftl"),
 
             // Summarization & Data Generation
             Map.entry("summarization", "summarization-prompt.ftl"),

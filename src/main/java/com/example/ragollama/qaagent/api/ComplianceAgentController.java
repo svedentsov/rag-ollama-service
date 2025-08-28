@@ -2,7 +2,7 @@ package com.example.ragollama.qaagent.api;
 
 import com.example.ragollama.qaagent.AgentOrchestratorService;
 import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.api.dto.ComplianceEvidenceRequest;
+import com.example.ragollama.qaagent.api.dto.PrivacyCheckRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -21,20 +21,20 @@ import java.util.concurrent.CompletableFuture;
 @RestController
 @RequestMapping("/api/v1/agents/compliance")
 @RequiredArgsConstructor
-@Tag(name = "Compliance Agents", description = "API для автоматизации сбора доказательств для аудитов")
+@Tag(name = "Compliance Agents", description = "API для автоматизации сбора доказательств и проверок")
 public class ComplianceAgentController {
 
     private final AgentOrchestratorService orchestratorService;
 
     /**
-     * Запускает полный конвейер для сбора доказательств по жизненному циклу разработки.
+     * Запускает агента для проверки измененного кода на соответствие политикам конфиденциальности.
      *
-     * @param request DTO с Git-ссылками, определяющими объем изменений.
-     * @return {@link CompletableFuture} с финальным, агрегированным отчетом в формате Markdown.
+     * @param request DTO с политикой и списком измененных файлов.
+     * @return {@link CompletableFuture} с результатом анализа.
      */
-    @PostMapping("/collect-evidence")
-    @Operation(summary = "Собрать доказательства для аудита соответствия по изменениям в коде")
-    public CompletableFuture<List<AgentResult>> collectComplianceEvidence(@Valid @RequestBody ComplianceEvidenceRequest request) {
-        return orchestratorService.invokePipeline("compliance-evidence-pipeline", request.toAgentContext());
+    @PostMapping("/check-privacy")
+    @Operation(summary = "Проверить код на соответствие политикам конфиденциальности")
+    public CompletableFuture<List<AgentResult>> checkPrivacyCompliance(@Valid @RequestBody PrivacyCheckRequest request) {
+        return orchestratorService.invokePipeline("privacy-compliance-check-pipeline", request.toAgentContext());
     }
 }
