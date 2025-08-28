@@ -115,4 +115,30 @@ public class TestAnalysisController {
     public CompletableFuture<List<AgentResult>> refactorTestCode(@Valid @RequestBody TestRefactoringRequest request) {
         return orchestratorService.invokePipeline("test-smell-refactoring-pipeline", request.toAgentContext());
     }
+
+    /**
+     * Запускает конвейер парного тестирования для генерации полного набора тестов.
+     *
+     * @param request DTO с описанием требований.
+     * @return {@link CompletableFuture} с результатом, содержащим позитивный и негативные тесты.
+     */
+    @PostMapping("/pair-test")
+    @Operation(summary = "Сгенерировать набор тестов с помощью двух AI-агентов (self-play)",
+            description = "Один агент генерирует позитивный тест, второй анализирует его и генерирует негативные/граничные тесты для упущенных сценариев.")
+    public CompletableFuture<List<AgentResult>> runPairTesting(@Valid @RequestBody PairTestingRequest request) {
+        return orchestratorService.invokePipeline("agentic-pair-testing-pipeline", request.toAgentContext());
+    }
+
+    /**
+     * Запускает агента "Тестовый Оракул" для анализа и объяснения набора тестов.
+     *
+     * @param request DTO с требованиями и сгенерированными тестами.
+     * @return {@link CompletableFuture} с результатом, содержащим матрицу трассируемости и анализ покрытия.
+     */
+    @PostMapping("/explain-and-analyze-coverage")
+    @Operation(summary = "Проанализировать тестовое покрытие и объяснить сгенерированные тесты (XAI)",
+            description = "Принимает требования и набор тестов, строит матрицу трассируемости и находит непокрытые требования.")
+    public CompletableFuture<List<AgentResult>> analyzeTestCoverage(@Valid @RequestBody TestOracleRequest request) {
+        return orchestratorService.invokePipeline("xai-test-oracle-pipeline", request.toAgentContext());
+    }
 }

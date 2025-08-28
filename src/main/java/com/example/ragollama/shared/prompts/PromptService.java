@@ -18,7 +18,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * Этот сервис является нашей собственной реализацией рендерера,
  * обходя ограничения стандартного PromptTemplate в Spring AI. Он загружает
  * все шаблоны при старте приложения и предоставляет единый метод для их
- * безопасной и эффективной обработки.
+ * безопасной и эффективной обработки. Использование централизованного
+ * реестра {@code TEMPLATE_PATHS} упрощает управление и предотвращает
+ * разброс путей к шаблонам по всему коду.
  */
 @Slf4j
 @Service
@@ -69,6 +71,12 @@ public class PromptService {
             Map.entry("securityReportAggregator", "security-report-aggregator-prompt.ftl"),
             Map.entry("personaGenerator", "persona-generator-prompt.ftl"),
             Map.entry("complianceReportGenerator", "compliance-report-generator-prompt.ftl"),
+            Map.entry("archConsistencyMapper", "arch-consistency-mapper-prompt.ftl"),
+            Map.entry("scaComplianceAgent", "sca-compliance-agent-prompt.ftl"),
+            Map.entry("mlDriftGuard", "ml-drift-guard-prompt.ftl"),
+            Map.entry("xaiTestOracle", "xai-test-oracle-prompt.ftl"),
+            Map.entry("testDesigner", "test-designer-prompt.ftl"),
+            Map.entry("adversarialTester", "adversarial-tester-prompt.ftl"),
 
             // Summarization & Data Generation
             Map.entry("summarization", "summarization-prompt.ftl"),

@@ -17,8 +17,9 @@ import java.util.stream.Collectors;
  * <p>
  * Этот класс является простым и надежным исполнителем для часто используемых
  * сценариев, которые не требуют гибкости динамического AI-планировщика.
- * Он обнаруживает все доступные бины {@link ToolAgent} (инструменты) и компонует их
- * в предопределенные последовательности (конвейеры).
+ * Он автоматически обнаруживает все доступные бины {@link ToolAgent} (инструменты)
+ * при старте приложения, а затем компонует их в предопределенные
+ * последовательности (конвейеры) в методе {@code definePipelines}.
  */
 @Slf4j
 @Service
@@ -45,12 +46,17 @@ public class AgentOrchestratorService {
 
     /**
      * Определяет все доступные статические конвейеры в системе.
+     * <p>
+     * Этот метод является центральным реестром всех многошаговых процессов.
+     * Он компонует атомарных агентов в сложные цепочки для решения
+     * конкретных бизнес-задач.
      *
      * @return Карта, где ключ - уникальное имя конвейера, а значение -
-     * список агентов для выполнения.
+     * упорядоченный список агентов для выполнения.
      */
     private Map<String, List<QaAgent>> definePipelines() {
         return Map.ofEntries(
+                // --- Single-Agent Pipelines (Tools) ---
                 Map.entry("git-inspector-pipeline", List.of(agentMap.get("git-inspector"))),
                 Map.entry("openapi-pipeline", List.of(agentMap.get("openapi-agent"))),
                 Map.entry("flaky-test-detection-pipeline", List.of(agentMap.get("flaky-test-detector"))),
@@ -69,6 +75,11 @@ public class AgentOrchestratorService {
                 Map.entry("e2e-flow-synthesis-pipeline", List.of(agentMap.get("e2e-flow-synthesizer"))),
                 Map.entry("canary-analysis-pipeline", List.of(agentMap.get("canary-analyzer"))),
                 Map.entry("dp-synthetic-data-pipeline", List.of(agentMap.get("dp-synthetic-data-generator"))),
+                Map.entry("xai-test-oracle-pipeline", List.of(agentMap.get("xai-test-oracle"))),
+                Map.entry("arch-consistency-mapping-pipeline", List.of(agentMap.get("arch-consistency-mapper"))),
+                Map.entry("sca-compliance-pipeline", List.of(agentMap.get("sca-compliance-agent"))),
+
+                // --- Multi-Agent Composite Pipelines ---
                 Map.entry("bug-reproduction-pipeline", List.of(
                         agentMap.get("bug-report-summarizer"),
                         agentMap.get("bug-repro-script-generator"))
@@ -135,6 +146,16 @@ public class AgentOrchestratorService {
                         agentMap.get("code-graph-builder"),
                         agentMap.get("requirement-linker"),
                         agentMap.get("test-linker")
+                )),
+                Map.entry("agentic-pair-testing-pipeline", List.of(
+                        agentMap.get("test-designer"),
+                        agentMap.get("adversarial-tester"))
+                ),
+                Map.entry("rbac-fuzzing-pipeline", List.of(
+                        agentMap.get("git-inspector"),
+                        agentMap.get("rbac-extractor"),
+                        agentMap.get("persona-generator"),
+                        agentMap.get("fuzzing-test-generator")
                 ))
         );
     }
@@ -151,10 +172,14 @@ public class AgentOrchestratorService {
 
     /**
      * Асинхронно запускает статический конвейер по его имени.
+     * <p>
+     * Метод последовательно выполняет каждого агента из определенного конвейера,
+     * передавая и обогащая {@link AgentContext} на каждом шаге.
      *
      * @param pipelineName   Уникальное имя конвейера.
      * @param initialContext Начальный контекст с входными данными.
-     * @return {@link CompletableFuture} с полным списком результатов.
+     * @return {@link CompletableFuture} с полным списком результатов от всех
+     * агентов, выполненных в конвейере.
      */
     public CompletableFuture<List<AgentResult>> invokePipeline(String pipelineName, AgentContext initialContext) {
         List<QaAgent> agentsInPipeline = pipelines.get(pipelineName);
@@ -187,6 +212,10 @@ public class AgentOrchestratorService {
     /**
      * Внутренний вспомогательный класс для хранения текущего состояния
      * выполнения конвейера.
+     * <p>
+     * Он является неизменяемым (immutable) и на каждом шаге создает новый
+     * экземпляр с обновленным контекстом и списком результатов, что обеспечивает
+     * потокобезопасность и предсказуемость.
      */
     private static class PipelineExecutionState {
         private final AgentContext currentContext;
