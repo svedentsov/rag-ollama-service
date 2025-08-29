@@ -3,6 +3,7 @@ package com.example.ragollama.qaagent.api;
 import com.example.ragollama.qaagent.AgentOrchestratorService;
 import com.example.ragollama.qaagent.AgentResult;
 import com.example.ragollama.qaagent.api.dto.ArchConsistencyRequest;
+import com.example.ragollama.qaagent.api.dto.ArchitecturalGuidanceRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -21,7 +22,7 @@ import java.util.concurrent.CompletableFuture;
 @RestController
 @RequestMapping("/api/v1/agents/architecture")
 @RequiredArgsConstructor
-@Tag(name = "Architecture Agents", description = "API для проверки архитектурной консистентности")
+@Tag(name = "Architecture Agents", description = "API для проверки архитектурной консистентности и получения ревью")
 public class ArchitectureAgentController {
 
     private final AgentOrchestratorService orchestratorService;
@@ -36,5 +37,17 @@ public class ArchitectureAgentController {
     @Operation(summary = "Проверить измененный код на соответствие эталонной архитектуре")
     public CompletableFuture<List<AgentResult>> checkArchitectureConsistency(@Valid @RequestBody ArchConsistencyRequest request) {
         return orchestratorService.invokePipeline("arch-consistency-mapping-pipeline", request.toAgentContext());
+    }
+
+    /**
+     * Запускает мета-агента "AI Architecture Governor" для проведения полного ревью.
+     *
+     * @param request DTO с Git-ссылками и политиками.
+     * @return {@link CompletableFuture} с финальным отчетом-ревью.
+     */
+    @PostMapping("/full-review")
+    @Operation(summary = "Получить полное архитектурное ревью для изменений (AI Governor)")
+    public CompletableFuture<List<AgentResult>> getFullArchitecturalReview(@Valid @RequestBody ArchitecturalGuidanceRequest request) {
+        return orchestratorService.invokePipeline("architectural-guardian-pipeline", request.toAgentContext());
     }
 }

@@ -86,6 +86,12 @@ public class PromptService {
             Map.entry("canaryDecisionMaker", "canary-decision-maker-prompt.ftl"),
             Map.entry("checklistBuilder", "checklist-builder-prompt.ftl"),
             Map.entry("bugPatternDetector", "bug-pattern-detector-prompt.ftl"),
+            Map.entry("refactoringStrategist", "refactoring-strategist-prompt.ftl"),
+            Map.entry("sprintPlanner", "sprint-planner-prompt.ftl"),
+            Map.entry("architecturalReviewSynthesizer", "architectural-review-synthesizer-prompt.ftl"),
+            Map.entry("incidentSummarizer", "incident-summarizer-prompt.ftl"),
+            Map.entry("featureExtraction", "feature-extraction-prompt.ftl"),
+            Map.entry("featureGapAnalysis", "feature-gap-analysis-prompt.ftl"),
 
             // Summarization & Data Generation
             Map.entry("summarization", "summarization-prompt.ftl"),

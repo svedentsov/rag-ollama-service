@@ -165,4 +165,16 @@ public class TestAnalysisController {
     public CompletableFuture<List<AgentResult>> buildChecklist(@Valid @RequestBody ChecklistBuilderRequest request) {
         return orchestratorService.invokePipeline("checklist-building-pipeline", request.toAgentContext());
     }
+
+    /**
+     * Запускает конвейер помощи мануальному QA для создания баг-репорта.
+     *
+     * @param request DTO с сырым описанием бага и контекстом.
+     * @return {@link CompletableFuture} с результатом, содержащим обогащенный отчет.
+     */
+    @PostMapping("/assist-bug-reporting")
+    @Operation(summary = "Получить помощь в создании баг-репорта")
+    public CompletableFuture<List<AgentResult>> assistBugReporting(@Valid @RequestBody BugReportAssistanceRequest request) {
+        return orchestratorService.invokePipeline("bug-reporting-assistance-pipeline", request.toAgentContext());
+    }
 }

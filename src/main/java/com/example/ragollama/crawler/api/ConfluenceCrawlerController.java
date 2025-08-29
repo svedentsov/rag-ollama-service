@@ -2,17 +2,15 @@ package com.example.ragollama.crawler.api;
 
 import com.example.ragollama.crawler.confluence.ConfluenceCrawlerService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
- * Контроллер для управления фоновыми задачами краулинга.
+ * Контроллер для управления фоновыми задачами краулинга и индексации.
  * <p>
  * Предоставляет API для асинхронного запуска процесса индексации
  * внешних источников знаний, таких как Confluence.
@@ -32,18 +30,25 @@ public class ConfluenceCrawlerController {
      * задача принята в обработку. Сам процесс краулинга выполняется в фоновом потоке.
      *
      * @param spaceKey Ключ пространства в Confluence (например, "DEV").
+     * @param category Категория, которая будет присвоена всем проиндексированным
+     *                 документам из этого пространства (например, "onboarding").
      * @return {@link ResponseEntity} со статусом 202, если задача успешно запущена,
      * или 409 (Conflict), если задача для этого пространства уже выполняется.
      */
-    @PostMapping("/confluence/spaces/{spaceKey}")
-    @Operation(summary = "Запустить краулинг пространства Confluence",
-            description = "Асинхронно запускает полную индексацию всех страниц в указанном пространстве.",
+    @PostMapping("/confluence/spaces/{spaceKey}/index")
+    @Operation(summary = "Запустить индексацию пространства Confluence",
+            description = "Асинхронно запускает полную индексацию всех страниц в указанном пространстве, " +
+                    "присваивая им заданную категорию в метаданных.",
             responses = {
-                    @ApiResponse(responseCode = "202", description = "Задача краулинга успешно принята в обработку."),
+                    @ApiResponse(responseCode = "202", description = "Задача индексации успешно принята в обработку."),
                     @ApiResponse(responseCode = "409", description = "Задача для этого пространства уже выполняется.")
             })
-    public ResponseEntity<Void> crawlConfluenceSpace(@PathVariable String spaceKey) {
-        boolean started = crawlerService.crawlSpaceAsync(spaceKey);
+    public ResponseEntity<Void> crawlConfluenceSpace(
+            @Parameter(description = "Ключ пространства Confluence", example = "ONBOARDING")
+            @PathVariable String spaceKey,
+            @Parameter(description = "Категория для метаданных документов", example = "onboarding_materials")
+            @RequestParam(defaultValue = "general") String category) {
+        boolean started = crawlerService.crawlSpaceAsync(spaceKey, category);
         return started
                 ? ResponseEntity.accepted().build()
                 : ResponseEntity.status(409).build();

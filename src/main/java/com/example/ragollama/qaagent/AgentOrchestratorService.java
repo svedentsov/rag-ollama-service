@@ -166,7 +166,32 @@ public class AgentOrchestratorService {
                         agentMap.get("canary-analyzer"),
                         agentMap.get("canary-decision-orchestrator")
                 )),
-                Map.entry("feedback-to-test-pipeline", List.of(agentMap.get("feedback-to-test-converter")))
+                Map.entry("feedback-to-test-pipeline", List.of(agentMap.get("feedback-to-test-converter"))),
+                Map.entry("strategic-refactoring-pipeline", List.of(
+                        agentMap.get("test-debt-analyzer"),
+                        agentMap.get("bug-pattern-detector"),
+                        agentMap.get("refactoring-strategist")
+                )),
+                Map.entry("sprint-planning-pipeline", List.of(
+                        agentMap.get("bug-pattern-detector"),
+                        agentMap.get("sprint-planner")
+                )),
+                Map.entry("architectural-guardian-pipeline", List.of(
+                        agentMap.get("git-inspector"),
+                        agentMap.get("arch-consistency-mapper"),
+                        agentMap.get("test-mentor-bot"),
+                        agentMap.get("performance-bottleneck-finder"),
+                        agentMap.get("privacy-compliance-checker"),
+                        agentMap.get("architecture-review-synthesizer")
+                )),
+                Map.entry("incident-response-pipeline", List.of(
+                        agentMap.get("git-inspector"),
+                        agentMap.get("incident-summarizer")
+                )),
+                Map.entry("market-opportunity-pipeline", List.of(
+                        agentMap.get("web-crawler"),
+                        agentMap.get("feature-gap-analyzer")
+                ))
         );
     }
 
