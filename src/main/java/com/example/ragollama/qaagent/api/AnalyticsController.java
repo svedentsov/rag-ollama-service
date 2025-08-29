@@ -113,4 +113,40 @@ public class AnalyticsController {
     public CompletableFuture<List<AgentResult>> analyzeCanaryDeployment(@Valid @RequestBody CanaryAnalysisRequest request) {
         return orchestratorService.invokePipeline("canary-analysis-pipeline", request.toAgentContext());
     }
+
+    /**
+     * Запускает агента для анализа всей истории багов и выявления системных паттернов.
+     *
+     * @param request DTO с периодом анализа.
+     * @return {@link CompletableFuture} с финальным отчетом о найденных паттернах.
+     */
+    @PostMapping("/bug-patterns")
+    @Operation(summary = "Проанализировать историю багов и выявить системные паттерны")
+    public CompletableFuture<List<AgentResult>> detectBugPatterns(@Valid @RequestBody BugPatternRequest request) {
+        return orchestratorService.invokePipeline("bug-pattern-detection-pipeline", request.toAgentContext());
+    }
+
+    /**
+     * Запускает агента для анализа и составления отчета о тестовом техническом долге.
+     *
+     * @param request DTO для запроса (в данный момент пустой).
+     * @return {@link CompletableFuture} с финальным отчетом.
+     */
+    @PostMapping("/test-debt-report")
+    @Operation(summary = "Получить отчет о тестовом техническом долге")
+    public CompletableFuture<List<AgentResult>> getTestDebtReport(@Valid @RequestBody TestDebtReportRequest request) {
+        return orchestratorService.invokePipeline("test-debt-report-pipeline", request.toAgentContext());
+    }
+
+    /**
+     * Запускает полный конвейер для анализа и принятия решения по канареечному развертыванию.
+     *
+     * @param request DTO с данными метрик и политикой принятия решений.
+     * @return {@link CompletableFuture} с результатом выполненного плана действий.
+     */
+    @PostMapping("/canary/orchestrate-decision")
+    @Operation(summary = "Провести анализ и оркестровать решение по canary-развертыванию")
+    public CompletableFuture<List<AgentResult>> orchestrateCanaryDecision(@Valid @RequestBody CanaryDecisionRequest request) {
+        return orchestratorService.invokePipeline("canary-decision-orchestration-pipeline", request.toAgentContext());
+    }
 }

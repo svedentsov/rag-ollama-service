@@ -1,6 +1,7 @@
 package com.example.ragollama.qaagent;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
@@ -33,10 +34,10 @@ public class AgentOrchestratorService {
      * интерфейс {@link ToolAgent}, и инициализирует реестр агентов
      * и статических конвейеров.
      *
-     * @param toolAgents Список всех реализаций {@link ToolAgent} (инструментов),
-     *                   найденных Spring'ом.
+     * @param toolAgentsProvider Провайдер для ленивого получения списка агентов.
      */
-    public AgentOrchestratorService(List<ToolAgent> toolAgents) {
+    public AgentOrchestratorService(ObjectProvider<List<ToolAgent>> toolAgentsProvider) {
+        List<ToolAgent> toolAgents = toolAgentsProvider.getObject();
         this.agentMap = toolAgents.stream()
                 .collect(Collectors.toMap(QaAgent::getName, Function.identity()));
         this.pipelines = definePipelines();
@@ -80,12 +81,14 @@ public class AgentOrchestratorService {
                 Map.entry("sca-compliance-pipeline", List.of(agentMap.get("sca-compliance-agent"))),
                 Map.entry("user-behavior-simulation-pipeline", List.of(agentMap.get("user-behavior-simulator"))),
                 Map.entry("privacy-compliance-check-pipeline", List.of(agentMap.get("privacy-compliance-checker"))),
+                Map.entry("test-mentor-pipeline", List.of(agentMap.get("test-mentor-bot"))),
 
                 // --- Multi-Agent Composite Pipelines ---
                 Map.entry("bug-reproduction-pipeline", List.of(
                         agentMap.get("bug-report-summarizer"),
                         agentMap.get("bug-repro-script-generator"))
                 ),
+                Map.entry("bug-pattern-detection-pipeline", List.of(agentMap.get("bug-pattern-detector"))),
                 Map.entry("bug-report-analysis-pipeline", List.of(
                         agentMap.get("bug-report-summarizer"),
                         agentMap.get("bug-duplicate-detector"))
@@ -158,7 +161,12 @@ public class AgentOrchestratorService {
                         agentMap.get("rbac-extractor"),
                         agentMap.get("persona-generator"),
                         agentMap.get("fuzzing-test-generator")
-                ))
+                )),
+                Map.entry("canary-decision-orchestration-pipeline", List.of(
+                        agentMap.get("canary-analyzer"),
+                        agentMap.get("canary-decision-orchestrator")
+                )),
+                Map.entry("feedback-to-test-pipeline", List.of(agentMap.get("feedback-to-test-converter")))
         );
     }
 

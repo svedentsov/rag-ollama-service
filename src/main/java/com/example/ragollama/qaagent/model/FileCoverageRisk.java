@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * DTO для представления результата аудита покрытия для одного файла.
  *
  * @param filePath           Путь к файлу.
- * @param coveragePercentage Процент покрытия методов (от 0.0 до 100.0).
+ * @param coveragePercentage Процент покрытия методов (от 0.0 до 100.0), полученный из JaCoCo.
  * @param riskLevel          Вычисленный уровень риска.
  * @param summary            Краткое описание риска.
  */

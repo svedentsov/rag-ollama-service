@@ -2,6 +2,7 @@ package com.example.ragollama.qaagent.api;
 
 import com.example.ragollama.qaagent.AgentOrchestratorService;
 import com.example.ragollama.qaagent.AgentResult;
+import com.example.ragollama.qaagent.api.dto.DataGenerationRequest;
 import com.example.ragollama.qaagent.api.dto.DataSubsetRequest;
 import com.example.ragollama.qaagent.api.dto.SyntheticDataDpRequest;
 import com.example.ragollama.qaagent.api.dto.SyntheticDataRequest;
@@ -72,5 +73,17 @@ public class DataGenerationController {
     @Operation(summary = "Создать синтетические данные с дифференциальной приватностью (DP)")
     public CompletableFuture<List<AgentResult>> createDpDataSubset(@Valid @RequestBody SyntheticDataDpRequest request) {
         return orchestratorService.invokePipeline("dp-synthetic-data-pipeline", request.toAgentContext());
+    }
+
+    /**
+     * Запускает агента для генерации статистически-релевантных синтетических данных.
+     *
+     * @param request DTO с SQL-запросом для исходных данных и количеством записей.
+     * @return {@link CompletableFuture} с отчетом, содержащим сгенерированные данные.
+     */
+    @PostMapping("/generate-statistical-data")
+    @Operation(summary = "Сгенерировать статистически-релевантные данные")
+    public CompletableFuture<List<AgentResult>> generateStatisticalData(@Valid @RequestBody DataGenerationRequest request) {
+        return orchestratorService.invokePipeline("statistical-data-generation-pipeline", request.toAgentContext());
     }
 }

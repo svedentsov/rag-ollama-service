@@ -26,9 +26,9 @@ import java.util.concurrent.CompletableFuture;
 /**
  * AI-агент, прогнозирующий регрессионные риски на основе совокупности данных.
  * <p>
- * Этот агент синтезирует информацию из трех источников: текущие изменения в коде,
- * их тестовое покрытие и историческую стабильность затронутых файлов,
- * чтобы предоставить комплексную оценку риска для каждого изменения.
+ * Этот агент синтезирует информацию из двух источников: текущее тестовое покрытие
+ * и историческую стабильность затронутых файлов, чтобы предоставить
+ * комплексную, приоритизированную оценку риска для каждого изменения.
  */
 @Slf4j
 @Component
@@ -40,47 +40,27 @@ public class RegressionPredictorAgent implements ToolAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public String getName() {
         return "regression-predictor";
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public String getDescription() {
-        return "Прогнозирует регрессионные риски, анализируя изменения в коде, их покрытие и историю дефектов.";
+        return "Прогнозирует регрессионные риски, анализируя тестовое покрытие и историю дефектов.";
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @param context Контекст, который должен содержать 'coverageRisks'.
-     * @return {@code true}, если все необходимые ключи присутствуют.
-     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey("coverageRisks");
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @param context Контекст, содержащий результаты работы предыдущих агентов.
-     * @return {@link CompletableFuture} со структурированным отчетом о рисках.
-     */
     @Override
     @SuppressWarnings("unchecked")
     public CompletableFuture<AgentResult> execute(AgentContext context) {
-        // Получаем результаты от предыдущего агента в конвейере
         List<FileCoverageRisk> coverageRisks = (List<FileCoverageRisk>) context.payload().get("coverageRisks");
         Map<String, Long> historicalFailures = historicalDefectService.getFailureCountsByClass(30);
 
-        // Собираем "досье" для LLM
         String dataForLlm;
         try {
             List<Map<String, Object>> riskProfiles = coverageRisks.stream()

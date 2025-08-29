@@ -20,6 +20,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * AI-агент, который проводит комплексный анализ тестового технического долга.
+ * <p>
+ * Он оркестрирует сбор данных от других агентов и сервисов (для flaky-тестов,
+ * медленных тестов и т.д.), агрегирует их и использует LLM для генерации
+ * стратегического резюме и рекомендаций.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -43,16 +50,15 @@ public class TestDebtAnalyzerAgent implements ToolAgent {
 
     @Override
     public boolean canHandle(AgentContext context) {
-        return true; // Агент запускается без внешних параметров
+        return true;
     }
 
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         // Шаг 1: Асинхронно собираем все виды техдолга
-        CompletableFuture<List<TestDebtItem>> flakyTestsFuture = findFlakyTests();
+        CompletableFuture<List<TestDebtItem>> flakyTestsFuture = findFlakyTests(context);
         CompletableFuture<List<TestDebtItem>> slowTestsFuture = findSlowTests();
-
-        // Шаг 2: Объединяем результаты
+        // Шаг 2: Объединяем результаты, когда оба завершатся
         return CompletableFuture.allOf(flakyTestsFuture, slowTestsFuture)
                 .thenCompose(v -> {
                     List<TestDebtItem> allItems = new ArrayList<>();
@@ -80,9 +86,12 @@ public class TestDebtAnalyzerAgent implements ToolAgent {
                 });
     }
 
-    private CompletableFuture<List<TestDebtItem>> findFlakyTests() {
-        return flakinessTrackerAgent.execute(new AgentContext(Map.of("days", 30)))
+    private CompletableFuture<List<TestDebtItem>> findFlakyTests(AgentContext context) {
+        return flakinessTrackerAgent.execute(context)
                 .thenApply(agentResult -> {
+                    if (!agentResult.details().containsKey("flakinessReport")) {
+                        return List.of();
+                    }
                     FlakinessReport report = (FlakinessReport) agentResult.details().get("flakinessReport");
                     return report.flakyTests().stream()
                             .map(ft -> new TestDebtItem(

@@ -5,8 +5,8 @@ import com.example.ragollama.qaagent.ToolAgent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -21,15 +21,20 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ToolRegistryService {
 
-    private final List<ToolAgent> allToolAgents;
+    private final ObjectProvider<List<ToolAgent>> allToolAgentsProvider;
     private final ObjectMapper objectMapper;
     private Map<String, QaAgent> agentMap;
 
+    public ToolRegistryService(ObjectProvider<List<ToolAgent>> allToolAgentsProvider, ObjectMapper objectMapper) {
+        this.allToolAgentsProvider = allToolAgentsProvider;
+        this.objectMapper = objectMapper;
+    }
+
     @PostConstruct
     public void init() {
+        List<ToolAgent> allToolAgents = allToolAgentsProvider.getObject();
         agentMap = allToolAgents.stream()
                 .collect(Collectors.toMap(QaAgent::getName, Function.identity()));
         log.info("ToolRegistryService инициализирован. Зарегистрировано {} инструментов: {}", agentMap.size(), agentMap.keySet());
@@ -51,7 +56,7 @@ public class ToolRegistryService {
      * @return JSON-строка с "каталогом инструментов" для LLM-планировщика.
      */
     public String getToolDescriptionsAsJson() {
-        List<Map<String, String>> toolDescriptions = allToolAgents.stream()
+        List<Map<String, String>> toolDescriptions = agentMap.values().stream()
                 .map(agent -> Map.of(
                         "name", agent.getName(),
                         "description", agent.getDescription()

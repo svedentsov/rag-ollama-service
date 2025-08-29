@@ -5,6 +5,7 @@ import com.example.ragollama.qaagent.AgentResult;
 import com.example.ragollama.qaagent.QaAgent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +22,7 @@ import java.util.*;
 @RequiredArgsConstructor
 public class DynamicPipelineExecutionService {
 
-    private final ToolRegistryService toolRegistry;
+    private final ObjectProvider<ToolRegistryService> toolRegistryProvider;
     private final ExecutionStateRepository executionStateRepository;
 
     public Mono<List<AgentResult>> executePlan(List<PlanStep> plan, AgentContext initialContext, UUID sessionId) {
@@ -63,6 +64,7 @@ public class DynamicPipelineExecutionService {
     private Mono<List<AgentResult>> runPipelineFrom(ExecutionState state) {
         List<AgentResult> accumulatedResults = new ArrayList<>();
         Mono<ExecutionState> executionChain = Mono.just(state);
+        ToolRegistryService toolRegistry = toolRegistryProvider.getObject();
 
         for (int i = state.getCurrentStepIndex(); i < state.getPlanSteps().size(); i++) {
             final int currentStepIndex = i;
@@ -86,7 +88,7 @@ public class DynamicPipelineExecutionService {
             }
 
             executionChain = executionChain.flatMap(currentState ->
-                    executeStep(step, new AgentContext(currentState.getAccumulatedContext()))
+                    executeStep(step, new AgentContext(currentState.getAccumulatedContext()), toolRegistry)
                             .doOnNext(result -> {
                                 accumulatedResults.add(result);
                                 currentState.getAccumulatedContext().putAll(result.details());
@@ -106,7 +108,7 @@ public class DynamicPipelineExecutionService {
         });
     }
 
-    private Mono<AgentResult> executeStep(PlanStep step, AgentContext currentContext) {
+    private Mono<AgentResult> executeStep(PlanStep step, AgentContext currentContext, ToolRegistryService toolRegistry) {
         Map<String, Object> stepPayload = new HashMap<>(currentContext.payload());
         stepPayload.putAll(step.arguments());
         AgentContext stepContext = new AgentContext(stepPayload);

@@ -17,6 +17,9 @@ import java.util.List;
 
 /**
  * Контроллер для высокоуровневого, языкового управления жизненным циклом разработки.
+ * <p>
+ * Предоставляет единый, интеллектуальный эндпоинт, который скрывает всю
+ * сложность нижележащих агентных конвейеров.
  */
 @RestController
 @RequestMapping("/api/v1/sdlc")
@@ -33,7 +36,9 @@ public class SdlcController {
      * @return {@link Mono} с агрегированными результатами всех выполненных конвейеров.
      */
     @PostMapping("/execute")
-    @Operation(summary = "Выполнить высокоуровневую SDLC-задачу")
+    @Operation(summary = "Выполнить высокоуровневую SDLC-задачу",
+            description = "Принимает задачу на естественном языке (например, 'провести полный аудит безопасности'). " +
+                    "AI-планировщик сам выберет и запустит необходимые конвейеры.")
     public Mono<List<AgentResult>> executeSdlcGoal(@Valid @RequestBody SdlcRequest request) {
         return orchestratorAgent.execute(request.goal(), request.toAgentContext());
     }

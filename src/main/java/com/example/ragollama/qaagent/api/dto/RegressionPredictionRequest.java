@@ -28,6 +28,11 @@ public record RegressionPredictionRequest(
         @NotBlank
         String jacocoReportContent
 ) {
+    /**
+     * Преобразует DTO в {@link AgentContext}.
+     *
+     * @return Контекст для запуска конвейера.
+     */
     public AgentContext toAgentContext() {
         return new AgentContext(Map.of(
                 "oldRef", oldRef,

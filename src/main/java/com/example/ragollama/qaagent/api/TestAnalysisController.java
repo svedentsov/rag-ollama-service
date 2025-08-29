@@ -153,4 +153,16 @@ public class TestAnalysisController {
     public CompletableFuture<List<AgentResult>> getMentorshipReview(@Valid @RequestBody TestMentorshipRequest request) {
         return orchestratorService.invokePipeline("test-mentor-pipeline", request.toAgentContext());
     }
+
+    /**
+     * Запускает конвейер для построения комплексного, иерархического чек-листа.
+     *
+     * @param request DTO с целью и Git-ссылками для контекста.
+     * @return {@link CompletableFuture} с результатом, содержащим чек-лист в формате Markdown.
+     */
+    @PostMapping("/build-checklist")
+    @Operation(summary = "Построить комплексный, иерархический чек-лист")
+    public CompletableFuture<List<AgentResult>> buildChecklist(@Valid @RequestBody ChecklistBuilderRequest request) {
+        return orchestratorService.invokePipeline("checklist-building-pipeline", request.toAgentContext());
+    }
 }

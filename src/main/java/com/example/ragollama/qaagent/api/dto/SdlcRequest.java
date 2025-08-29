@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * DTO для высокоуровневого запроса к SDLC Orchestrator.
@@ -30,6 +31,6 @@ public record SdlcRequest(
      * @return Контекст для запуска.
      */
     public AgentContext toAgentContext() {
-        return new AgentContext(initialContext != null ? initialContext : Map.of());
+        return new AgentContext(Optional.ofNullable(initialContext).orElse(Map.of()));
     }
 }

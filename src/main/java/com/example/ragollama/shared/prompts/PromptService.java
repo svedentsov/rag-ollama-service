@@ -82,6 +82,10 @@ public class PromptService {
             Map.entry("privacyComplianceChecker", "privacy-compliance-checker-prompt.ftl"),
             Map.entry("testMentorBot", "test-mentor-bot-prompt.ftl"),
             Map.entry("cypherQueryGenerator", "cypher-query-generator-prompt.ftl"),
+            Map.entry("feedbackToTest", "feedback-to-test-prompt.ftl"),
+            Map.entry("canaryDecisionMaker", "canary-decision-maker-prompt.ftl"),
+            Map.entry("checklistBuilder", "checklist-builder-prompt.ftl"),
+            Map.entry("bugPatternDetector", "bug-pattern-detector-prompt.ftl"),
 
             // Summarization & Data Generation
             Map.entry("summarization", "summarization-prompt.ftl"),
@@ -90,6 +94,7 @@ public class PromptService {
             Map.entry("syntheticDataBuilder", "synthetic-data-builder-prompt.ftl"),
             Map.entry("dataSubsetSqlGenerator", "data-subset-sql-generator-prompt.ftl"),
             Map.entry("dpSyntheticDataGenerator", "dp-synthetic-data-generator-prompt.ftl"),
+            Map.entry("dataGenerator", "data-generator-prompt.ftl"),
             Map.entry("testCaseGeneration", "test-case-generation-prompt.ftl"),
             Map.entry("checklistGenerator", "checklist-generator-prompt.ftl"),
 
