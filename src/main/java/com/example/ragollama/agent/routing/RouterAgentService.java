@@ -14,9 +14,11 @@ import java.util.Map;
 /**
  * Сервис, реализующий логику "Router Agent".
  * <p>
- * Эта финальная версия содержит усиленный промпт и более интеллектуальную
- * логику парсинга для точного разграничения между вопросами для RAG
- * и командами на обработку текста (Summarization).
+ * Его единственная задача — быстро классифицировать запрос пользователя,
+ * определив его намерение (intent). Для этого используется легковесная LLM
+ * и специализированный промпт, что обеспечивает минимальную задержку.
+ * Результат работы этого сервиса используется {@link com.example.ragollama.orchestration.OrchestrationService}
+ * для выбора правильного конвейера обработки.
  */
 @Slf4j
 @Service
@@ -27,10 +29,10 @@ public class RouterAgentService {
     private final PromptService promptService;
 
     /**
-     * Асинхронно определяет намерение пользователя.
+     * Асинхронно определяет намерение пользователя на основе его запроса.
      *
      * @param query Запрос пользователя.
-     * @return {@link Mono} с определенным {@link QueryIntent}.
+     * @return {@link Mono}, который по завершении будет содержать определенный {@link QueryIntent}.
      */
     public Mono<QueryIntent> route(String query) {
         String promptString = promptService.render("routerAgent", Map.of("query", query));

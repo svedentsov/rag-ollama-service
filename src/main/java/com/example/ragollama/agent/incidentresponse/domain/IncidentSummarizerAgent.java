@@ -34,21 +34,33 @@ public class IncidentSummarizerAgent implements ToolAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "incident-summarizer";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Анализирует данные об инциденте и формирует сводный отчет с гипотезой о причине.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey("alertName") && context.payload().containsKey("changedFiles");
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         try {
@@ -69,6 +81,13 @@ public class IncidentSummarizerAgent implements ToolAgent {
         }
     }
 
+    /**
+     * Безопасно парсит JSON-ответ от LLM в {@link IncidentReport}.
+     *
+     * @param jsonResponse Ответ от LLM.
+     * @return Десериализованный объект {@link IncidentReport}.
+     * @throws ProcessingException если парсинг не удался.
+     */
     private IncidentReport parseLlmResponse(String jsonResponse) {
         try {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);

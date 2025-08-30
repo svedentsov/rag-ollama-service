@@ -35,7 +35,8 @@ public class DocumentProcessingWorker {
      * <p>
      * Метод извлекает задачу из базы данных, преобразует ее в универсальный
      * запрос на индексацию и передает его в {@link IndexingPipelineService}.
-     * Управляет статусом задачи в БД.
+     * Управляет статусом задачи в БД, оборачивая логику в try-catch для
+     * надежной обработки ошибок.
      *
      * @param jobId Идентификатор задачи для обработки.
      */
@@ -62,11 +63,13 @@ public class DocumentProcessingWorker {
     }
 
     /**
-     * Обновляет статус задачи в отдельной транзакции.
+     * Обновляет статус задачи в отдельной, новой транзакции.
+     * Это гарантирует, что статус будет сохранен даже если основная
+     * транзакция обработки будет отменена.
      *
-     * @param jobId        ID задачи.
+     * @param jobId        Идентификатор задачи для обновления.
      * @param newStatus    Новый статус.
-     * @param errorMessage Сообщение об ошибке (если есть).
+     * @param errorMessage Сообщение об ошибке, если статус FAILED.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void updateJobStatus(UUID jobId, JobStatus newStatus, String errorMessage) {

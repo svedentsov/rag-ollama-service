@@ -13,10 +13,13 @@ import java.time.Instant;
 import java.util.stream.Collectors;
 
 /**
- * Глобальный обработчик исключений для всего приложения.
+ * Глобальный обработчик исключений, реализующий централизованную и
+ * унифицированную логику обработки ошибок для всего приложения.
  * <p>
- * Добавлен обработчик для {@link ProcessingException}, чтобы возвращать
- * клиенту корректный код ошибки в случае сбоя парсинга ответа от LLM.
+ * Этот компонент перехватывает исключения, выброшенные из любого контроллера,
+ * логирует их, записывает метрики и возвращает клиенту стандартизированный
+ * ответ об ошибке в формате {@link ProblemDetail} (RFC 7807), скрывая
+ * детали внутренней реализации и stack trace.
  */
 @RestControllerAdvice
 @Slf4j
@@ -114,6 +117,12 @@ public class GlobalExceptionHandler {
         return problemDetail;
     }
 
+    /**
+     * Обрабатывает все остальные, непредвиденные исключения.
+     *
+     * @param e Любое необработанное исключение.
+     * @return {@link ProblemDetail} с кодом 500 (Internal Server Error).
+     */
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleGenericException(Exception e) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Произошла внутренняя ошибка сервера.");

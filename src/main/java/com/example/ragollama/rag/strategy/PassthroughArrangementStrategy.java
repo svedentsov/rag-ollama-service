@@ -12,7 +12,7 @@ import java.util.List;
  * никаких изменений в порядок документов.
  * <p>
  * Эта стратегия используется по умолчанию или когда требуется передать
- * в LLM документы в том порядке, в котором их вернул векторный поиск
+ * в LLM документы в том порядке, в котором их вернул этап поиска/реранжирования
  * (т.е. строго по убыванию релевантности).
  * <p>
  * Активируется при {@code app.rag.arrangement-strategy=passthrough} или если
@@ -23,6 +23,9 @@ import java.util.List;
 @ConditionalOnProperty(name = "app.rag.arrangement-strategy", havingValue = "passthrough", matchIfMissing = true)
 public class PassthroughArrangementStrategy implements ContextArrangementStrategy {
 
+    /**
+     * Конструктор, логирующий активацию стратегии.
+     */
     public PassthroughArrangementStrategy() {
         log.info("Активирована стратегия компоновки контекста: PassthroughArrangementStrategy (по умолчанию)");
     }

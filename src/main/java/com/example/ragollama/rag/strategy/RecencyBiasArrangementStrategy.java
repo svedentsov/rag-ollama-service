@@ -27,8 +27,14 @@ import java.util.Objects;
 @ConditionalOnProperty(name = "app.rag.arrangement-strategy", havingValue = "recency")
 public class RecencyBiasArrangementStrategy implements ContextArrangementStrategy {
 
+    /**
+     * Ключ в метаданных, по которому ищется временная метка.
+     */
     public static final String TIMESTAMP_METADATA_KEY = "timestamp";
 
+    /**
+     * Конструктор, логирующий активацию стратегии.
+     */
     public RecencyBiasArrangementStrategy() {
         log.info("Активирована стратегия компоновки контекста: RecencyBiasArrangementStrategy");
     }

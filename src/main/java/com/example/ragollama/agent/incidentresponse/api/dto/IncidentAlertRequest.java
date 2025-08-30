@@ -15,15 +15,31 @@ import java.util.Map;
  */
 @Schema(description = "DTO для веб-хука от системы мониторинга")
 public record IncidentAlertRequest(
-        @NotBlank String alertName,
-        @NotBlank String details,
+        @Schema(description = "Имя сработавшего алерта", requiredMode = Schema.RequiredMode.REQUIRED, example = "HighLatencyError")
+        @NotBlank
+        String alertName,
+
+        @Schema(description = "Детали алерта", requiredMode = Schema.RequiredMode.REQUIRED, example = "P99 latency for /api/v1/payments is over 2000ms")
+        @NotBlank
+        String details,
+
+        @Schema(description = "Фрагмент логов, связанный с алертом")
         String logSnippet
 ) {
+    /**
+     * Преобразует DTO в {@link AgentContext} для передачи в конвейер.
+     *
+     * @return Контекст для запуска агента.
+     */
     public AgentContext toAgentContext() {
+        // Устанавливаем разумные значения по умолчанию для Git-ссылок,
+        // так как агент будет искать последние изменения в main.
         return new AgentContext(Map.of(
                 "alertName", this.alertName,
                 "details", this.details,
-                "applicationLogs", this.logSnippet != null ? this.logSnippet : ""
+                "applicationLogs", this.logSnippet != null ? this.logSnippet : "",
+                "oldRef", "main~10", // последние 10 коммитов в main
+                "newRef", "main"
         ));
     }
 }

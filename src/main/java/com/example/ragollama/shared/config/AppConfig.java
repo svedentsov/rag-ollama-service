@@ -1,6 +1,7 @@
 package com.example.ragollama.shared.config;
 
 import com.example.ragollama.shared.config.properties.AppProperties;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
@@ -13,6 +14,8 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.core.task.TaskDecorator;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.http.codec.json.Jackson2JsonDecoder;
+import org.springframework.http.codec.json.Jackson2JsonEncoder;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.security.task.DelegatingSecurityContextAsyncTaskExecutor;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -29,19 +32,34 @@ import java.util.concurrent.TimeUnit;
  * <p>
  * В этой версии конфигурация пула потоков дополнена {@link TaskDecorator}
  * для автоматического проброса контекста логирования (MDC) в асинхронные задачи,
- * что обеспечивает сквозную трассировку по `requestId`.
+ * что обеспечивает сквозную трассировку по `requestId`. Также WebClient настраивается
+ * с кастомным ObjectMapper.
  */
 @Configuration
 @RequiredArgsConstructor
 public class AppConfig {
 
     private final AppProperties appProperties;
+    private final ObjectMapper objectMapper;
 
+    /**
+     * Включает автоматическую передачу контекста Reactor в другие контексты,
+     * такие как MDC, при старте приложения.
+     */
     @PostConstruct
     void initializeReactorContext() {
         Hooks.enableAutomaticContextPropagation();
     }
 
+    /**
+     * Создает и настраивает основной, переиспользуемый строитель для {@link WebClient}.
+     * <p>
+     * Эта конфигурация является центральной точкой для всех HTTP-взаимодействий. Она
+     * устанавливает таймауты, пулы соединений и использует кастомный {@link ObjectMapper},
+     * что обеспечивает консистентность и надежность всех внешних вызовов.
+     *
+     * @return Сконфигурированный {@link WebClient.Builder}.
+     */
     @Bean
     @Primary
     public WebClient.Builder webClientBuilder() {
@@ -53,7 +71,11 @@ public class AppConfig {
                         .addHandlerLast(new ReadTimeoutHandler(httpClientProps.readWriteTimeout().toSeconds(), TimeUnit.SECONDS))
                         .addHandlerLast(new WriteTimeoutHandler(httpClientProps.readWriteTimeout().toSeconds(), TimeUnit.SECONDS)));
         return WebClient.builder()
-                .clientConnector(new ReactorClientHttpConnector(httpClient));
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .codecs(configurer -> {
+                    configurer.defaultCodecs().jackson2JsonEncoder(new Jackson2JsonEncoder(objectMapper));
+                    configurer.defaultCodecs().jackson2JsonDecoder(new Jackson2JsonDecoder(objectMapper));
+                });
     }
 
     /**
@@ -80,8 +102,15 @@ public class AppConfig {
 
     /**
      * Декоратор, который копирует MDC-контекст из родительского потока в дочерний.
+     * Это обеспечивает сквозную трассировку по `requestId` в асинхронных операциях.
      */
     static class MdcTaskDecorator implements TaskDecorator {
+        /**
+         * Оборачивает {@link Runnable}, копируя в него MDC-контекст.
+         *
+         * @param runnable Исходная задача.
+         * @return Обернутая задача с сохраненным контекстом.
+         */
         @Override
         public Runnable decorate(Runnable runnable) {
             Map<String, String> contextMap = MDC.getCopyOfContextMap();

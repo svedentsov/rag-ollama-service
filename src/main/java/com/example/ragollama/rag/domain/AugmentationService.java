@@ -18,9 +18,10 @@ import java.util.stream.Collectors;
 /**
  * Сервис, отвечающий за этап обогащения (Augmentation) в RAG-конвейере.
  * <p>
- * Эта версия использует наш кастомный {@link PromptService} для рендеринга
- * шаблона, что обеспечивает полный контроль и независимость от
- * стандартного рендерера Spring AI.
+ * Его задача - принять извлеченные документы и исходный запрос,
+ * применить к ним различные бизнес-правила и эвристики через цепочку
+ * "Советников" (Advisors), а затем, используя результат, сформировать
+ * финальный, готовый к отправке в LLM промпт.
  */
 @Service
 @Slf4j
@@ -32,29 +33,30 @@ public class AugmentationService {
     private final PromptService promptService;
 
     /**
-     * Выполняет обогащение, последовательно применяя все доступные советники
-     * и формируя промпт с помощью кастомного {@link PromptService}.
+     * Асинхронно выполняет полный цикл обогащения контекста и генерации промпта.
      *
-     * @param documents   Извлеченные документы.
-     * @param query       Запрос пользователя.
-     * @param chatHistory История чата.
-     * @return {@link Mono} с полностью готовым промптом.
+     * @param documents   Список документов, извлеченных на этапе Retrieval.
+     * @param query       Оригинальный запрос пользователя.
+     * @param chatHistory История предыдущего диалога для поддержания контекста.
+     * @return {@link Mono}, который по завершении будет содержать полностью
+     * сформированный и готовый к отправке в LLM объект {@link Prompt}.
      */
     public Mono<Prompt> augment(List<Document> documents, String query, List<Message> chatHistory) {
         RagContext initialContext = new RagContext(query);
         initialContext.setDocuments(documents);
-
+        // Последовательно применяем всех советников к контексту
         Mono<RagContext> finalContextMono = Flux.fromIterable(advisors)
                 .reduce(Mono.just(initialContext), (contextMono, advisor) -> contextMono.flatMap(advisor::advise))
                 .flatMap(mono -> mono);
-
         return finalContextMono.map(finalContext -> {
+            // Собираем финальный контекст с учетом лимита токенов
             List<Document> documentsForContext = contextAssemblerService.assembleContext(finalContext.getDocuments());
-
+            // Готовим модель для рендеринга шаблона
             finalContext.getPromptModel().put("documents", documentsForContext);
             finalContext.getPromptModel().put("question", query);
             String historyString = formatHistory(chatHistory);
             finalContext.getPromptModel().put("history", historyString);
+            // Рендерим шаблон
             String promptString = promptService.render("ragPrompt", finalContext.getPromptModel());
             log.debug("Этап Augmentation успешно завершен. Использовано {} документов в контексте.", documentsForContext.size());
             return new Prompt(promptString);
@@ -62,7 +64,7 @@ public class AugmentationService {
     }
 
     /**
-     * Форматирует историю сообщений в строку для подстановки в промпт.
+     * Форматирует историю сообщений в единую строку для подстановки в промпт.
      *
      * @param chatHistory Список сообщений из Spring AI.
      * @return Отформатированная строка истории.

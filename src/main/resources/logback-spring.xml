@@ -55,4 +55,10 @@
         <appender-ref ref="RollingFile"/>
     </logger>
 
+    <!-- Уменьшаем "шум" от некоторых библиотек -->
+    <logger name="org.hibernate" level="info"/>
+    <logger name="org.springframework.web" level="info"/>
+    <logger name="org.springframework.security" level="info"/>
+    <logger name="com.zaxxer.hikari" level="info"/>
+
 </configuration>

@@ -13,12 +13,16 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Стратегия переранжирования, которая повышает оценку документов, содержащих ключевые слова из оригинального запроса.
+ * Стратегия переранжирования, которая повышает оценку документов, содержащих
+ * точные ключевые слова из оригинального запроса.
+ * <p>
+ * Эта стратегия полезна для "гибридизации" семантического поиска, добавляя
+ * к нему элемент лексического (keyword) соответствия.
  * Активируется свойством {@code app.reranking.strategies.keyword-boost.enabled=true}.
  */
 @Slf4j
 @Component
-@Order(10) // Будет применена первой
+@Order(10) // Будет применена одной из первых
 @ConditionalOnProperty(name = "app.reranking.strategies.keyword-boost.enabled", havingValue = "true")
 @RequiredArgsConstructor
 public class KeywordBoostStrategy implements RerankingStrategy {

@@ -117,7 +117,12 @@ public class PromptService {
             Map.entry("testTrendAnalyzer", "test-trend-analyzer-prompt.ftl"),
             Map.entry("regressionPredictor", "regression-predictor-prompt.ftl"),
             Map.entry("testDebtSummary", "test-debt-summary-prompt.ftl"),
-            Map.entry("riskMatrixSummary", "risk-matrix-summary-prompt.ftl")
+            Map.entry("riskMatrixSummary", "risk-matrix-summary-prompt.ftl"),
+            Map.entry("prReviewAggregator", "pr-review-aggregator-prompt.ftl"),
+            Map.entry("copilotResultSummarizer", "copilot-result-summarizer-prompt.ftl"),
+            Map.entry("releaseDecision", "release-decision-prompt.ftl"),
+            Map.entry("releaseReadiness", "release-readiness-prompt.ftl"),
+            Map.entry("customerImpactAnalyzer", "customer-impact-analyzer-prompt.ftl")
     );
 
     /**

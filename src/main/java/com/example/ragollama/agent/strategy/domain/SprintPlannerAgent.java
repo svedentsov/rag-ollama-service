@@ -35,21 +35,33 @@ public class SprintPlannerAgent implements ToolAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "sprint-planner";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Анализирует паттерны багов и формирует план на спринт.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey("bugPatternReport");
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         BugPatternReport bugPatternReport = (BugPatternReport) context.payload().get("bugPatternReport");
@@ -72,6 +84,13 @@ public class SprintPlannerAgent implements ToolAgent {
         }
     }
 
+    /**
+     * Безопасно парсит JSON-ответ от LLM в {@link SprintPlan}.
+     *
+     * @param jsonResponse Ответ от LLM.
+     * @return Десериализованный объект {@link SprintPlan}.
+     * @throws ProcessingException если парсинг не удался.
+     */
     private SprintPlan parseLlmResponse(String jsonResponse) {
         try {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);

@@ -29,11 +29,11 @@ public class DocumentIngestionService {
     private final DocumentProcessingWorker documentProcessingWorker;
 
     /**
-     * Сохраняет документ и регистрирует задачу на асинхронную обработку
-     * после успешного завершения транзакции.
+     * Сохраняет метаданные о документе и регистрирует задачу на асинхронную обработку
+     * и индексацию, которая будет запущена после успешного завершения текущей транзакции.
      *
      * @param request DTO с данными документа.
-     * @return Уникальный ID созданной задачи (Job ID).
+     * @return Уникальный идентификатор (UUID) созданной задачи на обработку (Job ID).
      */
     @Transactional
     public UUID scheduleDocumentIngestion(DocumentIngestionRequest request) {
@@ -47,7 +47,8 @@ public class DocumentIngestionService {
                 documentProcessingWorker.processDocument(savedJob.getId());
             }
         });
-        log.info("Документ '{}' успешно сохранен. Асинхронная обработка будет запущена после коммита. Job ID: {}", savedJob.getSourceName(), savedJob.getId());
+        log.info("Документ '{}' успешно сохранен. Асинхронная обработка будет запущена после коммита. Job ID: {}",
+                savedJob.getSourceName(), savedJob.getId());
         return savedJob.getId();
     }
 }

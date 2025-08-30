@@ -14,7 +14,7 @@ import java.util.List;
  * <p>
  * Эта стратегия борется с проблемой "Lost in the Middle" у LLM, помещая
  * самые релевантные документы в начало и конец списка, где у модели
- * максимальное "внимание".
+ * максимальное "внимание". Наименее релевантные документы оказываются в середине.
  * <p>
  * Активируется при {@code app.rag.arrangement-strategy=sandwich}.
  */
@@ -23,6 +23,9 @@ import java.util.List;
 @ConditionalOnProperty(name = "app.rag.arrangement-strategy", havingValue = "sandwich")
 public class SandwichArrangementStrategy implements ContextArrangementStrategy {
 
+    /**
+     * Конструктор, логирующий активацию стратегии.
+     */
     public SandwichArrangementStrategy() {
         log.info("Активирована стратегия компоновки контекста: SandwichArrangementStrategy");
     }
@@ -50,10 +53,11 @@ public class SandwichArrangementStrategy implements ContextArrangementStrategy {
                 reordered.add(sortedDocs.get(left++)); // Добавляем самый релевантный
             }
             if (left <= right) {
-                reordered.add(sortedDocs.get(right--)); // Добавляем наименее релевантный (для разнообразия)
+                reordered.add(sortedDocs.get(right--)); // Добавляем наименее релевантный (из текущего списка)
             }
         }
-        log.debug("Документы переупорядочены для стратегии 'Сэндвич'. Исходный размер: {}, итоговый: {}.", sortedDocs.size(), reordered.size());
+        log.debug("Документы переупорядочены для стратегии 'Сэндвич'. Исходный размер: {}, итоговый: {}.",
+                sortedDocs.size(), reordered.size());
         return reordered;
     }
 }

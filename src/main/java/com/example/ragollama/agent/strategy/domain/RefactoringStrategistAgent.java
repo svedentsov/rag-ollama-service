@@ -34,22 +34,34 @@ public class RefactoringStrategistAgent implements ToolAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "refactoring-strategist";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Анализирует отчеты о здоровье репозитория и предлагает стратегические инициативы по рефакторингу.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         // Запускается как финальный шаг, если есть отчеты для анализа
         return context.payload().containsKey("testDebtReport") || context.payload().containsKey("bugPatternReport");
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         try {
@@ -69,6 +81,13 @@ public class RefactoringStrategistAgent implements ToolAgent {
         }
     }
 
+    /**
+     * Безопасно парсит JSON-ответ от LLM в {@link RefactoringReport}.
+     *
+     * @param jsonResponse Ответ от LLM.
+     * @return Десериализованный объект {@link RefactoringReport}.
+     * @throws ProcessingException если парсинг не удался.
+     */
     private RefactoringReport parseLlmResponse(String jsonResponse) {
         try {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);

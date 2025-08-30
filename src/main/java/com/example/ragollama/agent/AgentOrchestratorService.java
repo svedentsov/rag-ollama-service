@@ -13,191 +13,38 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Сервис-оркестратор, управляющий выполнением **статических, жестко
- * заданных конвейеров** из QA-агентов.
+ * Сервис-оркестратор, который управляет выполнением конвейеров AI-агентов.
  * <p>
- * Этот класс является простым и надежным исполнителем для часто используемых
- * сценариев, которые не требуют гибкости динамического AI-планировщика.
- * Он автоматически обнаруживает все доступные бины {@link ToolAgent} (инструменты)
- * при старте приложения, а затем компонует их в предопределенные
- * последовательности (конвейеры) в методе {@code definePipelines}.
+ * Эта версия реализует паттерн "Стратегия". Оркестратор автоматически обнаруживает
+ * все бины, реализующие {@link AgentPipeline}, и предоставляет API для их
+ * асинхронного запуска по имени. Он не содержит логики композиции конвейеров,
+ * а лишь делегирует выполнение соответствующей "стратегии" (реализации конвейера).
+ *
+ * @see AgentPipeline
  */
 @Slf4j
 @Service
 public class AgentOrchestratorService {
 
-    private final Map<String, QaAgent> agentMap;
-    private final Map<String, List<QaAgent>> pipelines;
+    private final Map<String, AgentPipeline> pipelines;
 
     /**
-     * Конструктор, который автоматически обнаруживает все бины, реализующие
-     * интерфейс {@link ToolAgent}, и инициализирует реестр агентов
-     * и статических конвейеров.
+     * Конструктор, который автоматически обнаруживает все доступные конвейеры
+     * (бины, реализующие {@link AgentPipeline}) и инициализирует их реестр.
      *
-     * @param toolAgentsProvider Провайдер для ленивого получения списка агентов.
+     * @param pipelineProvider Провайдер для ленивого получения списка бинов конвейеров.
      */
-    public AgentOrchestratorService(ObjectProvider<List<ToolAgent>> toolAgentsProvider) {
-        List<ToolAgent> toolAgents = toolAgentsProvider.getObject();
-        this.agentMap = toolAgents.stream()
-                .collect(Collectors.toMap(QaAgent::getName, Function.identity()));
-        this.pipelines = definePipelines();
-        log.info("AgentOrchestratorService инициализирован. Доступные инструменты: {}. Статические конвейеры: {}",
-                agentMap.keySet(), pipelines.keySet());
-    }
-
-    /**
-     * Определяет все доступные статические конвейеры в системе.
-     * <p>
-     * Этот метод является центральным реестром всех многошаговых процессов.
-     * Он компонует атомарных агентов в сложные цепочки для решения
-     * конкретных бизнес-задач.
-     *
-     * @return Карта, где ключ - уникальное имя конвейера, а значение -
-     * упорядоченный список агентов для выполнения.
-     */
-    private Map<String, List<QaAgent>> definePipelines() {
-        return Map.ofEntries(
-                // --- Single-Agent Pipelines (Tools) ---
-                Map.entry("git-inspector-pipeline", List.of(agentMap.get("git-inspector"))),
-                Map.entry("openapi-pipeline", List.of(agentMap.get("openapi-agent"))),
-                Map.entry("flaky-test-detection-pipeline", List.of(agentMap.get("flaky-test-detector"))),
-                Map.entry("spec-drift-sentinel-pipeline", List.of(agentMap.get("spec-drift-sentinel"))),
-                Map.entry("github-pr-pipeline", List.of(agentMap.get("test-prioritizer"))),
-                Map.entry("jira-bug-creation-pipeline", List.of(agentMap.get("bug-duplicate-detector"))),
-                Map.entry("test-case-generation-pipeline", List.of(agentMap.get("test-case-generator"))),
-                Map.entry("checklist-generation-pipeline", List.of(agentMap.get("checklist-generator"))),
-                Map.entry("test-verifier-pipeline", List.of(agentMap.get("test-verifier"))),
-                Map.entry("test-case-deduplication-pipeline", List.of(agentMap.get("test-case-deduplicator"))),
-                Map.entry("contract-test-generation-pipeline", List.of(agentMap.get("contract-test-generator"))),
-                Map.entry("accessibility-audit-pipeline", List.of(agentMap.get("accessibility-auditor"))),
-                Map.entry("test-smell-refactoring-pipeline", List.of(agentMap.get("test-smell-refactorer"))),
-                Map.entry("data-subset-masking-pipeline", List.of(agentMap.get("data-subset-masker"))),
-                Map.entry("synthetic-data-generation-pipeline", List.of(agentMap.get("synthetic-data-builder"))),
-                Map.entry("e2e-flow-synthesis-pipeline", List.of(agentMap.get("e2e-flow-synthesizer"))),
-                Map.entry("canary-analysis-pipeline", List.of(agentMap.get("canary-analyzer"))),
-                Map.entry("dp-synthetic-data-pipeline", List.of(agentMap.get("dp-synthetic-data-generator"))),
-                Map.entry("xai-test-oracle-pipeline", List.of(agentMap.get("xai-test-oracle"))),
-                Map.entry("arch-consistency-mapping-pipeline", List.of(agentMap.get("arch-consistency-mapper"))),
-                Map.entry("sca-compliance-pipeline", List.of(agentMap.get("sca-compliance-agent"))),
-                Map.entry("user-behavior-simulation-pipeline", List.of(agentMap.get("user-behavior-simulator"))),
-                Map.entry("privacy-compliance-check-pipeline", List.of(agentMap.get("privacy-compliance-checker"))),
-                Map.entry("test-mentor-pipeline", List.of(agentMap.get("test-mentor-bot"))),
-
-                // --- Multi-Agent Composite Pipelines ---
-                Map.entry("bug-reproduction-pipeline", List.of(
-                        agentMap.get("bug-report-summarizer"),
-                        agentMap.get("bug-repro-script-generator"))
-                ),
-                Map.entry("bug-pattern-detection-pipeline", List.of(agentMap.get("bug-pattern-detector"))),
-                Map.entry("bug-report-analysis-pipeline", List.of(
-                        agentMap.get("bug-report-summarizer"),
-                        agentMap.get("bug-duplicate-detector"))
-                ),
-                Map.entry("jira-update-analysis-pipeline", List.of(
-                        agentMap.get("jira-fetcher"),
-                        agentMap.get("bug-duplicate-detector"))
-                ),
-                Map.entry("test-coverage-pipeline", List.of(
-                        agentMap.get("git-inspector"),
-                        agentMap.get("test-gap-analyzer"))
-                ),
-                Map.entry("security-audit-pipeline", List.of(
-                        agentMap.get("git-inspector"),
-                        agentMap.get("rbac-extractor"),
-                        agentMap.get("security-risk-scorer")
-                )),
-                Map.entry("full-security-audit-pipeline", List.of(
-                        agentMap.get("git-inspector"),
-                        agentMap.get("sast-agent"),
-                        agentMap.get("dast-test-generator"),
-                        agentMap.get("security-log-analyzer"),
-                        agentMap.get("security-report-aggregator")
-                )),
-                Map.entry("compliance-evidence-pipeline", List.of(
-                        agentMap.get("git-inspector"),
-                        agentMap.get("test-gap-analyzer"),
-                        agentMap.get("sast-agent"),
-                        agentMap.get("compliance-report-generator")
-                )),
-                Map.entry("root-cause-analysis-pipeline", List.of(
-                        agentMap.get("flaky-test-detector"),
-                        agentMap.get("git-inspector"),
-                        agentMap.get("root-cause-analyzer"))
-                ),
-                Map.entry("coverage-audit-pipeline", List.of(
-                        agentMap.get("git-inspector"),
-                        agentMap.get("coverage-auditor")
-                )),
-                Map.entry("regression-prediction-pipeline", List.of(
-                        agentMap.get("git-inspector"),
-                        agentMap.get("coverage-auditor"),
-                        agentMap.get("regression-predictor")
-                )),
-                Map.entry("customer-impact-analysis-pipeline", List.of(
-                        agentMap.get("git-inspector"),
-                        agentMap.get("customer-impact-analyzer")
-                )),
-                Map.entry("test-debt-report-pipeline", List.of(
-                        agentMap.get("flakiness-tracker"),
-                        agentMap.get("test-debt-analyzer")
-                )),
-                Map.entry("performance-analysis-pipeline", List.of(
-                        agentMap.get("git-inspector"),
-                        agentMap.get("performance-bottleneck-finder")
-                )),
-                Map.entry("knowledge-graph-update-pipeline", List.of(
-                        agentMap.get("git-inspector"),
-                        agentMap.get("code-parser"),
-                        agentMap.get("code-graph-builder"),
-                        agentMap.get("requirement-linker"),
-                        agentMap.get("test-linker")
-                )),
-                Map.entry("agentic-pair-testing-pipeline", List.of(
-                        agentMap.get("test-designer"),
-                        agentMap.get("adversarial-tester"))
-                ),
-                Map.entry("rbac-fuzzing-pipeline", List.of(
-                        agentMap.get("git-inspector"),
-                        agentMap.get("rbac-extractor"),
-                        agentMap.get("persona-generator"),
-                        agentMap.get("fuzzing-test-generator")
-                )),
-                Map.entry("canary-decision-orchestration-pipeline", List.of(
-                        agentMap.get("canary-analyzer"),
-                        agentMap.get("canary-decision-orchestrator")
-                )),
-                Map.entry("feedback-to-test-pipeline", List.of(agentMap.get("feedback-to-test-converter"))),
-                Map.entry("strategic-refactoring-pipeline", List.of(
-                        agentMap.get("test-debt-analyzer"),
-                        agentMap.get("bug-pattern-detector"),
-                        agentMap.get("refactoring-strategist")
-                )),
-                Map.entry("sprint-planning-pipeline", List.of(
-                        agentMap.get("bug-pattern-detector"),
-                        agentMap.get("sprint-planner")
-                )),
-                Map.entry("architectural-guardian-pipeline", List.of(
-                        agentMap.get("git-inspector"),
-                        agentMap.get("arch-consistency-mapper"),
-                        agentMap.get("test-mentor-bot"),
-                        agentMap.get("performance-bottleneck-finder"),
-                        agentMap.get("privacy-compliance-checker"),
-                        agentMap.get("architecture-review-synthesizer")
-                )),
-                Map.entry("incident-response-pipeline", List.of(
-                        agentMap.get("git-inspector"),
-                        agentMap.get("incident-summarizer")
-                )),
-                Map.entry("market-opportunity-pipeline", List.of(
-                        agentMap.get("web-crawler"),
-                        agentMap.get("feature-gap-analyzer")
-                ))
-        );
+    public AgentOrchestratorService(ObjectProvider<List<AgentPipeline>> pipelineProvider) {
+        List<AgentPipeline> pipelineBeans = pipelineProvider.getIfAvailable(Collections::emptyList);
+        this.pipelines = pipelineBeans.stream()
+                .collect(Collectors.toMap(AgentPipeline::getName, Function.identity()));
+        log.info("AgentOrchestratorService инициализирован. Зарегистрировано {} конвейеров: {}",
+                pipelines.size(), pipelines.keySet());
     }
 
     /**
      * Предоставляет публичный доступ к списку имен всех
-     * определенных статических конвейеров.
+     * зарегистрированных конвейеров.
      *
      * @return Неизменяемое множество имен конвейеров.
      */
@@ -206,24 +53,30 @@ public class AgentOrchestratorService {
     }
 
     /**
-     * Асинхронно запускает статический конвейер по его имени.
+     * Асинхронно запускает конвейер по его имени.
      * <p>
-     * Метод последовательно выполняет каждого агента из определенного конвейера,
+     * Метод находит соответствующую стратегию {@link AgentPipeline}, получает от нее
+     * упорядоченный список агентов и последовательно выполняет каждого из них,
      * передавая и обогащая {@link AgentContext} на каждом шаге.
      *
      * @param pipelineName   Уникальное имя конвейера.
      * @param initialContext Начальный контекст с входными данными.
      * @return {@link CompletableFuture} с полным списком результатов от всех
      * агентов, выполненных в конвейере.
+     * @throws IllegalArgumentException если конвейер с указанным именем не найден.
      */
     public CompletableFuture<List<AgentResult>> invokePipeline(String pipelineName, AgentContext initialContext) {
-        List<QaAgent> agentsInPipeline = pipelines.get(pipelineName);
-        if (agentsInPipeline == null || agentsInPipeline.isEmpty()) {
-            log.warn("Конвейер с именем '{}' не найден или пуст.", pipelineName);
-            return CompletableFuture.completedFuture(List.of());
+        AgentPipeline pipeline = pipelines.get(pipelineName);
+        if (pipeline == null) {
+            log.error("Попытка вызова несуществующего конвейера: '{}'. Доступные конвейеры: {}",
+                    pipelineName, pipelines.keySet());
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException("Конвейер с именем '" + pipelineName + "' не найден.")
+            );
         }
 
-        log.info("Запуск статического конвейера '{}' с {} агентами.", pipelineName, agentsInPipeline.size());
+        List<QaAgent> agentsInPipeline = pipeline.getAgents();
+        log.info("Запуск конвейера '{}' с {} агентами.", pipelineName, agentsInPipeline.size());
 
         CompletableFuture<PipelineExecutionState> executionChain = CompletableFuture.completedFuture(
                 new PipelineExecutionState(initialContext, List.of())

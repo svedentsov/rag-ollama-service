@@ -21,6 +21,8 @@ public record SprintPlanningRequest(
 ) {
     /**
      * Преобразует DTO в {@link AgentContext}.
+     *
+     * @return Контекст для запуска агента.
      */
     public AgentContext toAgentContext() {
         return new AgentContext(Map.of("analysisPeriodDays", this.analysisPeriodDays));

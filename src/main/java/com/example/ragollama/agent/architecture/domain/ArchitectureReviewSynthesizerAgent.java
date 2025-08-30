@@ -35,21 +35,34 @@ public class ArchitectureReviewSynthesizerAgent implements ToolAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "architecture-review-synthesizer";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Агрегирует все отчеты по качеству в единый архитектурный вердикт.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
+        // Запускается как финальный агент в конвейере, если есть хоть какие-то данные для анализа
         return context.payload().containsKey("changedFiles");
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         try {
@@ -70,6 +83,13 @@ public class ArchitectureReviewSynthesizerAgent implements ToolAgent {
         }
     }
 
+    /**
+     * Безопасно парсит JSON-ответ от LLM в {@link ArchitecturalReviewReport}.
+     *
+     * @param jsonResponse Ответ от LLM.
+     * @return Десериализованный объект {@link ArchitecturalReviewReport}.
+     * @throws ProcessingException если парсинг не удался.
+     */
     private ArchitecturalReviewReport parseLlmResponse(String jsonResponse) {
         try {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);

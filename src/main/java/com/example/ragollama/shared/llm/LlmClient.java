@@ -26,7 +26,6 @@ import java.util.concurrent.CompletableFuture;
  * <p>
  * Эта версия интегрирована с {@link LlmRouterService}. Она делегирует
  * выбор конкретной модели роутеру, а сама фокусируется на применении
- * паттернов отказоустойчивости (Retry, Circuit Breaker, TimeLimiter).
  */
 public class LlmClient {
 
@@ -43,6 +42,16 @@ public class LlmClient {
     private Retry retry;
     private TimeLimiter timeLimiter;
 
+    /**
+     * Конструктор для внедрения зависимостей.
+     *
+     * @param chatClientBuilder      Стандартный строитель ChatClient от Spring AI.
+     * @param metricService          Сервис для сбора метрик.
+     * @param llmRouterService       Сервис для выбора модели.
+     * @param circuitBreakerRegistry Реестр Circuit Breaker'ов.
+     * @param retryRegistry          Реестр Retry.
+     * @param timeLimiterRegistry    Реестр Time Limiter'ов.
+     */
     public LlmClient(
             ChatClient.Builder chatClientBuilder,
             MetricService metricService,
@@ -58,6 +67,10 @@ public class LlmClient {
         this.timeLimiterRegistry = timeLimiterRegistry;
     }
 
+    /**
+     * Инициализирует компоненты Resilience4j после создания бина.
+     * Загружает именованные конфигурации из реестров для дальнейшего использования.
+     */
     @PostConstruct
     public void init() {
         this.circuitbreaker = circuitBreakerRegistry.circuitBreaker(OLLAMA_CONFIG_NAME);
@@ -67,6 +80,9 @@ public class LlmClient {
 
     /**
      * Асинхронно вызывает чат-модель для получения полного, не-потокового ответа.
+     * <p>
+     * Вызов выполняется на отдельном пуле потоков (`boundedElastic`) для
+     * предотвращения блокировки основного потока.
      *
      * @param prompt     Промпт для отправки в модель.
      * @param capability Требуемый уровень возможностей модели.
@@ -110,6 +126,13 @@ public class LlmClient {
         return metricService.recordTimer("llm.requests.stream", () -> resilientFlux);
     }
 
+    /**
+     * Применяет политики отказоустойчивости к потоковому (Flux) вызову.
+     *
+     * @param publisher Исходный {@link Flux}.
+     * @param <T>       Тип элементов в потоке.
+     * @return {@link Flux}, обернутый в механизмы Resilience4j.
+     */
     private <T> Flux<T> applyResilienceToFlux(Flux<T> publisher) {
         return publisher
                 .transformDeferred(RetryOperator.of(retry))
@@ -117,6 +140,13 @@ public class LlmClient {
                 .transformDeferred(TimeLimiterOperator.of(timeLimiter));
     }
 
+    /**
+     * Применяет политики отказоустойчивости к асинхронному (Mono) вызову.
+     *
+     * @param publisher Исходный {@link Mono}.
+     * @param <T>       Тип результата.
+     * @return {@link Mono}, обернутый в механизмы Resilience4j.
+     */
     private <T> Mono<T> applyResilienceToMono(Mono<T> publisher) {
         return publisher
                 .transformDeferred(RetryOperator.of(retry))
