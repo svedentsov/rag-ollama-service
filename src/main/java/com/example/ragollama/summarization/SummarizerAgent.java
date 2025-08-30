@@ -1,8 +1,8 @@
 package com.example.ragollama.summarization;
 
-import com.example.ragollama.qaagent.AgentContext;
-import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.QaAgent;
+import com.example.ragollama.agent.AgentContext;
+import com.example.ragollama.agent.AgentResult;
+import com.example.ragollama.agent.QaAgent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

@@ -5,6 +5,7 @@ import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.metrics.MetricService;
 import com.example.ragollama.shared.prompts.PromptService;
+import com.example.ragollama.shared.util.JsonExtractorUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -79,12 +80,23 @@ public class SourceCiteVerifierService {
                 });
     }
 
-    private VerificationResult parseLlmResponse(String jsonResponse) {
+    /**
+     * Надежно парсит ответ от LLM, используя {@link JsonExtractorUtil} для
+     * извлечения чистого JSON-блока перед десериализацией.
+     *
+     * @param llmResponse Сырой ответ от LLM, который может содержать "мусор".
+     * @return Десериализованный объект {@link VerificationResult}.
+     */
+    private VerificationResult parseLlmResponse(String llmResponse) {
+        String cleanedJson = JsonExtractorUtil.extractJsonBlock(llmResponse);
+        if (cleanedJson.isEmpty()) {
+            log.error("Не удалось извлечь JSON из ответа LLM-верификатора: {}", llmResponse);
+            return new VerificationResult(false, List.of(), "LLM вернула ответ без валидного JSON.");
+        }
         try {
-            String cleanedJson = jsonResponse.replaceAll("(?s)```json\\s*|\\s*```", "").trim();
             return objectMapper.readValue(cleanedJson, VerificationResult.class);
         } catch (JsonProcessingException e) {
-            log.error("Не удалось распарсить JSON-ответ от LLM-верификатора: {}", jsonResponse, e);
+            log.error("Не удалось распарсить JSON-ответ от LLM-верификатора: {}", cleanedJson, e);
             return new VerificationResult(false, List.of(), "LLM вернула невалидный JSON.");
         }
     }

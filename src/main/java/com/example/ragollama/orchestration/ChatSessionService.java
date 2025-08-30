@@ -14,7 +14,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -28,7 +27,8 @@ import java.util.concurrent.CompletableFuture;
  * Сервис-фасад, инкапсулирующий всю логику управления сессиями и историей чата.
  * <p>
  * Эта версия обновлена для передачи `sessionId` в `RagService` для
- * корректной работы аудиторского логирования.
+ * корректной работы аудиторского логирования. Она также использует
+ * полностью асинхронный API {@link ChatHistoryService}.
  */
 @Service
 @Slf4j
@@ -39,7 +39,6 @@ public class ChatSessionService {
     private final ChatService chatService;
     private final ChatHistoryService chatHistoryService;
     private final AppProperties appProperties;
-    private final AsyncTaskExecutor applicationTaskExecutor;
 
     /**
      * Обрабатывает RAG-запрос, управляя сессией и историей.
@@ -51,7 +50,7 @@ public class ChatSessionService {
         final UUID sessionId = getOrCreateSessionId(request.sessionId());
 
         return saveMessageAndGetHistory(sessionId, request.query())
-                .thenCompose(history -> ragService.queryAsync(request.query(), history, request.topK(), request.similarityThreshold(), sessionId)) // <-- ПЕРЕДАЕМ sessionId
+                .thenCompose(history -> ragService.queryAsync(request.query(), history, request.topK(), request.similarityThreshold(), sessionId))
                 .thenCompose(ragAnswer -> saveMessageAsync(sessionId, MessageRole.ASSISTANT, ragAnswer.answer())
                         .thenApply(v -> new RagQueryResponse(ragAnswer.answer(), ragAnswer.sourceCitations(), sessionId)));
     }
@@ -68,7 +67,7 @@ public class ChatSessionService {
         return Flux.defer(() -> Mono.fromFuture(() -> saveMessageAndGetHistory(sessionId, request.query()))
                 .flatMapMany(history -> {
                     final StringBuilder fullResponseBuilder = new StringBuilder();
-                    return ragService.queryStream(request.query(), history, request.topK(), request.similarityThreshold(), sessionId) // <-- ПЕРЕДАЕМ sessionId
+                    return ragService.queryStream(request.query(), history, request.topK(), request.similarityThreshold(), sessionId)
                             .doOnNext(part -> {
                                 if (part instanceof StreamingResponsePart.Content content) {
                                     fullResponseBuilder.append(content.text());
@@ -130,7 +129,7 @@ public class ChatSessionService {
      *
      * @param sessionId   ID сессии.
      * @param userMessage Текст сообщения пользователя.
-     * @return {@link CompletableFuture} со списком сообщений.
+     * @return {@link CompletableFuture} со списком сообщений, включающим текущее.
      */
     private CompletableFuture<List<Message>> saveMessageAndGetHistory(UUID sessionId, String userMessage) {
         final UserMessage currentMessage = new UserMessage(userMessage);
@@ -146,7 +145,8 @@ public class ChatSessionService {
     }
 
     /**
-     * Асинхронно сохраняет сообщение в базу данных.
+     * Асинхронно сохраняет сообщение в базу данных, делегируя вызов
+     * асинхронному {@link ChatHistoryService}.
      *
      * @param sessionId ID сессии.
      * @param role      Роль отправителя.
@@ -154,27 +154,23 @@ public class ChatSessionService {
      * @return {@link CompletableFuture}, завершающийся после сохранения.
      */
     private CompletableFuture<Void> saveMessageAsync(UUID sessionId, MessageRole role, String content) {
-        return CompletableFuture.runAsync(
-                () -> chatHistoryService.saveMessage(sessionId, role, content),
-                applicationTaskExecutor
-        ).exceptionally(ex -> {
-            log.error("Не удалось сохранить сообщение для сессии {}. Роль: {}", sessionId, role, ex);
-            return null;
-        });
+        return chatHistoryService.saveMessageAsync(sessionId, role, content)
+                .exceptionally(ex -> {
+                    log.error("Не удалось сохранить сообщение для сессии {}. Роль: {}", sessionId, role, ex);
+                    return null;
+                });
     }
 
     /**
-     * Асинхронно загружает историю сообщений из базы данных.
+     * Асинхронно загружает историю сообщений из базы данных, делегируя вызов
+     * асинхронному {@link ChatHistoryService}.
      *
      * @param sessionId ID сессии.
      * @return {@link CompletableFuture} со списком сообщений.
      */
     private CompletableFuture<List<Message>> getHistoryAsync(UUID sessionId) {
         int maxHistory = appProperties.chat().history().maxMessages();
-        return CompletableFuture.supplyAsync(
-                () -> chatHistoryService.getLastNMessages(sessionId, maxHistory - 1),
-                applicationTaskExecutor
-        );
+        return chatHistoryService.getLastNMessagesAsync(sessionId, maxHistory - 1);
     }
 
     /**

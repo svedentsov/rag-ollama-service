@@ -1,9 +1,9 @@
 package com.example.ragollama.crawler.confluence;
 
+import com.example.ragollama.crawler.confluence.tool.ConfluenceApiClient;
+import com.example.ragollama.crawler.confluence.tool.dto.ConfluencePageDto;
 import com.example.ragollama.indexing.IndexingPipelineService;
 import com.example.ragollama.indexing.IndexingRequest;
-import com.example.ragollama.qaagent.tools.ConfluenceApiClient;
-import com.example.ragollama.qaagent.tools.ConfluencePageDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;

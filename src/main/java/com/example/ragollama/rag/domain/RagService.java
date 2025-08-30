@@ -1,16 +1,14 @@
 package com.example.ragollama.rag.domain;
 
-import com.example.ragollama.monitoring.AuditLoggingService;
-import com.example.ragollama.monitoring.GroundingService;
-import com.example.ragollama.monitoring.SourceCiteVerifierService;
 import com.example.ragollama.rag.agent.QueryProcessingPipeline;
 import com.example.ragollama.rag.api.dto.StreamingResponsePart;
+import com.example.ragollama.rag.postprocessing.RagPostProcessingOrchestrator;
+import com.example.ragollama.rag.postprocessing.RagProcessingContext;
 import com.example.ragollama.rag.retrieval.HybridRetrievalStrategy;
 import com.example.ragollama.shared.metrics.MetricService;
 import com.example.ragollama.shared.security.PromptGuardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.MDC;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
@@ -23,10 +21,12 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * "Чистый" сервис-оркестратор RAG-конвейера.
+ * "Чистый" сервис-оркестратор RAG-конвейера, освобожденный от сквозных задач.
  * <p>
- * Эта версия интегрирована с {@link AuditLoggingService} для сохранения
- * полного аудиторского следа каждого RAG-взаимодействия.
+ * Эта финальная, отрефакторенная версия делегирует всю логику постобработки
+ * (аудит, верификация, метрики) специализированному сервису
+ * {@link RagPostProcessingOrchestrator}. Это делает `RagService` сфокусированным,
+ * легко тестируемым и соответствующим Принципу Единственной Ответственности (SRP).
  */
 @Slf4j
 @Service
@@ -39,9 +39,7 @@ public class RagService {
     private final GenerationService generationService;
     private final PromptGuardService promptGuardService;
     private final MetricService metricService;
-    private final GroundingService groundingService;
-    private final SourceCiteVerifierService verifierService;
-    private final AuditLoggingService auditLoggingService;
+    private final RagPostProcessingOrchestrator postProcessingOrchestrator;
 
     /**
      * DTO для инкапсуляции результата работы RAG-сервиса.
@@ -65,25 +63,14 @@ public class RagService {
     public CompletableFuture<RagAnswer> queryAsync(String query, List<Message> history, int topK, double similarityThreshold, UUID sessionId) {
         return metricService.recordTimer("rag.requests.async.pure",
                 () -> prepareRagFlow(query, history, topK, similarityThreshold)
-                        .flatMap(context -> {
-                            String promptContent = context.prompt().getContents();
-                            return Mono.fromFuture(generationService.generate(context.prompt(), context.documents(), sessionId))
-                                    .doOnSuccess(response -> {
-                                        // Асинхронно запускаем верификацию, grounding и аудит
-                                        verifierService.verify(context.documents(), response.answer());
-                                        if (Math.random() < 0.1) {
-                                            groundingService.verify(promptContent, response.answer());
-                                        }
-                                        auditLoggingService.logInteractionAsync(
-                                                MDC.get("requestId"),
-                                                sessionId,
-                                                query,
-                                                response.sourceCitations(),
-                                                promptContent,
-                                                response.answer()
-                                        );
-                                    });
-                        })
+                        .flatMap(context ->
+                                Mono.fromFuture(generationService.generate(context.prompt(), context.documents(), sessionId))
+                                        .doOnSuccess(response -> {
+                                            var processingContext = new RagProcessingContext(query, context.documents(), context.prompt(),
+                                                    new RagAnswer(response.answer(), response.sourceCitations()), sessionId);
+                                            postProcessingOrchestrator.process(processingContext);
+                                        })
+                        )
                         .map(response -> new RagAnswer(response.answer(), response.sourceCitations()))
                         .toFuture()
         );
@@ -100,8 +87,6 @@ public class RagService {
      * @return Реактивный поток {@link Flux} со структурированными частями ответа.
      */
     public Flux<StreamingResponsePart> queryStream(String query, List<Message> history, int topK, double similarityThreshold, UUID sessionId) {
-        // Примечание: полноценный аудит для потоковых ответов требует более сложной
-        // логики агрегации ответа. Для простоты здесь он не реализован.
         return metricService.recordTimer("rag.requests.stream.pure",
                 () -> prepareRagFlow(query, history, topK, similarityThreshold)
                         .flatMapMany(context -> generationService.generateStructuredStream(context.prompt(), context.documents(), sessionId))
@@ -115,6 +100,10 @@ public class RagService {
     /**
      * Внутренний метод, подготавливающий асинхронный конвейер до этапа генерации.
      *
+     * @param query               Запрос пользователя.
+     * @param history             История чата.
+     * @param topK                Количество извлекаемых документов.
+     * @param similarityThreshold Порог схожести.
      * @return {@link Mono}, который эммитит контекст, готовый для генерации.
      */
     private Mono<RagFlowContext> prepareRagFlow(String query, List<Message> history, int topK, double similarityThreshold) {
@@ -135,6 +124,9 @@ public class RagService {
 
     /**
      * Внутренний DTO для передачи данных между этапами асинхронного потока.
+     *
+     * @param documents Список извлеченных и переранжированных документов.
+     * @param prompt    Финальный промпт, готовый к отправке в LLM.
      */
     private record RagFlowContext(List<Document> documents, Prompt prompt) {
     }

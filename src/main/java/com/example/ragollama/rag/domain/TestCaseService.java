@@ -2,8 +2,8 @@ package com.example.ragollama.rag.domain;
 
 import com.example.ragollama.indexing.IndexingPipelineService;
 import com.example.ragollama.indexing.IndexingRequest;
-import com.example.ragollama.qaagent.api.dto.ManualIndexRequest;
 import com.example.ragollama.rag.agent.QueryProcessingPipeline;
+import com.example.ragollama.rag.api.dto.ManualIndexRequest;
 import com.example.ragollama.rag.retrieval.HybridRetrievalStrategy;
 import com.example.ragollama.rag.retrieval.RetrievalProperties;
 import lombok.RequiredArgsConstructor;

@@ -12,12 +12,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Асинхронный сервис для записи аудиторских логов RAG-взаимодействий.
  * <p>
  * Обеспечивает персистентное сохранение полного контекста каждого запроса
  * (включая промпт, контекст, ответ) для целей отладки, анализа и комплаенса.
+ * Эта версия явно принимает `requestId` для надежной трассировки.
  */
 @Slf4j
 @Service
@@ -30,18 +32,20 @@ public class AuditLoggingService {
      * Асинхронно сохраняет полную запись о RAG-взаимодействии в базу данных.
      * <p>
      * Метод выполняется в отдельном потоке, чтобы не влиять на задержку
-     * ответа основному пользователю.
+     * ответа основному пользователю. Возвращает {@link CompletableFuture} для
+     * возможности отслеживания завершения операции.
      *
-     * @param requestId        Уникальный идентификатор HTTP-запроса из MDC.
+     * @param requestId        Уникальный идентификатор HTTP-запроса, переданный явно.
      * @param sessionId        Идентификатор сессии диалога.
      * @param originalQuery    Исходный запрос пользователя.
      * @param contextDocuments Список источников, использованных в контексте.
      * @param finalPrompt      Финальный промпт, отправленный в LLM.
      * @param llmAnswer        Ответ, сгенерированный LLM.
+     * @return {@link CompletableFuture}, который завершается после сохранения.
      */
     @Async("applicationTaskExecutor")
     @Transactional
-    public void logInteractionAsync(
+    public CompletableFuture<Void> logInteractionAsync(
             String requestId,
             UUID sessionId,
             String originalQuery,
@@ -70,5 +74,6 @@ public class AuditLoggingService {
         } catch (Exception e) {
             log.error("Не удалось сохранить аудиторскую запись для requestId {}: {}", requestId, e.getMessage(), e);
         }
+        return CompletableFuture.completedFuture(null);
     }
 }

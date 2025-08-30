@@ -6,10 +6,12 @@ import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.MDC;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.task.AsyncTaskExecutor;
+import org.springframework.core.task.TaskDecorator;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.security.task.DelegatingSecurityContextAsyncTaskExecutor;
@@ -17,6 +19,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Hooks;
 import reactor.netty.http.client.HttpClient;
 
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -24,8 +27,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * Основной конфигурационный класс приложения.
  * <p>
- * В этой версии конфигурация пула потоков обернута в {@link DelegatingSecurityContextAsyncTaskExecutor}
- * для корректного проброса контекста Spring Security в асинхронные задачи.
+ * В этой версии конфигурация пула потоков дополнена {@link TaskDecorator}
+ * для автоматического проброса контекста логирования (MDC) в асинхронные задачи,
+ * что обеспечивает сквозную трассировку по `requestId`.
  */
 @Configuration
 @RequiredArgsConstructor
@@ -53,14 +57,13 @@ public class AppConfig {
     }
 
     /**
-     * Создает единый пул потоков для всех асинхронных задач с поддержкой Security Context.
+     * Создает единый пул потоков для всех асинхронных задач с поддержкой Security Context и MDC.
      * <p>
-     * Базовый {@link ThreadPoolTaskExecutor} оборачивается в {@link DelegatingSecurityContextAsyncTaskExecutor}.
-     * Этот декоратор гарантирует, что {@code SecurityContext} из вызывающего потока
-     * (например, HTTP-потока) будет автоматически передан в поток, выполняющий
-     * задачу, аннотированную {@code @Async}.
+     * Базовый {@link ThreadPoolTaskExecutor} оборачивается в декораторы, которые
+     * гарантируют, что и {@code SecurityContext}, и контекст логирования {@code MDC}
+     * будут автоматически переданы из вызывающего потока в поток, выполняющий задачу.
      *
-     * @return Сконфигурированный и безопасный для Spring Security {@link AsyncTaskExecutor}.
+     * @return Сконфигурированный и безопасный для Spring Security и логирования {@link AsyncTaskExecutor}.
      */
     @Bean
     public AsyncTaskExecutor applicationTaskExecutor() {
@@ -70,8 +73,29 @@ public class AppConfig {
         executor.setMaxPoolSize(executorProps.maxPoolSize());
         executor.setQueueCapacity(executorProps.queueCapacity());
         executor.setThreadNamePrefix(executorProps.threadNamePrefix());
+        executor.setTaskDecorator(new MdcTaskDecorator());
         executor.initialize();
         return new DelegatingSecurityContextAsyncTaskExecutor(executor);
+    }
+
+    /**
+     * Декоратор, который копирует MDC-контекст из родительского потока в дочерний.
+     */
+    static class MdcTaskDecorator implements TaskDecorator {
+        @Override
+        public Runnable decorate(Runnable runnable) {
+            Map<String, String> contextMap = MDC.getCopyOfContextMap();
+            return () -> {
+                try {
+                    if (contextMap != null) {
+                        MDC.setContextMap(contextMap);
+                    }
+                    runnable.run();
+                } finally {
+                    MDC.clear();
+                }
+            };
+        }
     }
 
     /**

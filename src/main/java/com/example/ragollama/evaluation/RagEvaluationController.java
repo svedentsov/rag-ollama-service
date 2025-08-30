@@ -1,8 +1,8 @@
 package com.example.ragollama.evaluation;
 
-import com.example.ragollama.qaagent.api.dto.FeedbackToTestRequest;
-import com.example.ragollama.qaagent.AgentOrchestratorService;
-import com.example.ragollama.qaagent.AgentResult;
+import com.example.ragollama.agent.AgentOrchestratorService;
+import com.example.ragollama.agent.AgentResult;
+import com.example.ragollama.evaluation.api.dto.FeedbackToTestRequest;
 import com.example.ragollama.evaluation.model.EvaluationResult;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

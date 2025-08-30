@@ -1,8 +1,8 @@
 package com.example.ragollama.orchestration.dto;
 
-import com.example.ragollama.agent.api.dto.CodeGenerationResponse;
-import com.example.ragollama.agent.domain.QueryIntent;
-import com.example.ragollama.qaagent.api.dto.BugAnalysisResponse;
+import com.example.ragollama.agent.codegeneration.api.dto.CodeGenerationResponse;
+import com.example.ragollama.agent.routing.QueryIntent;
+import com.example.ragollama.agent.buganalysis.api.dto.BugAnalysisResponse;
 import com.example.ragollama.chat.api.dto.ChatResponse;
 import com.example.ragollama.rag.api.dto.RagQueryResponse;
 import com.fasterxml.jackson.annotation.JsonInclude;

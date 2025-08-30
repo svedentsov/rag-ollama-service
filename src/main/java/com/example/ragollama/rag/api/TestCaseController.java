@@ -1,9 +1,9 @@
 package com.example.ragollama.rag.api;
 
-import com.example.ragollama.qaagent.AgentOrchestratorService;
-import com.example.ragollama.qaagent.AgentResult;
-import com.example.ragollama.qaagent.api.dto.DeduplicationRequest;
-import com.example.ragollama.qaagent.api.dto.ManualIndexRequest;
+import com.example.ragollama.agent.AgentOrchestratorService;
+import com.example.ragollama.agent.AgentResult;
+import com.example.ragollama.agent.testanalysis.api.dto.DeduplicationRequest;
+import com.example.ragollama.rag.api.dto.ManualIndexRequest;
 import com.example.ragollama.rag.domain.TestCaseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;

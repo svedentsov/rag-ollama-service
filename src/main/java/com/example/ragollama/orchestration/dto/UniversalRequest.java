@@ -1,6 +1,6 @@
 package com.example.ragollama.orchestration.dto;
 
-import com.example.ragollama.agent.api.dto.CodeGenerationRequest;
+import com.example.ragollama.agent.codegeneration.api.dto.CodeGenerationRequest;
 import com.example.ragollama.chat.api.dto.ChatRequest;
 import com.example.ragollama.rag.api.dto.RagQueryRequest;
 import io.swagger.v3.oas.annotations.media.Schema;

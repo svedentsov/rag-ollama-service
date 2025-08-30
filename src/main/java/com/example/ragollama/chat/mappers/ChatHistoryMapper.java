@@ -1,14 +1,17 @@
 package com.example.ragollama.chat.mappers;
 
 import com.example.ragollama.chat.domain.model.ChatMessage;
+import com.example.ragollama.chat.domain.model.MessageRole;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -45,6 +48,27 @@ public class ChatHistoryMapper {
 
         Collections.reverse(springAiMessages);
         return springAiMessages;
+    }
+
+    /**
+     * Создает новую, не сохраненную в БД, сущность {@link ChatMessage}
+     * из "сырых" данных.
+     * <p>
+     * Этот метод инкапсулирует логику создания доменного объекта,
+     * освобождая от этой ответственности сервисный слой.
+     *
+     * @param sessionId ID сессии чата.
+     * @param role      Роль отправителя сообщения.
+     * @param content   Текст сообщения.
+     * @return Готовый к сохранению объект {@link ChatMessage}.
+     */
+    public ChatMessage toChatMessageEntity(UUID sessionId, MessageRole role, String content) {
+        return ChatMessage.builder()
+                .sessionId(sessionId)
+                .role(role)
+                .content(content)
+                .createdAt(LocalDateTime.now())
+                .build();
     }
 
     /**

@@ -8,20 +8,21 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
- * Сервис для управления историей сообщений чата.
+ * Сервис для управления историей сообщений чата в асинхронном режиме.
  * <p>
- * Эта версия сервиса полностью сфокусирована на оркестрации доступа к данным,
- * делегируя всю логику преобразования (маппинга) специализированному
- * компоненту {@link ChatHistoryMapper}. Это соответствует Принципу
- * единственной ответственности (SRP) и значительно улучшает тестируемость.
+ * Эта финальная версия использует аннотацию {@code @Async} для делегирования
+ * управления асинхронностью и транзакциями фреймворку Spring. Это гарантирует,
+ * что операции с базой данных всегда выполняются в правильном транзакционном
+ * контексте, даже в отдельном потоке.
  */
 @Service
 @RequiredArgsConstructor
@@ -32,43 +33,49 @@ public class ChatHistoryService {
     private final ChatHistoryMapper chatHistoryMapper;
 
     /**
-     * Синхронно и транзакционно сохраняет одно сообщение в базу данных.
+     * Асинхронно и транзакционно сохраняет одно сообщение в базу данных.
+     * <p>
+     * Аннотация {@code @Async} указывает Spring выполнить этот метод в отдельном
+     * потоке из указанного пула. Аннотация {@code @Transactional} гарантирует,
+     * что выполнение будет обернуто в транзакцию.
      *
      * @param sessionId ID сессии чата.
      * @param role      Роль отправителя сообщения.
      * @param content   Текст сообщения.
+     * @return {@link CompletableFuture}, который завершается после успешного сохранения сообщения.
      */
+    @Async("applicationTaskExecutor")
     @Transactional
-    public void saveMessage(UUID sessionId, MessageRole role, String content) {
-        ChatMessage message = ChatMessage.builder()
-                .sessionId(sessionId)
-                .role(role)
-                .content(content)
-                .createdAt(LocalDateTime.now())
-                .build();
+    public CompletableFuture<Void> saveMessageAsync(UUID sessionId, MessageRole role, String content) {
+        ChatMessage message = chatHistoryMapper.toChatMessageEntity(sessionId, role, content);
         chatMessageRepository.save(message);
         log.debug("Сохранено сообщение для сессии {}: Role={}", sessionId, role);
+        return CompletableFuture.completedFuture(null);
     }
 
     /**
-     * Синхронно и транзакционно загружает N последних сообщений для указанной сессии.
+     * Асинхронно и транзакционно загружает N последних сообщений для указанной сессии.
      * <p>
      * Результат возвращается в хронологическом порядке (от старых к новым),
      * что является корректным форматом для передачи в Spring AI Prompt.
+     * Операция выполняется в отдельном потоке с активной транзакцией.
      *
      * @param sessionId ID сессии чата.
      * @param lastN     Количество последних сообщений для загрузки.
-     * @return Список сообщений {@link Message}, готовый к использованию в промпте.
+     * @return {@link CompletableFuture}, который по завершении будет содержать
+     *         список сообщений {@link Message}, готовый к использованию в промпте.
      */
+    @Async("applicationTaskExecutor")
     @Transactional(readOnly = true)
-    public List<Message> getLastNMessages(UUID sessionId, int lastN) {
+    public CompletableFuture<List<Message>> getLastNMessagesAsync(UUID sessionId, int lastN) {
         if (lastN <= 0) {
-            return List.of();
+            return CompletableFuture.completedFuture(List.of());
         }
         PageRequest pageRequest = PageRequest.of(0, lastN, Sort.by(Sort.Direction.DESC, "createdAt"));
         List<ChatMessage> recentMessages = chatMessageRepository.findBySessionId(sessionId, pageRequest);
         log.debug("Загружено {} сообщений для сессии {}", recentMessages.size(), sessionId);
 
-        return chatHistoryMapper.toSpringAiMessages(recentMessages);
+        List<Message> springAiMessages = chatHistoryMapper.toSpringAiMessages(recentMessages);
+        return CompletableFuture.completedFuture(springAiMessages);
     }
 }

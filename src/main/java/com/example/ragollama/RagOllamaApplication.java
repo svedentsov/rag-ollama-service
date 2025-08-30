@@ -1,10 +1,10 @@
 package com.example.ragollama;
 
+import com.example.ragollama.agent.config.*;
 import com.example.ragollama.crawler.confluence.ConfluenceProperties;
 import com.example.ragollama.evaluation.EvaluationProperties;
 import com.example.ragollama.ingestion.IngestionProperties;
 import com.example.ragollama.optimization.IndexOptimizerProperties;
-import com.example.ragollama.qaagent.config.*;
 import com.example.ragollama.rag.domain.reranking.RerankingProperties;
 import com.example.ragollama.rag.retrieval.RetrievalProperties;
 import com.example.ragollama.shared.config.properties.AppProperties;
