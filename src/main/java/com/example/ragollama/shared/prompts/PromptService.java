@@ -122,7 +122,13 @@ public class PromptService {
             Map.entry("copilotResultSummarizer", "copilot-result-summarizer-prompt.ftl"),
             Map.entry("releaseDecision", "release-decision-prompt.ftl"),
             Map.entry("releaseReadiness", "release-readiness-prompt.ftl"),
-            Map.entry("customerImpactAnalyzer", "customer-impact-analyzer-prompt.ftl")
+            Map.entry("customerImpactAnalyzer", "customer-impact-analyzer-prompt.ftl"),
+
+            // Optimization & Meta-Learning
+            Map.entry("ragOptimizer", "rag-optimizer-prompt.ftl"),
+            Map.entry("queryProfiler", "query-profiler-prompt.ftl"),
+            Map.entry("errorHandler", "error-handler-prompt.ftl"),
+            Map.entry("workflowPlanner", "workflow-planner-prompt.ftl") // <-- ДОБАВЛЕНА НЕДОСТАЮЩАЯ ЗАПИСЬ
     );
 
     /**

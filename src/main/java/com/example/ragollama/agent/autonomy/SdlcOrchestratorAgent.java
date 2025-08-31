@@ -18,6 +18,8 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.io.Serializable;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -26,7 +28,9 @@ import java.util.Map;
  * высокоуровневым командам на естественном языке.
  * <p>
  * Является высшим уровнем в иерархии агентов, который не выполняет
- * конкретные задачи, а **планирует и оркеструет запуск других конвейеров**.
+ * конкретные задачи, а **планирует и оркестрирует запуск других конвейеров**.
+ * Он декомпозирует сложную бизнес-цель в последовательность вызовов
+ * предопределенных, надежных {@link com.example.ragollama.agent.AgentPipeline}.
  */
 @Slf4j
 @Service
@@ -42,8 +46,11 @@ public class SdlcOrchestratorAgent {
     /**
      * DTO для представления одного шага в стратегическом плане,
      * который генерирует LLM.
+     *
+     * @param pipeline Имя конвейера для запуска.
+     * @param context  Дополнительный контекст для этого шага.
      */
-    private record StrategicPlanStep(String pipeline, Map<String, Object> context) {
+    private record StrategicPlanStep(String pipeline, Map<String, Object> context) implements Serializable {
     }
 
     /**
@@ -64,18 +71,18 @@ public class SdlcOrchestratorAgent {
         ));
 
         // Шаг 1: LLM создает высокоуровневый план
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+        return Mono.fromFuture(() -> llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
                 .map(this::parseStrategicPlan)
                 .flatMapMany(Flux::fromIterable)
                 // Шаг 2: Выполняем каждый шаг плана (каждый конвейер) последовательно
                 .concatMap(step -> {
                     log.info("SDLC Orchestrator: запуск конвейера '{}'", step.pipeline);
                     // Объединяем начальный контекст с контекстом из плана
-                    Map<String, Object> finalContext = new java.util.HashMap<>(initialContext.payload());
+                    Map<String, Object> finalContext = new HashMap<>(initialContext.payload());
                     if (step.context != null) {
                         finalContext.putAll(step.context);
                     }
-                    return Mono.fromFuture(orchestratorService.invokePipeline(step.pipeline, new AgentContext(finalContext)));
+                    return Mono.fromFuture(() -> orchestratorService.invokePipeline(step.pipeline, new AgentContext(finalContext)));
                 })
                 .flatMap(Flux::fromIterable) // "Расплющиваем" List<AgentResult> в поток AgentResult
                 .collectList();
@@ -86,6 +93,7 @@ public class SdlcOrchestratorAgent {
      *
      * @param llmResponse Сырой ответ от LLM.
      * @return Список шагов {@link StrategicPlanStep}.
+     * @throws ProcessingException если парсинг JSON не удался.
      */
     private List<StrategicPlanStep> parseStrategicPlan(String llmResponse) {
         try {

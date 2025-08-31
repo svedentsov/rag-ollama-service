@@ -23,6 +23,7 @@ public class IndexOptimizerScheduler {
 
     /**
      * Запускает асинхронную задачу оптимизации индекса по cron-расписанию.
+     * Расписание настраивается через свойство `app.optimization.index.cron`.
      */
     @Scheduled(cron = "${app.optimization.index.cron}")
     public void runScheduledIndexOptimization() {

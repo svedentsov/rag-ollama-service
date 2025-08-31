@@ -11,7 +11,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.UUID;
 
 /**
- * Сервис для обработки решений человека-рецензента.
+ * Сервис для обработки решений человека-рецензента в рамках
+ * механизма Human-in-the-Loop.
+ * <p>
+ * Этот сервис является "мостом" между API утверждения и ядром
+ * выполнения динамических конвейеров.
  */
 @Service
 @RequiredArgsConstructor
@@ -21,24 +25,27 @@ public class ReviewService {
     private final DynamicPipelineExecutionService executionService;
 
     /**
-     * Обрабатывает утверждение конвейера.
+     * Обрабатывает утверждение приостановленного конвейера.
+     * <p>
+     * Метод находит конвейер в статусе `PENDING_APPROVAL`, устанавливает
+     * флаг `resumedAfterApproval` в `true`, чтобы сигнализировать исполнителю,
+     * что проверка `requiresApproval()` для текущего шага может быть пропущена,
+     * и затем асинхронно запускает возобновление выполнения.
      *
-     * @param executionId ID конвейера.
+     * @param executionId ID конвейера, ожидающего утверждения.
+     * @throws EntityNotFoundException если конвейер с указанным ID не найден.
+     * @throws IllegalStateException   если конвейер не находится в статусе,
+     *                                 допускающем утверждение.
      */
     @Transactional
     public void approve(UUID executionId) {
         ExecutionState state = executionStateRepository.findById(executionId)
-                .orElseThrow(() -> new EntityNotFoundException("Execution with ID " + executionId + " not found."));
-
+                .orElseThrow(() -> new EntityNotFoundException("Выполнение с ID " + executionId + " не найдено."));
         if (state.getStatus() != ExecutionState.Status.PENDING_APPROVAL) {
-            throw new IllegalStateException("Execution " + executionId + " is not awaiting approval.");
+            throw new IllegalStateException("Выполнение " + executionId + " не ожидает утверждения.");
         }
-
-        // Помечаем, что можно продолжить
-        state.setStatus(ExecutionState.Status.RESUMED_AFTER_APPROVAL);
+        state.setResumedAfterApproval(true);
         executionStateRepository.save(state);
-
-        // Асинхронно запускаем продолжение
         executionService.resumeExecution(executionId);
     }
 }

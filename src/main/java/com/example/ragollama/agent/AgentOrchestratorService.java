@@ -1,13 +1,12 @@
 package com.example.ragollama.agent;
 
+import com.example.ragollama.shared.exception.ProcessingException;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -19,6 +18,10 @@ import java.util.stream.Collectors;
  * все бины, реализующие {@link AgentPipeline}, и предоставляет API для их
  * асинхронного запуска по имени. Он не содержит логики композиции конвейеров,
  * а лишь делегирует выполнение соответствующей "стратегии" (реализации конвейера).
+ * <p>
+ * Внутренняя реализация использует функциональный подход с `Stream.reduce`
+ * для построения асинхронной цепочки вызовов, что повышает читаемость и
+ * соответствует современным практикам.
  *
  * @see AgentPipeline
  */
@@ -37,7 +40,15 @@ public class AgentOrchestratorService {
     public AgentOrchestratorService(ObjectProvider<List<AgentPipeline>> pipelineProvider) {
         List<AgentPipeline> pipelineBeans = pipelineProvider.getIfAvailable(Collections::emptyList);
         this.pipelines = pipelineBeans.stream()
-                .collect(Collectors.toMap(AgentPipeline::getName, Function.identity()));
+                .collect(Collectors.toUnmodifiableMap(AgentPipeline::getName, Function.identity()));
+    }
+
+    /**
+     * Инициализирует сервис и логирует информацию о зарегистрированных конвейерах.
+     * Этот метод вызывается автоматически после создания бина.
+     */
+    @PostConstruct
+    public void init() {
         log.info("AgentOrchestratorService инициализирован. Зарегистрировано {} конвейеров: {}",
                 pipelines.size(), pipelines.keySet());
     }
@@ -49,7 +60,7 @@ public class AgentOrchestratorService {
      * @return Неизменяемое множество имен конвейеров.
      */
     public Set<String> getAvailablePipelines() {
-        return Collections.unmodifiableSet(pipelines.keySet());
+        return pipelines.keySet();
     }
 
     /**
@@ -63,7 +74,7 @@ public class AgentOrchestratorService {
      * @param initialContext Начальный контекст с входными данными.
      * @return {@link CompletableFuture} с полным списком результатов от всех
      * агентов, выполненных в конвейере.
-     * @throws IllegalArgumentException если конвейер с указанным именем не найден.
+     * @throws ProcessingException если конвейер с указанным именем не найден.
      */
     public CompletableFuture<List<AgentResult>> invokePipeline(String pipelineName, AgentContext initialContext) {
         AgentPipeline pipeline = pipelines.get(pipelineName);
@@ -71,65 +82,61 @@ public class AgentOrchestratorService {
             log.error("Попытка вызова несуществующего конвейера: '{}'. Доступные конвейеры: {}",
                     pipelineName, pipelines.keySet());
             return CompletableFuture.failedFuture(
-                    new IllegalArgumentException("Конвейер с именем '" + pipelineName + "' не найден.")
+                    new ProcessingException("Конвейер с именем '" + pipelineName + "' не найден.")
             );
         }
 
         List<QaAgent> agentsInPipeline = pipeline.getAgents();
         log.info("Запуск конвейера '{}' с {} агентами.", pipelineName, agentsInPipeline.size());
-
-        CompletableFuture<PipelineExecutionState> executionChain = CompletableFuture.completedFuture(
-                new PipelineExecutionState(initialContext, List.of())
-        );
-
-        for (QaAgent agent : agentsInPipeline) {
-            executionChain = executionChain.thenCompose(state -> {
-                log.debug("Выполнение агента '{}' в конвейере '{}'", agent.getName(), pipelineName);
-                if (!agent.canHandle(state.currentContext)) {
-                    log.warn("Агент '{}' пропущен, так как не может обработать текущий контекст.", agent.getName());
-                    return CompletableFuture.completedFuture(state);
-                }
-                return agent.execute(state.currentContext)
-                        .thenApply(state::addResult);
-            });
-        }
-
-        return executionChain.thenApply(PipelineExecutionState::getResults);
+        PipelineExecutionState initialState = new PipelineExecutionState(initialContext, List.of());
+        CompletableFuture<PipelineExecutionState> executionChain = agentsInPipeline.stream()
+                .reduce(CompletableFuture.completedFuture(initialState),
+                        (stateFuture, agent) -> stateFuture.thenCompose(state -> executeAgent(agent, state, pipelineName)),
+                        (f1, f2) -> f1.thenCombine(f2, (s1, s2) -> s2)
+                );
+        return executionChain.thenApply(PipelineExecutionState::results);
     }
 
     /**
-     * Внутренний вспомогательный класс для хранения текущего состояния
-     * выполнения конвейера.
-     * <p>
-     * Он является неизменяемым (immutable) и на каждом шаге создает новый
-     * экземпляр с обновленным контекстом и списком результатов, что обеспечивает
-     * потокобезопасность и предсказуемость.
+     * Выполняет одного агента и обновляет состояние конвейера.
+     *
+     * @param agent        Агент для выполнения.
+     * @param state        Текущее состояние конвейера.
+     * @param pipelineName Имя конвейера (для логирования).
+     * @return {@link CompletableFuture} с новым состоянием.
      */
-    private static class PipelineExecutionState {
-        private final AgentContext currentContext;
-        private final List<AgentResult> results;
-
-        PipelineExecutionState(AgentContext currentContext, List<AgentResult> results) {
-            this.currentContext = currentContext;
-            this.results = new java.util.ArrayList<>(results);
+    private CompletableFuture<PipelineExecutionState> executeAgent(QaAgent agent, PipelineExecutionState state, String pipelineName) {
+        log.debug("Выполнение агента '{}' в конвейере '{}'", agent.getName(), pipelineName);
+        if (!agent.canHandle(state.currentContext)) {
+            log.warn("Агент '{}' пропущен, так как не может обработать текущий контекст.", agent.getName());
+            return CompletableFuture.completedFuture(state);
         }
+        return agent.execute(state.currentContext)
+                .thenApply(state::addResult);
+    }
 
+    /**
+     * Внутренний неизменяемый (immutable) record для хранения текущего состояния
+     * выполнения конвейера. Использование record сокращает бойлерплейт и
+     * гарантирует потокобезопасность.
+     *
+     * @param currentContext Текущий контекст, передаваемый между агентами.
+     * @param results        Список результатов от уже выполненных агентов.
+     */
+    private record PipelineExecutionState(AgentContext currentContext, List<AgentResult> results) {
         /**
-         * Добавляет новый результат и обогащает контекст для следующего шага.
+         * Создает новый экземпляр состояния, добавляя результат последнего
+         * выполненного агента и обогащая контекст для следующего шага.
          *
          * @param newResult Результат работы предыдущего агента.
          * @return Новый, обновленный экземпляр {@link PipelineExecutionState}.
          */
         public PipelineExecutionState addResult(AgentResult newResult) {
-            List<AgentResult> newResults = new java.util.ArrayList<>(this.results);
+            List<AgentResult> newResults = new ArrayList<>(this.results);
             newResults.add(newResult);
             Map<String, Object> newPayload = new java.util.HashMap<>(this.currentContext.payload());
             newPayload.putAll(newResult.details());
-            return new PipelineExecutionState(new AgentContext(newPayload), newResults);
-        }
-
-        public List<AgentResult> getResults() {
-            return results;
+            return new PipelineExecutionState(new AgentContext(newPayload), Collections.unmodifiableList(newResults));
         }
     }
 }

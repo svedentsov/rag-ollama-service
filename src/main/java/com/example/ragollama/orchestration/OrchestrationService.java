@@ -1,8 +1,10 @@
+// Обновленный OrchestrationService для интеграции нового агента
 package com.example.ragollama.orchestration;
 
 import com.example.ragollama.agent.buganalysis.domain.BugAnalysisService;
 import com.example.ragollama.agent.codegeneration.domain.CodeGenerationService;
 import com.example.ragollama.agent.routing.RouterAgentService;
+import com.example.ragollama.optimization.AdaptiveRagOrchestrator;
 import com.example.ragollama.orchestration.dto.UniversalRequest;
 import com.example.ragollama.orchestration.dto.UniversalResponse;
 import com.example.ragollama.orchestration.dto.UniversalSyncResponse;
@@ -18,9 +20,8 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Сервис-оркестратор, который является единой точкой входа для всех запросов.
  * <p>
- * Эта финальная версия вводит жесткие бизнес-правила по использованию полей
- * из {@link UniversalRequest} в зависимости от определенного намерения.
- * Все асинхронные операции теперь унифицированы с использованием Project Reactor.
+ * Эта версия интегрирует `AdaptiveRagOrchestrator` для обработки RAG-запросов,
+ * делегируя ему выбор и выполнение оптимальной RAG-стратегии.
  */
 @Slf4j
 @Service
@@ -32,6 +33,7 @@ public class OrchestrationService {
     private final CodeGenerationService codeGenerationService;
     private final BugAnalysisService bugAnalysisService;
     private final SummarizationService summarizationService;
+    private final AdaptiveRagOrchestrator adaptiveRagOrchestrator; // <-- НОВАЯ ЗАВИСИМОСТЬ
 
     /**
      * Обрабатывает унифицированный запрос от пользователя, возвращая полный ответ после его генерации.
@@ -44,22 +46,21 @@ public class OrchestrationService {
                 .flatMap(intent -> {
                     log.info("Маршрутизация запроса с намерением: {}. SessionID: {}", intent, request.sessionId());
                     return switch (intent) {
-                        // Для всех интентов, кроме SUMMARIZATION, используем поле `query`
-                        case RAG_QUERY ->
-                                Mono.fromFuture(sessionService.processRagRequestAsync(request.toRagQueryRequest()))
+                        case RAG_QUERY -> // <-- ИЗМЕНЕНИЕ
+                                Mono.fromFuture(() -> adaptiveRagOrchestrator.processAdaptive(request.toRagQueryRequest()))
                                         .map(response -> UniversalSyncResponse.from(response, intent));
                         case CHITCHAT ->
-                                Mono.fromFuture(sessionService.processChatRequestAsync(request.toChatRequest()))
+                                Mono.fromFuture(() -> sessionService.processChatRequestAsync(request.toChatRequest()))
                                         .map(response -> UniversalSyncResponse.from(response, intent));
+                        // ... остальной код без изменений
                         case CODE_GENERATION -> codeGenerationService.generateCode(request.toCodeGenerationRequest())
                                 .map(response -> UniversalSyncResponse.from(response, intent));
                         case BUG_ANALYSIS -> bugAnalysisService.analyzeBugReport(request.query())
                                 .map(response -> UniversalSyncResponse.from(response, intent));
-                        // Для SUMMARIZATION используем ТОЛЬКО поле `context`
                         case SUMMARIZATION -> summarizationService.summarizeAsync(request.context(), null)
                                 .map(summary -> UniversalSyncResponse.from(summary, intent));
-                        case UNKNOWN -> // Fallback-поведение
-                                Mono.fromFuture(sessionService.processChatRequestAsync(request.toChatRequest()))
+                        case UNKNOWN ->
+                                Mono.fromFuture(() -> sessionService.processChatRequestAsync(request.toChatRequest()))
                                         .map(response -> UniversalSyncResponse.from(response, intent));
                     };
                 }).toFuture();

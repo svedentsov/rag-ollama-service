@@ -3,17 +3,17 @@ package com.example.ragollama.optimization;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * Типобезопасная конфигурация для агента оптимизации индекса.
  * <p>
  * Позволяет гибко управлять работой агента через {@code application.yml},
  * включая его включение/выключение и расписание запуска.
- *
- * @EnableConfigurationProperties в главном классе приложения.
  */
 @Getter
 @Setter
+@Validated
 @ConfigurationProperties(prefix = "app.optimization.index")
 public class IndexOptimizerProperties {
 
@@ -33,6 +33,9 @@ public class IndexOptimizerProperties {
      */
     private StaleDocumentDetection staleDocumentDetection = new StaleDocumentDetection();
 
+    /**
+     * Настройки для этапа обнаружения устаревших документов.
+     */
     @Getter
     @Setter
     public static class StaleDocumentDetection {

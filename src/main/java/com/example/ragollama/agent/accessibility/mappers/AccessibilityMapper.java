@@ -5,6 +5,7 @@ import com.example.ragollama.agent.accessibility.api.dto.AccessibilityAuditRespo
 import com.example.ragollama.agent.accessibility.model.AccessibilityReport;
 import org.springframework.stereotype.Component;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -18,22 +19,39 @@ import java.util.List;
 public class AccessibilityMapper {
 
     /**
-     * Преобразует список {@link AgentResult} в {@link AccessibilityAuditResponse}.
+     * Преобразует список результатов работы конвейера в DTO ответа.
+     * <p>
+     * Логика основана на контракте, что интересующий нас результат
+     * (`AccessibilityReport`) будет находиться в деталях **последнего**
+     * выполненного агента в конвейере.
      *
      * @param agentResults Список результатов, возвращенный конвейером.
-     *                     Ожидается, что он содержит один результат от агента "accessibility-auditor".
-     * @return DTO ответа для API.
+     *                     Ожидается, что он не пуст.
+     * @return DTO ответа {@link AccessibilityAuditResponse} для API.
      */
     public AccessibilityAuditResponse toResponseDto(List<AgentResult> agentResults) {
-        // Извлекаем отчет из деталей последнего результата в конвейере
-        AccessibilityReport report = agentResults.stream()
-                .reduce((first, second) -> second) // Получаем последний элемент
-                .flatMap(lastResult -> lastResult.details().entrySet().stream()
-                        .filter(entry -> entry.getValue() instanceof AccessibilityReport)
-                        .map(entry -> (AccessibilityReport) entry.getValue())
-                        .findFirst())
-                .orElse(new AccessibilityReport("Отчет не был сгенерирован.", List.of(), List.of()));
+        if (agentResults == null || agentResults.isEmpty()) {
+            return createEmptyResponse();
+        }
+        AgentResult lastResult = agentResults.get(agentResults.size() - 1);
+        Object reportObject = lastResult.details().get("accessibilityReport");
+        if (reportObject instanceof AccessibilityReport report) {
+            return new AccessibilityAuditResponse(report);
+        }
+        return createEmptyResponse();
+    }
 
-        return new AccessibilityAuditResponse(report);
+    /**
+     * Создает DTO ответа по умолчанию, если отчет не был сгенерирован.
+     *
+     * @return DTO с сообщением об ошибке.
+     */
+    private AccessibilityAuditResponse createEmptyResponse() {
+        AccessibilityReport emptyReport = new AccessibilityReport(
+                "Отчет не был сгенерирован из-за внутренней ошибки.",
+                Collections.emptyList(),
+                Collections.emptyList()
+        );
+        return new AccessibilityAuditResponse(emptyReport);
     }
 }

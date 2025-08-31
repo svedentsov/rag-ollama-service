@@ -4,6 +4,8 @@ import com.example.ragollama.agent.AgentOrchestratorService;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.evaluation.api.dto.FeedbackToTestRequest;
 import com.example.ragollama.evaluation.model.EvaluationResult;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
@@ -23,15 +25,16 @@ import java.util.concurrent.CompletableFuture;
  * <p>
  * Этот класс объединяет две ответственности:
  * 1. Предоставляет кастомный эндпоинт Spring Boot Actuator для запуска
- *    оценки RAG-системы по пути {@code /actuator/rageval}.
+ * оценки RAG-системы по пути {@code /actuator/rageval}.
  * 2. Предоставляет стандартный REST API для запуска агента, который
- *    преобразует пользовательский фидбэк в новый тест.
+ * преобразует пользовательский фидбэк в новый тест.
  */
 @Component
 @RestController
 @RequestMapping("/api/v1/evaluation")
 @Endpoint(id = "rageval")
 @RequiredArgsConstructor
+@Tag(name = "RAG Evaluation API", description = "API для оценки качества RAG и работы с фидбэком")
 public class RagEvaluationController {
 
     private final RagEvaluationService evaluationService;
@@ -45,6 +48,8 @@ public class RagEvaluationController {
      * @return {@link Mono} с объектом {@link EvaluationResult}.
      */
     @ReadOperation
+    @Operation(summary = "Запустить оценку RAG по 'золотому датасету' (Actuator)",
+            description = "Доступен по GET /actuator/rageval. Асинхронно прогоняет все тесты из датасета и возвращает метрики качества.")
     public Mono<EvaluationResult> evaluate() {
         return evaluationService.evaluate();
     }
@@ -58,6 +63,8 @@ public class RagEvaluationController {
      * @return {@link CompletableFuture} с результатом, содержащим новый `GoldenRecord`.
      */
     @PostMapping("/generate-test-from-feedback")
+    @Operation(summary = "Сгенерировать тест для 'золотого датасета' из фидбэка пользователя",
+            description = "Принимает ID негативного фидбэка, анализирует его и автоматически создает новый тест для предотвращения регрессий.")
     public CompletableFuture<List<AgentResult>> generateTestFromFeedback(@Valid @RequestBody FeedbackToTestRequest request) {
         return orchestratorService.invokePipeline("feedback-to-test-pipeline", request.toAgentContext());
     }

@@ -15,6 +15,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +24,8 @@ import java.util.Map;
  * <p>
  * Преобразует задачу на естественном языке в структурированный,
  * пошаговый план выполнения, используя доступные инструменты (других агентов).
+ * Является stateless-компонентом, который выполняет чистую функцию
+ * трансформации "запрос -> план".
  */
 @Slf4j
 @Service
@@ -35,11 +38,11 @@ public class PlanningAgentService {
     private final ObjectMapper objectMapper;
 
     /**
-     * Создает план выполнения на основе задачи пользователя.
+     * Асинхронно создает план выполнения на основе задачи пользователя и начального контекста.
      *
-     * @param taskDescription Задача на естественном языке.
-     * @param initialContext  Начальные данные, которые могут помочь в планировании.
-     * @return {@link Mono} со списком шагов плана.
+     * @param taskDescription Задача на естественном языке (например, "Проанализируй изменения и найди риски").
+     * @param initialContext  Начальные данные, которые могут помочь в планировании (например, Git-ссылки).
+     * @return {@link Mono}, который по завершении будет содержать список шагов плана {@link PlanStep}.
      */
     public Mono<List<PlanStep>> createPlan(String taskDescription, Map<String, Object> initialContext) {
         String availableToolsJson = toolRegistry.getToolDescriptionsAsJson();
@@ -57,14 +60,26 @@ public class PlanningAgentService {
         ));
         log.info("Запрос к LLM-планировщику для задачи: '{}'", taskDescription);
         Prompt prompt = new Prompt(new UserMessage(promptString));
-        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.BALANCED))
+
+        return Mono.fromFuture(() -> llmClient.callChat(prompt, ModelCapability.BALANCED))
                 .map(this::parsePlanFromLlmResponse)
-                .doOnSuccess(plan -> log.info("LLM-планировщик сгенерировал план из {} шагов.", plan.size()));
+                .doOnSuccess(plan -> log.info("LLM-планировщик сгенерировал план из {} шагов.", plan.size()))
+                .doOnError(e -> log.error("Ошибка при создании плана для задачи '{}'", taskDescription, e));
     }
 
+    /**
+     * Надежно парсит JSON-ответ от LLM в список шагов плана.
+     *
+     * @param jsonResponse Сырой ответ от LLM, который может содержать markdown и другой "мусор".
+     * @return Список объектов {@link PlanStep}.
+     * @throws ProcessingException если парсинг не удался даже после очистки.
+     */
     private List<PlanStep> parsePlanFromLlmResponse(String jsonResponse) {
         try {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            if (cleanedJson.isEmpty() || "[]".equals(cleanedJson)) {
+                return Collections.emptyList();
+            }
             return objectMapper.readValue(cleanedJson, new TypeReference<>() {
             });
         } catch (JsonProcessingException e) {

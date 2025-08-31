@@ -1,4 +1,4 @@
-package com.example.ragollama.agent.sdlc.api.dto;
+package com.example.ragollama.optimization.api.dto;
 
 import com.example.ragollama.agent.AgentContext;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -9,10 +9,10 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * DTO для высокоуровневого запроса к SDLC Orchestrator.
+ * DTO для высокоуровневого запроса к Workflow Orchestrator.
  * <p>
  * Этот объект передает бизнес-цель пользователя и начальный набор данных,
- * необходимых для ее выполнения, в {@link com.example.ragollama.agent.autonomy.SdlcOrchestratorAgent}.
+ * необходимых для ее выполнения, в {@link com.example.ragollama.optimization.WorkflowPlannerAgent}.
  *
  * @param goal           Высокоуровневая цель на естественном языке, которую должен
  *                       достичь оркестратор.
@@ -20,15 +20,15 @@ import java.util.Optional;
  *                       Ключи и значения зависят от конкретной цели
  *                       (например, `oldRef`, `newRef` для анализа релиза).
  */
-@Schema(description = "DTO для запроса к SDLC Orchestrator")
-public record SdlcRequest(
+@Schema(description = "DTO для запроса на выполнение сложного рабочего процесса (workflow)")
+public record WorkflowRequest(
         @Schema(description = "Высокоуровневая цель на естественном языке", requiredMode = Schema.RequiredMode.REQUIRED,
-                example = "Проведи полный аудит готовности к релизу для ветки feature/new-payment-system")
-        @NotBlank @Size(max = 1024)
+                example = "Проведи полный аудит безопасности и покрытия тестами для изменений между main и feature/auth, а затем создай отчет.")
+        @NotBlank @Size(max = 2048)
         String goal,
 
         @Schema(description = "Начальный контекст с данными для выполнения",
-                example = "{\"oldRef\": \"main\", \"newRef\": \"feature/new-payment-system\"}")
+                example = "{\"oldRef\": \"main\", \"newRef\": \"feature/auth\", \"jacocoReportContent\": \"<...xml...>\"}")
         Map<String, Object> initialContext
 ) {
     /**

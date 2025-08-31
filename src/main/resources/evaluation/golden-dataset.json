@@ -3,15 +3,14 @@
     "queryId": "spring-ai-intro-01",
     "queryText": "Что такое Spring AI?",
     "expectedDocumentIds": [
-      "d290f1ee-6c54-4b01-90e6-d701748f0851"
+      "manual-doc-1"
     ]
   },
   {
     "queryId": "ollama-integration-01",
     "queryText": "Как интегрироваться с Ollama?",
     "expectedDocumentIds": [
-      "d290f1ee-6c54-4b01-90e6-d701748f0851",
-      "1a2b3c4d-5e6f-7890-1234-567890abcdef"
+      "manual-doc-1"
     ]
   },
   {

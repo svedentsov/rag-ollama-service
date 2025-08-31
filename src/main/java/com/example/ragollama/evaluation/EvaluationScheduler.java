@@ -6,6 +6,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+/**
+ * Планировщик для периодического запуска задачи оценки качества RAG-системы.
+ * <p>
+ * Активируется свойством {@code app.evaluation.scheduler.enabled=true}.
+ * Позволяет настроить автоматический, регулярный мониторинг качества модели
+ * и вовремя обнаруживать деградацию.
+ */
 @Component
 @Slf4j
 @RequiredArgsConstructor
@@ -17,6 +24,9 @@ public class EvaluationScheduler {
 
     /**
      * Периодически запускает полный прогон оценки RAG-системы по "золотому датасету".
+     * <p>
+     * После завершения оценки, сравнивает полученный F1-Score с пороговым
+     * значением из конфигурации и выводит в лог ошибку в случае деградации.
      */
     @Scheduled(cron = "${app.evaluation.scheduler.cron}")
     public void runScheduledEvaluation() {
