@@ -93,6 +93,11 @@ public class PromptService {
             Map.entry("featureExtraction", "feature-extraction-prompt.ftl"),
             Map.entry("featureGapAnalysis", "feature-gap-analysis-prompt.ftl"),
             Map.entry("documentEnhancer", "document-enhancer-prompt.ftl"),
+            Map.entry("resourceAllocator", "resource-allocator-prompt.ftl"),
+            Map.entry("prioritizationAgent", "prioritization-agent-prompt.ftl"),
+            Map.entry("dataSummarizer", "data-summarizer-prompt.ftl"),
+            Map.entry("chartGenerator", "chart-generator-prompt.ftl"),
+            Map.entry("simulationAnalyzer", "simulation-analyzer-prompt.ftl"),
 
             // Summarization & Data Generation
             Map.entry("summarization", "summarization-prompt.ftl"),
@@ -131,7 +136,7 @@ public class PromptService {
             Map.entry("ragOptimizer", "rag-optimizer-prompt.ftl"),
             Map.entry("queryProfiler", "query-profiler-prompt.ftl"),
             Map.entry("errorHandler", "error-handler-prompt.ftl"),
-            Map.entry("prioritizationAgent", "prioritization-agent-prompt.ftl")
+            Map.entry("promptRefinement", "prompt-refinement-prompt.ftl")
     );
 
     /**

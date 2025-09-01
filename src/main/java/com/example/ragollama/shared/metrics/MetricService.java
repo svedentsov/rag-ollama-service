@@ -14,6 +14,7 @@ import java.util.function.Supplier;
  * Предоставляет удобные методы для инкремента счетчиков и измерения времени выполнения
  * операций. Включает метрики для RAG-конвейера, такие как количество найденных
  * документов и результаты проверки "обоснованности" (grounding) и цитирования ответов.
+ * В этой версии добавлена метрика для отслеживания оценки доверия (Trust Score).
  */
 @Service
 public class MetricService {
@@ -24,11 +25,11 @@ public class MetricService {
     private final Counter emptyRetrievalCounter;
     private final Counter successfulRetrievalCounter;
     private final DistributionSummary retrievedDocumentsSummary;
+    private final DistributionSummary trustScoreSummary;
     private final Counter groundedCounter;
     private final Counter ungroundedCounter;
     private final Counter verificationPassedCounter;
     private final Counter verificationFailedCounter;
-
 
     /**
      * Конструктор, который инициализирует реестр метрик и создает все необходимые счетчики.
@@ -60,6 +61,12 @@ public class MetricService {
         this.retrievedDocumentsSummary = DistributionSummary.builder("rag.retrieval.documents.count")
                 .description("Распределение количества документов, найденных на этапе Retrieval.")
                 .baseUnit("documents")
+                .register(meterRegistry);
+
+        this.trustScoreSummary = DistributionSummary.builder("rag.trust.score")
+                .description("Распределение оценок доверия (Trust Score) для сгенерированных RAG-ответов.")
+                .baseUnit("points")
+                .scale(100)
                 .register(meterRegistry);
 
         this.groundedCounter = Counter.builder("rag.grounding.checks")
@@ -165,5 +172,14 @@ public class MetricService {
         } else {
             verificationFailedCounter.increment();
         }
+    }
+
+    /**
+     * Записывает вычисленную оценку доверия (Trust Score) в метрики.
+     *
+     * @param score Оценка доверия от 0 до 100.
+     */
+    public void recordTrustScore(int score) {
+        trustScoreSummary.record(score);
     }
 }
