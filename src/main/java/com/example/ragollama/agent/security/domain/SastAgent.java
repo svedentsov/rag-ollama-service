@@ -20,13 +20,15 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, выполняющий статическое сканирование безопасности (SAST)
- * измененного кода с помощью LLM.
+ * измененного кода с помощью LLM. Он ищет уязвимости, соответствующие
+ * общепринятым стандартам, таким как OWASP Top 10.
  */
 @Slf4j
 @Component
@@ -38,21 +40,33 @@ public class SastAgent implements ToolAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "sast-agent";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Выполняет статическое сканирование (SAST) измененного Java-кода на предмет уязвимостей.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey("changedFiles") && context.payload().containsKey("newRef");
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @SuppressWarnings("unchecked")
     public CompletableFuture<AgentResult> execute(AgentContext context) {
@@ -68,12 +82,23 @@ public class SastAgent implements ToolAgent {
                 .map(allFindings -> {
                     List<SecurityFinding> flattened = allFindings.stream().flatMap(List::stream).toList();
                     String summary = "SAST-сканирование завершено. Найдено уязвимостей: " + flattened.size();
+                    log.info(summary);
                     return new AgentResult(getName(), AgentResult.Status.SUCCESS, summary, Map.of("sastFindings", flattened));
                 })
                 .toFuture();
     }
 
+    /**
+     * Асинхронно сканирует один файл с помощью LLM.
+     *
+     * @param filePath Путь к файлу.
+     * @param content  Содержимое файла.
+     * @return {@link Mono} со списком найденных уязвимостей.
+     */
     private Mono<List<SecurityFinding>> scanFile(String filePath, String content) {
+        if (content == null || content.isBlank()) {
+            return Mono.just(Collections.emptyList());
+        }
         String promptString = promptService.render("sastAgent", Map.of("filePath", filePath, "code", content));
         return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
                 .map(this::parseLlmResponse);
@@ -82,6 +107,9 @@ public class SastAgent implements ToolAgent {
     private List<SecurityFinding> parseLlmResponse(String jsonResponse) {
         try {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            if (cleanedJson.isEmpty() || "[]".equals(cleanedJson)) {
+                return Collections.emptyList();
+            }
             return objectMapper.readValue(cleanedJson, new TypeReference<>() {
             });
         } catch (JsonProcessingException e) {

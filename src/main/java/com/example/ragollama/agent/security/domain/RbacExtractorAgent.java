@@ -8,6 +8,7 @@ import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
+import com.example.ragollama.shared.util.JsonExtractorUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,12 +19,14 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент для извлечения правил контроля доступа (RBAC/ACL) из исходного кода.
+ * Использует LLM для парсинга аннотаций Spring Security и других паттернов авторизации.
  */
 @Slf4j
 @Component
@@ -35,21 +38,33 @@ public class RbacExtractorAgent implements ToolAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "rbac-extractor";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Извлекает правила RBAC/ACL из измененных Java-файлов с помощью LLM.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey("changedFiles") && context.payload().containsKey("newRef");
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @SuppressWarnings("unchecked")
     public CompletableFuture<AgentResult> execute(AgentContext context) {
@@ -59,7 +74,7 @@ public class RbacExtractorAgent implements ToolAgent {
         log.info("RbacExtractorAgent: анализ {} измененных файлов в ref '{}'", changedFiles.size(), newRef);
 
         return Flux.fromIterable(changedFiles)
-                .filter(filePath -> filePath.endsWith(".java") && filePath.contains("controller"))
+                .filter(filePath -> filePath.endsWith(".java") && (filePath.contains("controller") || filePath.contains("config")))
                 .flatMap(filePath -> gitApiClient.getFileContent(filePath, newRef)
                         .flatMap(content -> extractRulesFromCode(content, filePath))
                         .onErrorResume(e -> {
@@ -94,7 +109,7 @@ public class RbacExtractorAgent implements ToolAgent {
      */
     private Mono<List<Map<String, String>>> extractRulesFromCode(String code, String filePath) {
         if (code == null || code.isBlank()) {
-            return Mono.just(List.of());
+            return Mono.just(Collections.emptyList());
         }
 
         String promptString = promptService.render("rbacExtractor", Map.of("code", code, "filePath", filePath));
@@ -107,10 +122,9 @@ public class RbacExtractorAgent implements ToolAgent {
      */
     private List<Map<String, String>> parseLlmResponse(String llmResponse) {
         try {
-            String cleanedJson = llmResponse.replaceAll("(?s)```json\\s*|\\s*```", "").trim();
-            // Проверяем, не вернула ли модель пустой объект или массив
-            if (cleanedJson.equals("{}") || cleanedJson.equals("[]") || !cleanedJson.contains("resource")) {
-                return List.of();
+            String cleanedJson = JsonExtractorUtil.extractJsonBlock(llmResponse);
+            if (cleanedJson.isEmpty() || "[]".equals(cleanedJson) || !cleanedJson.contains("resource")) {
+                return Collections.emptyList();
             }
             return objectMapper.readValue(cleanedJson, new TypeReference<>() {
             });

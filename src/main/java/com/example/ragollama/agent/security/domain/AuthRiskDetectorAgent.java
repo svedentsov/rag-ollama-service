@@ -8,6 +8,7 @@ import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
+import com.example.ragollama.shared.util.JsonExtractorUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,7 +24,8 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который анализирует извлеченные правила доступа на предмет
- * потенциальных рисков безопасности.
+ * потенциальных рисков безопасности, таких как нарушение принципа
+ * наименьших привилегий.
  */
 @Slf4j
 @Component
@@ -34,21 +36,33 @@ public class AuthRiskDetectorAgent implements ToolAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "auth-risk-detector";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Анализирует список правил RBAC/ACL и выявляет потенциальные риски безопасности.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey("extractedRules");
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @SuppressWarnings("unchecked")
     public CompletableFuture<AgentResult> execute(AgentContext context) {
@@ -91,7 +105,7 @@ public class AuthRiskDetectorAgent implements ToolAgent {
      */
     private List<AuthRisk> parseLlmResponse(String llmResponse) {
         try {
-            String cleanedJson = llmResponse.replaceAll("(?s)```json\\s*|\\s*```", "").trim();
+            String cleanedJson = JsonExtractorUtil.extractJsonBlock(llmResponse);
             if (cleanedJson.isEmpty() || cleanedJson.equals("[]")) {
                 return Collections.emptyList();
             }

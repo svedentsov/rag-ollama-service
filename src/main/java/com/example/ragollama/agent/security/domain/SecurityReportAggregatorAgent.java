@@ -3,7 +3,6 @@ package com.example.ragollama.agent.security.domain;
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.ToolAgent;
-import com.example.ragollama.agent.security.model.SecurityFinding;
 import com.example.ragollama.agent.security.model.UnifiedSecurityReport;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
@@ -17,8 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -49,23 +47,17 @@ public class SecurityReportAggregatorAgent implements ToolAgent {
 
     @Override
     public boolean canHandle(AgentContext context) {
-        // Запускается, если есть хотя бы один из отчетов
-        return context.payload().containsKey("sastFindings") || context.payload().containsKey("logAnalysisFindings");
+        return context.payload().containsKey("sastFindings") ||
+                context.payload().containsKey("risks") ||
+                context.payload().containsKey("privacyReport");
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public CompletableFuture<AgentResult> execute(AgentContext context) {
-        List<SecurityFinding> sastFindings = (List<SecurityFinding>) context.payload().getOrDefault("sastFindings", List.of());
-        List<SecurityFinding> logFindings = (List<SecurityFinding>) context.payload().getOrDefault("logAnalysisFindings", List.of());
-
-        List<SecurityFinding> allFindings = new ArrayList<>();
-        allFindings.addAll(sastFindings);
-        allFindings.addAll(logFindings);
-
-        if (allFindings.isEmpty()) {
-            return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Полный аудит безопасности завершен. Уязвимостей не найдено.", Map.of()));
-        }
+        Map<String, Object> allFindings = new HashMap<>();
+        allFindings.put("sastFindings", context.payload().get("sastFindings"));
+        allFindings.put("authRisks", context.payload().get("risks"));
+        allFindings.put("privacyViolations", context.payload().get("privacyReport"));
 
         try {
             String findingsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(allFindings);
@@ -89,7 +81,6 @@ public class SecurityReportAggregatorAgent implements ToolAgent {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, UnifiedSecurityReport.class);
         } catch (JsonProcessingException e) {
-            log.error("Не удалось распарсить JSON-ответ от Aggregator LLM: {}", jsonResponse, e);
             throw new ProcessingException("Aggregator LLM вернул невалидный JSON.", e);
         }
     }

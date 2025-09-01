@@ -17,15 +17,15 @@ import java.util.Optional;
  */
 @Schema(description = "DTO для запроса на сбор доказательств для аудита")
 public record ComplianceEvidenceRequest(
-        @Schema(description = "Исходная Git-ссылка", requiredMode = Schema.RequiredMode.REQUIRED, example = "v1.2.0")
+        @Schema(description = "Исходная Git-ссылка (например, тег предыдущего релиза)", requiredMode = Schema.RequiredMode.REQUIRED, example = "v1.2.0")
         @NotBlank @Pattern(regexp = "^[\\w\\-./]+$")
         String oldRef,
 
-        @Schema(description = "Конечная Git-ссылка", requiredMode = Schema.RequiredMode.REQUIRED, example = "v1.3.0")
+        @Schema(description = "Конечная Git-ссылка (например, тег текущего релиза)", requiredMode = Schema.RequiredMode.REQUIRED, example = "v1.3.0")
         @NotBlank @Pattern(regexp = "^[\\w\\-./]+$")
         String newRef,
 
-        @Schema(description = "Опциональные логи приложения, собранные во время тестов")
+        @Schema(description = "Опциональные логи приложения для анализа")
         String applicationLogs
 ) {
     /**
@@ -34,7 +34,6 @@ public record ComplianceEvidenceRequest(
      * @return Контекст для запуска агентов.
      */
     public AgentContext toAgentContext() {
-        // Для простоты, предполагаем что ticket ID извлекается из коммитов
         return new AgentContext(Map.of(
                 "oldRef", this.oldRef,
                 "newRef", this.newRef,
