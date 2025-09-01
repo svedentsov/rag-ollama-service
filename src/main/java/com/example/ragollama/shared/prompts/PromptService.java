@@ -14,13 +14,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Сервис для централизованного управления и рендеринга шаблонов FreeMarker.
- * <p>
- * Этот сервис является нашей собственной реализацией рендерера,
- * обходя ограничения стандартного PromptTemplate в Spring AI. Он загружает
- * все шаблоны при старте приложения и предоставляет единый метод для их
- * безопасной и эффективной обработки. Использование централизованного
- * реестра {@code TEMPLATE_PATHS} упрощает управление и предотвращает
- * разброс путей к шаблонам по всему коду.
  */
 @Slf4j
 @Service
@@ -32,7 +25,6 @@ public class PromptService {
 
     /**
      * Централизованный каталог всех используемых в приложении промптов.
-     * Ключ - логическое имя, используемое в коде. Значение - путь к файлу в ресурсах.
      */
     private static final Map<String, String> TEMPLATE_PATHS = Map.ofEntries(
             // RAG & Chat
@@ -95,9 +87,6 @@ public class PromptService {
             Map.entry("documentEnhancer", "document-enhancer-prompt.ftl"),
             Map.entry("resourceAllocator", "resource-allocator-prompt.ftl"),
             Map.entry("prioritizationAgent", "prioritization-agent-prompt.ftl"),
-            Map.entry("dataSummarizer", "data-summarizer-prompt.ftl"),
-            Map.entry("chartGenerator", "chart-generator-prompt.ftl"),
-            Map.entry("simulationAnalyzer", "simulation-analyzer-prompt.ftl"),
 
             // Summarization & Data Generation
             Map.entry("summarization", "summarization-prompt.ftl"),
@@ -109,12 +98,15 @@ public class PromptService {
             Map.entry("dataGenerator", "data-generator-prompt.ftl"),
             Map.entry("testCaseGeneration", "test-case-generation-prompt.ftl"),
             Map.entry("checklistGenerator", "checklist-generator-prompt.ftl"),
+            Map.entry("dataSummarizer", "data-summarizer-prompt.ftl"),
+            Map.entry("chartGenerator", "chart-generator-prompt.ftl"),
 
             // Validation & Explanation
             Map.entry("grounding", "grounding-prompt.ftl"),
             Map.entry("sourceCiteVerifier", "source-cite-verifier-prompt.ftl"),
             Map.entry("explainerAgent", "explainer-agent-prompt.ftl"),
             Map.entry("crossValidator", "cross-validator-prompt.ftl"),
+            Map.entry("trustScorer", "trust-scorer-prompt.ftl"),
 
             // Strategic & Planning Agents
             Map.entry("planningAgent", "planning-agent-prompt.ftl"),
@@ -136,7 +128,9 @@ public class PromptService {
             Map.entry("ragOptimizer", "rag-optimizer-prompt.ftl"),
             Map.entry("queryProfiler", "query-profiler-prompt.ftl"),
             Map.entry("errorHandler", "error-handler-prompt.ftl"),
-            Map.entry("promptRefinement", "prompt-refinement-prompt.ftl")
+            Map.entry("promptRefinement", "prompt-refinement-prompt.ftl"),
+            Map.entry("simulationAnalyzer", "simulation-analyzer-prompt.ftl"),
+            Map.entry("experimentAnalyzer", "experiment-analyzer-prompt.ftl")
     );
 
     /**

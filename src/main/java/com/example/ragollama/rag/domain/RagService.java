@@ -9,6 +9,7 @@ import com.example.ragollama.shared.metrics.MetricService;
 import com.example.ragollama.shared.security.PromptGuardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
@@ -61,12 +62,15 @@ public class RagService {
      * @return {@link CompletableFuture} с финальным ответом.
      */
     public CompletableFuture<RagAnswer> queryAsync(String query, List<Message> history, int topK, double similarityThreshold, UUID sessionId) {
+        final String requestId = MDC.get("requestId");
         return metricService.recordTimer("rag.requests.async.pure",
                 () -> prepareRagFlow(query, history, topK, similarityThreshold)
                         .flatMap(context ->
                                 Mono.fromFuture(generationService.generate(context.prompt(), context.documents(), sessionId))
                                         .doOnSuccess(response -> {
-                                            var processingContext = new RagProcessingContext(query, context.documents(), context.prompt(),
+                                            // Запускаем асинхронную постобработку, передавая requestId явно
+                                            var processingContext = new RagProcessingContext(
+                                                    requestId, query, context.documents(), context.prompt(),
                                                     new RagAnswer(response.answer(), response.sourceCitations()), sessionId);
                                             postProcessingOrchestrator.process(processingContext);
                                         })
@@ -87,9 +91,32 @@ public class RagService {
      * @return Реактивный поток {@link Flux} со структурированными частями ответа.
      */
     public Flux<StreamingResponsePart> queryStream(String query, List<Message> history, int topK, double similarityThreshold, UUID sessionId) {
+        final String requestId = MDC.get("requestId");
+        var documentsRef = new java.util.concurrent.atomic.AtomicReference<List<Document>>();
+        var promptRef = new java.util.concurrent.atomic.AtomicReference<Prompt>();
+        StringBuilder fullAnswerBuilder = new StringBuilder();
+
         return metricService.recordTimer("rag.requests.stream.pure",
                 () -> prepareRagFlow(query, history, topK, similarityThreshold)
+                        .doOnNext(context -> {
+                            documentsRef.set(context.documents());
+                            promptRef.set(context.prompt());
+                        })
                         .flatMapMany(context -> generationService.generateStructuredStream(context.prompt(), context.documents(), sessionId))
+                        .doOnNext(part -> {
+                            if (part instanceof StreamingResponsePart.Content content) {
+                                fullAnswerBuilder.append(content.text());
+                            }
+                        })
+                        .doOnComplete(() -> {
+                            String finalAnswer = fullAnswerBuilder.toString();
+                            if (!finalAnswer.isBlank()) {
+                                var processingContext = new RagProcessingContext(
+                                        requestId, query, documentsRef.get(), promptRef.get(),
+                                        new RagAnswer(finalAnswer, List.of()), sessionId);
+                                postProcessingOrchestrator.process(processingContext);
+                            }
+                        })
                         .onErrorResume(e -> {
                             log.error("Ошибка в 'чистом' потоке RAG для запроса '{}': {}", query, e.getMessage());
                             return Flux.just(new StreamingResponsePart.Error("Произошла внутренняя ошибка."));

@@ -10,11 +10,8 @@ import java.util.UUID;
 /**
  * Контекстный объект, передающий все необходимые данные между этапами
  * постобработки RAG-ответа.
- * <p>
- * Является неизменяемым (immutable) DTO, который агрегирует полный "слепок"
- * одного RAG-взаимодействия, обеспечивая чистоту и предсказуемость
- * конвейера постобработки.
  *
+ * @param requestId     Уникальный идентификатор исходного HTTP-запроса.
  * @param originalQuery Оригинальный, немодифицированный запрос пользователя.
  * @param documents     Список документов, фактически использованных для генерации контекста.
  * @param prompt        Финальный промпт, отправленный в LLM.
@@ -22,6 +19,7 @@ import java.util.UUID;
  * @param sessionId     Идентификатор сессии, к которой относится взаимодействие.
  */
 public record RagProcessingContext(
+        String requestId,
         String originalQuery,
         List<Document> documents,
         Prompt prompt,
