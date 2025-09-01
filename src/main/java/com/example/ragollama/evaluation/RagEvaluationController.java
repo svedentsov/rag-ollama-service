@@ -55,12 +55,14 @@ public class RagEvaluationController {
     }
 
     /**
-     * Запускает агента для анализа фидбэка и автоматического создания нового теста.
+     * Запускает конвейер для анализа фидбэка и автоматического создания нового теста.
      * <p>
-     * Доступен по пути {@code POST /api/v1/evaluation/generate-test-from-feedback}.
+     * Этот эндпоинт принимает ID негативного отзыва, запускает AI-агента для
+     * определения "истины" (ground truth) и добавляет новый регрессионный тест
+     * в "золотой датасет", замыкая MLOps-цикл.
      *
-     * @param request DTO с ID фидбэка.
-     * @return {@link CompletableFuture} с результатом, содержащим новый `GoldenRecord`.
+     * @param request DTO с ID фидбэка для анализа.
+     * @return {@link CompletableFuture} с результатом, содержащим информацию о созданном тесте (`GoldenRecord`).
      */
     @PostMapping("/generate-test-from-feedback")
     @Operation(summary = "Сгенерировать тест для 'золотого датасета' из фидбэка пользователя",

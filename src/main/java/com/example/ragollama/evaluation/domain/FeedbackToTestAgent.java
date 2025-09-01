@@ -26,6 +26,9 @@ import java.util.concurrent.CompletableFuture;
 /**
  * AI-агент, который преобразует негативный фидбэк пользователя в новый
  * тест для "золотого датасета".
+ * <p>
+ * Этот агент замыкает MLOps-цикл, автоматически пополняя набор регрессионных
+ * тестов на основе реальных ошибок системы, обнаруженных пользователями.
  */
 @Slf4j
 @Component
@@ -38,28 +41,42 @@ public class FeedbackToTestAgent implements ToolAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "feedback-to-test-converter";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Анализирует негативный фидбэк и создает новый тест для 'золотого датасета'.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().get("feedbackId") instanceof UUID;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         UUID feedbackId = (UUID) context.payload().get("feedbackId");
 
+        // Шаг 1: Собрать полный контекст по ID фидбэка.
         return CompletableFuture.supplyAsync(() -> feedbackAnalysisService.getContextForFeedback(feedbackId)
                         .orElseThrow(() -> new ProcessingException("Контекст для feedbackId " + feedbackId + " не найден.")))
                 .thenCompose(feedbackContext -> {
+                    // Шаг 2: Передать контекст в LLM для определения "истины".
                     String promptString = promptService.render("feedbackToTest", Map.of(
                             "user_query", feedbackContext.originalQuery(),
                             "bad_ai_answer", feedbackContext.badAnswer(),
@@ -71,9 +88,21 @@ public class FeedbackToTestAgent implements ToolAgent {
                 });
     }
 
+    /**
+     * Парсит ответ LLM, создает и сохраняет новый GoldenRecord.
+     *
+     * @param llmResponse Ответ от LLM с анализом.
+     * @param context     Исходный контекст фидбэка.
+     * @return Финальный {@link AgentResult}.
+     */
     private AgentResult createGoldenRecord(String llmResponse, FeedbackAnalysisService.FeedbackContext context) {
         try {
             FeedbackAnalysisResult analysis = parseLlmResponse(llmResponse);
+            if (analysis.correctedDocumentIds() == null || analysis.correctedDocumentIds().isEmpty()) {
+                String message = "AI-аналитик не смог определить корректный набор документов. Новый тест не создан.";
+                log.warn(message);
+                return new AgentResult(getName(), AgentResult.Status.SUCCESS, message, Map.of());
+            }
             GoldenRecord newRecord = new GoldenRecord(
                     "feedback-" + UUID.randomUUID().toString().substring(0, 8),
                     context.originalQuery(),

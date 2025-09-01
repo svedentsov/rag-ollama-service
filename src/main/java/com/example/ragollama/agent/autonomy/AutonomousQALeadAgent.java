@@ -3,6 +3,7 @@ package com.example.ragollama.agent.autonomy;
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.dynamic.DynamicPipelineExecutionService;
 import com.example.ragollama.agent.dynamic.PlanStep;
+import com.example.ragollama.optimization.ProjectHealthAggregatorService;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
@@ -42,6 +43,8 @@ public class AutonomousQALeadAgent {
 
     /**
      * Запускает полный цикл автономного анализа и планирования по расписанию.
+     * Расписание настраивается в {@code application.yml} через свойство
+     * {@code app.analysis.autonomy.cron}.
      */
     @Scheduled(cron = "${app.analysis.autonomy.cron:0 0 7 * * MON-FRI}") // По умолчанию - в 7 утра по будням
     public void runAutonomousAnalysis() {
@@ -52,7 +55,7 @@ public class AutonomousQALeadAgent {
         healthAggregatorService.aggregateHealthReports(context)
                 .thenCompose(healthReport -> {
                     if (healthReport.isEmpty()) {
-                        log.info("Анализ завершен. Критичных проблем не обнаружено.");
+                        log.info("Автономный анализ завершен. Критичных проблем не обнаружено.");
                         return CompletableFuture.completedFuture(null);
                     }
                     // Шаг 2: Передаем отчеты LLM для стратегического анализа и планирования
@@ -85,6 +88,13 @@ public class AutonomousQALeadAgent {
                 });
     }
 
+    /**
+     * Безопасно парсит JSON-ответ от LLM, который представляет собой план действий.
+     *
+     * @param jsonResponse Ответ от LLM.
+     * @return Список шагов {@link PlanStep}.
+     * @throws ProcessingException если парсинг JSON не удался.
+     */
     private List<PlanStep> parseLlmResponse(String jsonResponse) {
         try {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);

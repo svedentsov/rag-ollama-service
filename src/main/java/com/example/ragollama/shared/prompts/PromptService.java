@@ -92,6 +92,7 @@ public class PromptService {
             Map.entry("incidentSummarizer", "incident-summarizer-prompt.ftl"),
             Map.entry("featureExtraction", "feature-extraction-prompt.ftl"),
             Map.entry("featureGapAnalysis", "feature-gap-analysis-prompt.ftl"),
+            Map.entry("documentEnhancer", "document-enhancer-prompt.ftl"),
 
             // Summarization & Data Generation
             Map.entry("summarization", "summarization-prompt.ftl"),
@@ -108,12 +109,14 @@ public class PromptService {
             Map.entry("grounding", "grounding-prompt.ftl"),
             Map.entry("sourceCiteVerifier", "source-cite-verifier-prompt.ftl"),
             Map.entry("explainerAgent", "explainer-agent-prompt.ftl"),
+            Map.entry("crossValidator", "cross-validator-prompt.ftl"),
 
             // Strategic & Planning Agents
             Map.entry("planningAgent", "planning-agent-prompt.ftl"),
             Map.entry("autonomousTriage", "autonomous-triage-prompt.ftl"),
             Map.entry("qaLeadStrategy", "qa-lead-strategy-prompt.ftl"),
             Map.entry("sdlcStrategy", "sdlc-strategy-prompt.ftl"),
+            Map.entry("workflowPlanner", "workflow-planner-prompt.ftl"),
             Map.entry("testTrendAnalyzer", "test-trend-analyzer-prompt.ftl"),
             Map.entry("regressionPredictor", "regression-predictor-prompt.ftl"),
             Map.entry("testDebtSummary", "test-debt-summary-prompt.ftl"),
@@ -128,7 +131,7 @@ public class PromptService {
             Map.entry("ragOptimizer", "rag-optimizer-prompt.ftl"),
             Map.entry("queryProfiler", "query-profiler-prompt.ftl"),
             Map.entry("errorHandler", "error-handler-prompt.ftl"),
-            Map.entry("workflowPlanner", "workflow-planner-prompt.ftl") // <-- ДОБАВЛЕНА НЕДОСТАЮЩАЯ ЗАПИСЬ
+            Map.entry("prioritizationAgent", "prioritization-agent-prompt.ftl")
     );
 
     /**

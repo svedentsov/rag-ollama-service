@@ -60,6 +60,13 @@ spring:
       # Общие настройки для всех кэшей. Для кэша сессий задаем время жизни.
       spec: "maximumSize=500,expireAfterAccess=30m"
 
+  # --- RabbitMQ Configuration ---
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
   # ===================================================================
   # AI & RAG Pipeline Configuration
   # ===================================================================
@@ -84,13 +91,6 @@ spring:
         index-type: HNSW # Тип индекса для быстрого поиска (Hierarchical Navigable Small World).
         distance-type: COSINE_DISTANCE # Метрика для измерения схожести векторов.
         dimensions: 1024 # Размерность вектора (зависит от embedding-модели).
-
-  # --- RabbitMQ Configuration ---
-  rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
 
 # ===================================================================
 # Observability (Monitoring & Metrics)
@@ -140,6 +140,15 @@ resilience4j:
         record-exceptions: # Считать DataAccessException как сбой
           - org.springframework.dao.DataAccessException
           - java.util.concurrent.TimeoutException
+      database:
+        register-health-indicator: true
+        sliding-window-size: 20
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        record-exceptions:
+          - org.springframework.dao.TransientDataAccessException
+          - java.sql.SQLTransientException
       jira: # Конфигурация для Jira API
         register-health-indicator: true
         sliding-window-size: 20
@@ -183,6 +192,9 @@ resilience4j:
     instances:
       ollama:
         timeout-duration: 280s
+        cancel-running-future: true
+      database:
+        timeout-duration: 10s
         cancel-running-future: true
       jira: # Конфигурация для Jira API
         timeout-duration: 15s # Внешние API должны отвечать быстро
@@ -291,6 +303,11 @@ app:
       cron: "0 0 4 * * ?"
       stale-document-detection:
         enabled: true
+
+  curation: # Настройки для Knowledge Curator Agent
+    scheduler:
+      enabled: true
+      cron: "0 0 5 * * ?" # Каждый день в 5 утра
 
   analysis: # Настройки для аналитических агентов
     flakiness:
