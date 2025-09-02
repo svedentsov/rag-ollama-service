@@ -12,7 +12,6 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -33,7 +32,7 @@ public class GenerationService {
      *
      * @param prompt    Промпт для LLM.
      * @param documents Документы, использованные в контексте.
-     * @return {@link CompletableFuture} с доменным объектом {@link RagAnswer}.
+     * @return {@link CompletableFuture} с {@link RagAnswer}.
      */
     public CompletableFuture<RagAnswer> generate(Prompt prompt, List<Document> documents) {
         if (documents == null || documents.isEmpty()) {
@@ -71,11 +70,12 @@ public class GenerationService {
         Flux<StreamingResponsePart> contentStream = llmClient.streamChat(prompt, ModelCapability.BALANCED)
                 .map(StreamingResponsePart.Content::new);
 
-        Mono<StreamingResponsePart> sourcesPart = Mono.fromSupplier(() ->
-                new StreamingResponsePart.Sources(extractCitations(documents)));
+        Flux<StreamingResponsePart> tailStream = Flux.just(
+                new StreamingResponsePart.Sources(extractCitations(documents)),
+                new StreamingResponsePart.Done("Успешно завершено")
+        );
 
-        Mono<StreamingResponsePart> donePart = Mono.just(new StreamingResponsePart.Done("Успешно завершено"));
-        return Flux.concat(contentStream, sourcesPart, donePart)
+        return Flux.concat(contentStream, tailStream)
                 .doOnError(ex -> log.error("Ошибка в потоке генерации ответа LLM", ex))
                 .onErrorResume(ex -> {
                     String errorMessage = "Ошибка при генерации ответа: " + ex.getMessage();
@@ -83,12 +83,6 @@ public class GenerationService {
                 });
     }
 
-    /**
-     * Извлекает уникальные имена источников из метаданных документов.
-     *
-     * @param documents Список документов-источников.
-     * @return Список уникальных имен источников.
-     */
     private List<String> extractCitations(List<Document> documents) {
         return documents.stream()
                 .map(doc -> (String) doc.getMetadata().getOrDefault("source", "Unknown"))

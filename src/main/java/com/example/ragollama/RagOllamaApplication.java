@@ -43,8 +43,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         FlakinessProperties.class,
         CostProperties.class,
         FederationProperties.class,
-        KnowledgeDomainProperties.class
-})
+        KnowledgeDomainProperties.class,
+        QuotaProperties.class})
 public class RagOllamaApplication {
     /**
      * Точка входа в приложение.

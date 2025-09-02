@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -19,10 +20,6 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, выполняющий роль стратегического аналитика на уровне всей организации.
- * <p>
- * Агрегирует ключевые показатели качества по всем отслеживаемым проектам,
- * сравнивает их и использует LLM для генерации высокоуровневых выводов
- * и рекомендаций для инженерного руководства.
  */
 @Slf4j
 @Component
@@ -33,6 +30,7 @@ public class FederatedInsightsAgent implements QaAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final AsyncTaskExecutor applicationTaskExecutor;
 
     /**
      * {@inheritDoc}
@@ -55,7 +53,7 @@ public class FederatedInsightsAgent implements QaAgent {
      */
     @Override
     public boolean canHandle(AgentContext context) {
-        return true; // Запускается без специфического контекста
+        return true;
     }
 
     /**
@@ -63,8 +61,8 @@ public class FederatedInsightsAgent implements QaAgent {
      */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
-        // Асинхронно собираем данные, затем передаем их в LLM
-        return CompletableFuture.supplyAsync(analyticsService::getProjectHealthSummaries)
+        // <-- ИСПРАВЛЕНИЕ: Используем наш security-aware исполнитель
+        return CompletableFuture.supplyAsync(analyticsService::getProjectHealthSummaries, applicationTaskExecutor)
                 .thenCompose(healthSummaries -> {
                     if (healthSummaries.isEmpty()) {
                         return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Нет данных для федеративного анализа.", Map.of()));

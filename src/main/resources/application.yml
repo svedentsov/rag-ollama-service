@@ -410,3 +410,16 @@ app:
       - id: "payment-gateway"
         name: "Платежный Шлюз"
         gitUrl: "https://github.com/svedentsov/payment-gateway.git"
+
+  finops:
+    quotas:
+      enabled: true
+      default-tier: "free"
+      tiers:
+        free:
+          total-tokens-limit: 100000
+        pro:
+          total-tokens-limit: 5000000
+      costs:
+        input: 0.0005
+        output: 0.0015

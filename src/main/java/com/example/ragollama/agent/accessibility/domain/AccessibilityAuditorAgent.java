@@ -108,7 +108,7 @@ public class AccessibilityAuditorAgent implements ToolAgent {
             String promptString = promptService.render("accessibilityAudit", Map.of("violationsJson", violationsJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(llmResponse -> parseLlmResponse(llmResponse, violations))
+                    .thenApply(llmResponse -> parseLlmResponse(llmResponse, violations)) // <-- ИСПРАВЛЕНИЕ: Убран вызов .content()
                     .thenApply(this::createSuccessResultWithReport);
         } catch (JsonProcessingException e) {
             return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации нарушений a11y", e));

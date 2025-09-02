@@ -3,6 +3,7 @@ package com.example.ragollama.shared.llm;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.ollama.api.OllamaOptions;
 import org.springframework.stereotype.Component;
@@ -13,10 +14,9 @@ import reactor.core.scheduler.Schedulers;
 /**
  * Стандартная реализация {@link LlmGateway}, использующая Spring AI ChatClient.
  * <p>
- * Этот компонент является "последней милей" перед вызовом LLM. Он отвечает за
- * правильную конфигурацию вызова и его выполнение на отдельном, неблокирующем
- * пуле потоков. В этой версии он получает готовый {@link ChatClient} через
- * DI, а не строит его самостоятельно.
+ * Эта версия возвращает полный объект {@link ChatResponse}, содержащий как
+ * контент, так и метаданные (включая Usage), что необходимо для работы
+ * системы контроля квот.
  */
 @Slf4j
 @Component
@@ -29,12 +29,12 @@ public class DefaultLlmGateway implements LlmGateway {
      * {@inheritDoc}
      */
     @Override
-    public Mono<String> call(Prompt prompt, OllamaOptions options) {
+    public Mono<ChatResponse> call(Prompt prompt, OllamaOptions options) {
         log.debug("Выполнение не-потокового вызова к LLM модели: {}", options.getModel());
         return Mono.fromCallable(() -> chatClient.prompt(prompt)
                         .options(options)
                         .call()
-                        .content())
+                        .chatResponse())
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -42,12 +42,12 @@ public class DefaultLlmGateway implements LlmGateway {
      * {@inheritDoc}
      */
     @Override
-    public Flux<String> stream(Prompt prompt, OllamaOptions options) {
+    public Flux<ChatResponse> stream(Prompt prompt, OllamaOptions options) {
         log.debug("Выполнение потокового вызова к LLM модели: {}", options.getModel());
         return Flux.defer(() -> chatClient.prompt(prompt)
                         .options(options)
                         .stream()
-                        .content())
+                        .chatResponse())
                 .subscribeOn(Schedulers.boundedElastic());
     }
 }
