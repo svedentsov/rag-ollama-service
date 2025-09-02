@@ -7,7 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * DTO для представления одной конкретной проблемы безопасности, обнаруженной любым из сканеров.
  *
  * @param findingId      Уникальный идентификатор находки.
- * @param source         Источник обнаружения (SAST, DAST, LOGS).
+ * @param source         Источник обнаружения (SAST, DAST, LOGS, RBAC_ANALYSIS, PII_SCAN).
  * @param severity       Серьезность ("Critical", "High", "Medium", "Low").
  * @param description    Подробное описание уязвимости.
  * @param location       Местоположение (например, путь к файлу и строка).

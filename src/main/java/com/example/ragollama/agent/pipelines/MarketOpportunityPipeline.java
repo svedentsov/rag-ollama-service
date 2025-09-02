@@ -9,17 +9,27 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * Конвейер для мета-агента "AI Product Strategist", который
+ * анализирует рыночные возможности.
+ */
 @Component
 @RequiredArgsConstructor
-class MarketOpportunityPipeline implements AgentPipeline {
+public class MarketOpportunityPipeline implements AgentPipeline {
     private final WebCrawlerAgent webCrawler;
     private final FeatureGapAnalysisAgent featureGapAnalyzer;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "market-opportunity-pipeline";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public List<QaAgent> getAgents() {
         return List.of(webCrawler, featureGapAnalyzer);

@@ -33,7 +33,7 @@ public class SecurityAgentController {
      * @return {@link CompletableFuture} с финальным, агрегированным отчетом о безопасности.
      */
     @PostMapping("/full-scan")
-    @Operation(summary = "Провести полный аудит безопасности (SAST, DAST-gen, Logs)")
+    @Operation(summary = "Провести полный аудит безопасности (SAST, RBAC, PII)")
     public CompletableFuture<List<AgentResult>> runFullSecurityScan(@Valid @RequestBody SecurityScanRequest request) {
         return orchestratorService.invokePipeline("full-security-audit-pipeline", request.toAgentContext());
     }

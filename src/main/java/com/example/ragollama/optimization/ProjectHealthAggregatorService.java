@@ -52,6 +52,7 @@ public class ProjectHealthAggregatorService {
         log.info("Запуск агрегации отчетов о здоровье проекта...");
         CompletableFuture<List<AgentResult>> testDebtFuture = orchestratorService.invokePipeline("test-debt-report-pipeline", context);
         CompletableFuture<List<AgentResult>> bugPatternFuture = orchestratorService.invokePipeline("bug-pattern-detection-pipeline", context);
+
         return CompletableFuture.allOf(testDebtFuture, bugPatternFuture)
                 .thenApply(v -> {
                     Map<String, Object> healthReport = new HashMap<>();

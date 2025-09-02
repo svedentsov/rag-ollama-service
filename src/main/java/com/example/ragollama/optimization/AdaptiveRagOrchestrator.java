@@ -1,5 +1,6 @@
 package com.example.ragollama.optimization;
 
+import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.optimization.model.QueryProfile;
 import com.example.ragollama.rag.api.dto.RagQueryRequest;
 import com.example.ragollama.rag.api.dto.RagQueryResponse;
@@ -16,8 +17,10 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Мета-агент (оркестратор), реализующий адаптивную RAG-стратегию.
+ * <p>
  * Он динамически выбирает и настраивает RAG-конвейер на основе
- * семантического профиля входящего запроса.
+ * семантического профиля входящего запроса, который получает от
+ * {@link QueryProfilerAgent}.
  */
 @Slf4j
 @Service
@@ -25,7 +28,7 @@ import java.util.concurrent.CompletableFuture;
 public class AdaptiveRagOrchestrator {
 
     private final QueryProfilerAgent profilerAgent;
-    private final RagService ragService; // Стандартный RAG-сервис как одна из стратегий
+    private final RagService ragService;
     private final RetrievalProperties defaultRetrievalProperties;
 
     /**
@@ -36,7 +39,7 @@ public class AdaptiveRagOrchestrator {
      */
     public CompletableFuture<RagQueryResponse> processAdaptive(RagQueryRequest request) {
         // Шаг 1: Профилируем запрос, чтобы понять его природу.
-        return profilerAgent.execute(new com.example.ragollama.agent.AgentContext(Map.of("query", request.query())))
+        return profilerAgent.execute(new AgentContext(Map.of("query", request.query())))
                 .thenCompose(profilerResult -> {
                     QueryProfile profile = (QueryProfile) profilerResult.details().get("queryProfile");
 
@@ -58,10 +61,10 @@ public class AdaptiveRagOrchestrator {
         log.info("Применение 'Factual' RAG-стратегии для запроса: {}", request.query());
         int topK = defaultRetrievalProperties.hybrid().vectorSearch().topK() - 1; // Меньше документов
         double threshold = defaultRetrievalProperties.hybrid().vectorSearch().similarityThreshold() + 0.05; // Более строгий порог
+        final UUID sessionId = getOrCreateSessionId(request.sessionId());
 
-        return ragService.queryAsync(request.query(), Collections.emptyList(), topK, threshold, getOrCreateSessionId(request.sessionId()))
-                .thenApply(ragAnswer -> new RagQueryResponse(ragAnswer.answer(), ragAnswer.sourceCitations(), getOrCreateSessionId(request.sessionId())));
-
+        return ragService.queryAsync(request.query(), Collections.emptyList(), topK, threshold, sessionId)
+                .thenApply(ragAnswer -> new RagQueryResponse(ragAnswer.answer(), ragAnswer.sourceCitations(), sessionId));
     }
 
     /**
@@ -71,9 +74,10 @@ public class AdaptiveRagOrchestrator {
         log.info("Применение 'Default' RAG-стратегии для запроса: {}", request.query());
         int topK = defaultRetrievalProperties.hybrid().vectorSearch().topK();
         double threshold = defaultRetrievalProperties.hybrid().vectorSearch().similarityThreshold();
+        final UUID sessionId = getOrCreateSessionId(request.sessionId());
 
-        return ragService.queryAsync(request.query(), Collections.emptyList(), topK, threshold, getOrCreateSessionId(request.sessionId()))
-                .thenApply(ragAnswer -> new RagQueryResponse(ragAnswer.answer(), ragAnswer.sourceCitations(), getOrCreateSessionId(request.sessionId())));
+        return ragService.queryAsync(request.query(), Collections.emptyList(), topK, threshold, sessionId)
+                .thenApply(ragAnswer -> new RagQueryResponse(ragAnswer.answer(), ragAnswer.sourceCitations(), sessionId));
     }
 
     private UUID getOrCreateSessionId(UUID sessionId) {

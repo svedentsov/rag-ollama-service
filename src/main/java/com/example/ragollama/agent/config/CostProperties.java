@@ -7,11 +7,12 @@ import org.springframework.validation.annotation.Validated;
 /**
  * Типобезопасная конфигурация для экономической модели оценки стоимости.
  * <p>
- * Загружает бизнес-предположения из {@code application.yml} с префиксом {@code app.analysis.cost-model}.
+ * Загружает бизнес-предположения из {@code application.yml} с префиксом {@code app.analysis.cost-model},
+ * такие как стоимость часа разработки и стоимость обработки одного инцидента.
  *
  * @param perDevHour       Стоимость одного часа работы разработчика.
  * @param perSupportTicket Стоимость обработки одного обращения в техподдержку.
- * @param perLostUser      Средние потери от оттока одного пользователя.
+ * @param perLostUser      Средние потери от оттока одного пользователя (для более сложных моделей).
  */
 @Validated
 @ConfigurationProperties(prefix = "app.analysis.cost-model")

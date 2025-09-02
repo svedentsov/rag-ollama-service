@@ -19,6 +19,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * AI-агент, выступающий в роли "инженера по промптам".
+ * <p>
+ * Принимает на вход отчет об неэффективности и исходный текст промпта,
+ * а затем генерирует улучшенную версию, которая должна решить обнаруженные проблемы.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -28,24 +34,37 @@ public class PromptRefinementAgent implements ToolAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "prompt-refinement-agent";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
-        return "Анализирует неэффективность и предлагает улучшение для промпта.";
+        return "Анализирует отчет о неэффективности и предлагает улучшенную версию промпта в формате diff.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey("interactionAnalysis");
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         Map<String, Object> analysis = (Map<String, Object>) context.payload().get("interactionAnalysis");
+        // Для демонстрации, мы жестко нацеливаемся на промпт планировщика
         String targetPromptName = "planningAgent";
         String originalPrompt;
         try {

@@ -45,27 +45,39 @@ public class DefectEconomicsModelerAgent implements ToolAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "defect-economics-modeler";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Оценивает стоимость исправления и стоимость бездействия для дефекта или рискованного кода.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey("filePath") && context.payload().containsKey("ref");
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String filePath = (String) context.payload().get("filePath");
         String ref = (String) context.payload().get("ref");
 
-        // Шаг 1: Асинхронно собираем "досье"
+        // Шаг 1: Асинхронно собираем "досье" на файл
         Mono<String> contentMono = gitApiClient.getFileContent(filePath, ref);
         Mono<CodeMetrics> metricsMono = contentMono.map(staticAnalyzer::analyze);
         Mono<Long> failuresMono = Mono.fromCallable(() ->
@@ -73,7 +85,7 @@ public class DefectEconomicsModelerAgent implements ToolAgent {
 
         return Mono.zip(contentMono, metricsMono, failuresMono)
                 .flatMap(tuple -> {
-                    // Шаг 2: Передаем досье в LLM для оценки
+                    // Шаг 2: Передаем собранное досье в LLM для экспертной оценки
                     Map<String, Object> dossier = Map.of(
                             "filePath", filePath,
                             "codeMetrics", tuple.getT2(),
@@ -91,7 +103,7 @@ public class DefectEconomicsModelerAgent implements ToolAgent {
                 })
                 .map(this::parseLlmResponse)
                 .map(assessment -> {
-                    // Шаг 3: Выполняем детерминированный расчет стоимости
+                    // Шаг 3: Выполняем детерминированный расчет стоимости на основе прогноза LLM
                     double remediationCost = costService.calculateRemediationCost(assessment.estimatedDevHoursToFix());
                     double inactionCost = costService.calculateInactionCost(assessment.estimatedSupportTicketsPerMonth());
 
@@ -107,6 +119,13 @@ public class DefectEconomicsModelerAgent implements ToolAgent {
                 .toFuture();
     }
 
+    /**
+     * Безопасно парсит JSON-ответ от LLM в {@link EconomicImpactAssessment}.
+     *
+     * @param jsonResponse Ответ от LLM.
+     * @return Десериализованный объект {@link EconomicImpactAssessment}.
+     * @throws ProcessingException если парсинг не удался.
+     */
     private EconomicImpactAssessment parseLlmResponse(String jsonResponse) {
         try {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);

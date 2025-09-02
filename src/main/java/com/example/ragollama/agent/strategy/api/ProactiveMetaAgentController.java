@@ -1,4 +1,4 @@
-package com.example.ragollama.agent.strategy.api.ProactiveMetaAgentController;
+package com.example.ragollama.agent.strategy.api;
 
 import com.example.ragollama.agent.AgentOrchestratorService;
 import com.example.ragollama.agent.AgentResult;
@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -24,6 +25,7 @@ import java.util.concurrent.CompletableFuture;
  * инцидентов или исследование рынка.
  */
 @RestController
+@RequestMapping("/api/v1/strategy")
 @RequiredArgsConstructor
 @Tag(name = "Strategic Meta-Agents")
 public class ProactiveMetaAgentController {
@@ -36,13 +38,12 @@ public class ProactiveMetaAgentController {
      *
      * @param request DTO с деталями алерта.
      * @return {@link ResponseEntity} со статусом 202 (Accepted), подтверждающий
-     *         прием задачи в асинхронную обработку.
+     * прием задачи в асинхронную обработку.
      */
-    @PostMapping("/api/v1/webhooks/monitoring-alert")
+    @PostMapping("/incident-analysis") // Renamed from webhook endpoint for clarity
     @Operation(summary = "Принять алерт от системы мониторинга и запустить расследование")
-    public ResponseEntity<Void> handleMonitoringAlert(@Valid @RequestBody IncidentAlertRequest request) {
-        orchestratorService.invokePipeline("incident-response-pipeline", request.toAgentContext());
-        return ResponseEntity.accepted().build();
+    public CompletableFuture<List<AgentResult>> handleMonitoringAlert(@Valid @RequestBody IncidentAlertRequest request) {
+        return orchestratorService.invokePipeline("incident-response-pipeline", request.toAgentContext());
     }
 
     /**
@@ -52,7 +53,7 @@ public class ProactiveMetaAgentController {
      * @param request DTO с URL сайта конкурента.
      * @return {@link CompletableFuture} с финальным отчетом о пробелах в функциональности.
      */
-    @PostMapping("/api/v1/agents/strategy/analyze-market-opportunity")
+    @PostMapping("/analyze-market-opportunity")
     @Operation(summary = "Проанализировать конкурента и найти пробелы в функциональности")
     public CompletableFuture<List<AgentResult>> analyzeMarketOpportunity(@Valid @RequestBody MarketAnalysisRequest request) {
         return orchestratorService.invokePipeline("market-opportunity-pipeline", request.toAgentContext());

@@ -87,6 +87,9 @@ public class PromptService {
             Map.entry("documentEnhancer", "document-enhancer-prompt.ftl"),
             Map.entry("resourceAllocator", "resource-allocator-prompt.ftl"),
             Map.entry("prioritizationAgent", "prioritization-agent-prompt.ftl"),
+            Map.entry("federatedInsights", "federated-insights-prompt.ftl"),
+            Map.entry("knowledgeRouter", "knowledge-router-prompt.ftl"),
+            Map.entry("strategicInitiativePlanner", "strategic-initiative-planner-prompt.ftl"),
 
             // Summarization & Data Generation
             Map.entry("summarization", "summarization-prompt.ftl"),

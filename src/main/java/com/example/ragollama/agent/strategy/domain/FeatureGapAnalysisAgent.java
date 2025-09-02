@@ -1,11 +1,9 @@
 package com.example.ragollama.agent.strategy.domain;
 
-import com.example.ragollama.agent.strategy.model.FeatureGapReport;
-import com.example.ragollama.indexing.IndexingPipelineService;
-import com.example.ragollama.indexing.IndexingRequest;
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.ToolAgent;
+import com.example.ragollama.agent.strategy.model.FeatureGapReport;
 import com.example.ragollama.rag.domain.TestCaseService;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
@@ -22,7 +20,6 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -34,40 +31,47 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class FeatureGapAnalysisAgent implements ToolAgent {
 
-    private final IndexingPipelineService indexingPipelineService;
-    private final TestCaseService testCaseService; // Переиспользуем для RAG
+    private final TestCaseService testCaseService;
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "feature-gap-analyzer";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Сравнивает фичи нашего продукта с конкурентом и находит пробелы.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey("scrapedText");
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String competitorText = (String) context.payload().get("scrapedText");
 
-        // Шаг 1: Индексируем контент конкурента "на лету"
-        String competitorDocId = "competitor-" + UUID.randomUUID();
-        indexingPipelineService.process(new IndexingRequest(competitorDocId, "Competitor Docs", competitorText, Map.of("doc_type", "competitor")));
+        // Шаг 1: Параллельно извлекаем списки фич для нас и для конкурента
+        Mono<String> ourFeaturesMono = extractFeaturesFromOurKnowledgeBase();
+        Mono<String> competitorFeaturesMono = extractFeaturesFromText(competitorText);
 
-        // Шаг 2: Извлекаем фичи из нашей базы знаний и из базы конкурента
-        Mono<String> ourFeaturesMono = extractFeatures("Что умеет делать наш продукт?");
-        Mono<String> competitorFeaturesMono = extractFeatures("Что умеет делать продукт, описанный в Competitor Docs?");
-
-        // Шаг 3: Когда оба списка фичей готовы, передаем их на финальный анализ
+        // Шаг 2: Когда оба списка фичей готовы, передаем их на финальный анализ
         return Mono.zip(ourFeaturesMono, competitorFeaturesMono)
                 .flatMap(tuple -> {
                     String promptString = promptService.render("featureGapAnalysis", Map.of(
@@ -86,16 +90,28 @@ public class FeatureGapAnalysisAgent implements ToolAgent {
                 .toFuture();
     }
 
-    private Mono<String> extractFeatures(String question) {
-        // Используем RAG для получения релевантного контекста
-        return testCaseService.findRelevantTestCases(question)
+    /**
+     * Извлекает фичи нашего продукта, используя RAG по собственной базе знаний.
+     */
+    private Mono<String> extractFeaturesFromOurKnowledgeBase() {
+        return testCaseService.findRelevantTestCases("Все возможности продукта")
                 .flatMap(contextDocs -> {
                     String context = contextDocs.stream().map(Document::getText).collect(Collectors.joining("\n---\n"));
-                    String promptString = promptService.render("featureExtraction", Map.of("context", context));
-                    return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED));
+                    return extractFeaturesFromText(context);
                 });
     }
 
+    /**
+     * Вызывает LLM для извлечения структурированного списка фич из произвольного текста.
+     */
+    private Mono<String> extractFeaturesFromText(String text) {
+        String promptString = promptService.render("featureExtraction", Map.of("context", text));
+        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED));
+    }
+
+    /**
+     * Безопасно парсит JSON-ответ от LLM в {@link FeatureGapReport}.
+     */
     private FeatureGapReport parseLlmResponse(String jsonResponse) {
         try {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);

@@ -16,6 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Контроллер для AI-агентов, выполняющих задачи аудита и комплаенса.
+ */
 @RestController
 @RequestMapping("/api/v1/agents/compliance")
 @RequiredArgsConstructor
@@ -36,6 +39,12 @@ public class ComplianceAgentController {
         return orchestratorService.invokePipeline("privacy-compliance-check-pipeline", request.toAgentContext());
     }
 
+    /**
+     * Запускает полный конвейер для сбора доказательств и генерации аудиторского отчета.
+     *
+     * @param request DTO с Git-ссылками, определяющими диапазон аудита.
+     * @return {@link CompletableFuture} с финальным отчетом в формате Markdown.
+     */
     @PostMapping("/gather-evidence")
     @Operation(summary = "Собрать доказательства для аудита соответствия")
     public CompletableFuture<List<AgentResult>> gatherComplianceEvidence(@Valid @RequestBody ComplianceEvidenceRequest request) {

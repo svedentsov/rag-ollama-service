@@ -15,6 +15,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Контроллер для запуска конвейера самосовершенствования AI-агентов.
+ */
 @RestController
 @RequestMapping("/api/v1/self-improvement")
 @RequiredArgsConstructor
@@ -23,6 +26,12 @@ public class SelfImprovementController {
 
     private final AgentOrchestratorService orchestratorService;
 
+    /**
+     * Запускает полный конвейер для анализа работы агентов и генерации предложений по улучшению промптов.
+     *
+     * @param request DTO с параметрами анализа.
+     * @return {@link CompletableFuture} с результатом, содержащим diff для улучшения промпта.
+     */
     @PostMapping("/analyze-and-suggest")
     @Operation(summary = "Проанализировать работу агентов и предложить улучшения промптов")
     public CompletableFuture<List<AgentResult>> analyzeAndSuggest(@Valid @RequestBody SelfImprovementRequest request) {

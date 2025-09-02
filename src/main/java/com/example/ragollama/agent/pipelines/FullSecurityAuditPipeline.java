@@ -13,6 +13,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * Конвейер, реализующий полный, многовекторный аудит безопасности.
+ */
 @Component
 @RequiredArgsConstructor
 public class FullSecurityAuditPipeline implements AgentPipeline {
@@ -24,11 +27,17 @@ public class FullSecurityAuditPipeline implements AgentPipeline {
     private final PrivacyComplianceAgent privacyComplianceAgent;
     private final SecurityReportAggregatorAgent aggregatorAgent;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "full-security-audit-pipeline";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public List<QaAgent> getAgents() {
         return List.of(

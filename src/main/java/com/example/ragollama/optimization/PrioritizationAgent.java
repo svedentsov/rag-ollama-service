@@ -19,6 +19,15 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Мета-агент, выступающий в роли "AI Tech Lead / Product Manager".
+ * <p>
+ * Его задача — не выполнять атомарные действия, а принимать стратегические
+ * решения. Он инкапсулирует сложную логику: сначала самостоятельно инициирует
+ * сбор полной информации о состоянии проекта с помощью {@link ProjectHealthAggregatorService},
+ * а затем использует LLM для анализа этих данных и формирования
+ * приоритизированного бэклога в соответствии с бизнес-целями.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -29,21 +38,33 @@ public class PrioritizationAgent implements ToolAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "prioritization-agent";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
-        return "Анализирует отчеты о здоровье и генерирует приоритизированный бэклог.";
+        return "Анализирует комплексные отчеты о здоровье проекта и генерирует приоритизированный бэклог.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey("goal");
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String goal = (String) context.payload().get("goal");
@@ -73,6 +94,13 @@ public class PrioritizationAgent implements ToolAgent {
                 });
     }
 
+    /**
+     * Безопасно парсит JSON-ответ от LLM в {@link PrioritizedBacklog}.
+     *
+     * @param jsonResponse Ответ от LLM.
+     * @return Десериализованный объект {@link PrioritizedBacklog}.
+     * @throws ProcessingException если парсинг не удался.
+     */
     private PrioritizedBacklog parseLlmResponse(String jsonResponse) {
         try {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);

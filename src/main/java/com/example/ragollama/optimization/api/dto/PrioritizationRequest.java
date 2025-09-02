@@ -7,8 +7,15 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.hibernate.validator.constraints.Length;
+
 import java.util.Map;
 
+/**
+ * DTO для запроса на приоритизацию бэклога.
+ *
+ * @param goal               Высокоуровневая цель на следующий спринт/квартал.
+ * @param analysisPeriodDays Период для анализа исторических данных в днях.
+ */
 @Schema(description = "DTO для запроса на приоритизацию бэклога")
 public record PrioritizationRequest(
         @Schema(description = "Высокоуровневая цель на следующий спринт/квартал", requiredMode = Schema.RequiredMode.REQUIRED,
@@ -20,6 +27,11 @@ public record PrioritizationRequest(
         @NotNull @Min(7) @Max(180)
         Integer analysisPeriodDays
 ) {
+    /**
+     * Преобразует DTO в {@link AgentContext} для передачи в конвейер.
+     *
+     * @return Контекст для запуска агента.
+     */
     public AgentContext toAgentContext() {
         return new AgentContext(Map.of(
                 "goal", this.goal,

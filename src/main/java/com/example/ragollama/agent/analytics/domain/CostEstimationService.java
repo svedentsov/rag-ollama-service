@@ -8,8 +8,8 @@ import org.springframework.stereotype.Service;
  * Детерминированный сервис для расчета стоимости на основе бизнес-метрик.
  * <p>
  * Инкапсулирует бизнес-логику и предположения о стоимости,
- * загруженные из конфигурационного файла. Этот сервис не использует AI,
- * а выполняет простые, предсказуемые расчеты.
+ * загруженные из конфигурационного файла {@link CostProperties}. Этот сервис
+ * не использует AI, а выполняет простые, предсказуемые расчеты.
  */
 @Service
 @RequiredArgsConstructor
@@ -20,7 +20,7 @@ public class CostEstimationService {
     /**
      * Рассчитывает общую стоимость исправления (рефакторинга).
      *
-     * @param devHours Оценочное количество часов разработчика.
+     * @param devHours Оценочное количество часов разработчика, полученное от LLM.
      * @return Стоимость в денежном эквиваленте.
      */
     public double calculateRemediationCost(int devHours) {
@@ -29,11 +29,8 @@ public class CostEstimationService {
 
     /**
      * Рассчитывает общую стоимость бездействия за один месяц.
-     * <p>
-     * В более сложной модели здесь также могли бы учитываться
-     * `potentialUserImpactPercentage` и `perLostUser`.
      *
-     * @param supportTickets Оценочное количество тикетов в поддержку.
+     * @param supportTickets Оценочное количество тикетов в поддержку, полученное от LLM.
      * @return Стоимость в денежном эквиваленте.
      */
     public double calculateInactionCost(int supportTickets) {

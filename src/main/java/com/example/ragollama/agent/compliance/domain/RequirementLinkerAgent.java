@@ -10,15 +10,17 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * QA-агент, который связывает коммиты с требованиями или багами.
+ * QA-агент, который связывает коммиты с требованиями или задачами в трекере.
  * <p>
- * Анализирует сообщения коммитов на предмет наличия идентификаторов задач
- * (например, JIRA-123) и создает соответствующие связи в графе знаний.
+ * Этот детерминированный агент анализирует сообщения коммитов на предмет
+ * наличия идентификаторов задач (например, JIRA-123) и извлекает эти
+ * связи, создавая "доказательства" для аудита трассируемости.
  */
 @Slf4j
 @Component
@@ -28,21 +30,33 @@ public class RequirementLinkerAgent implements ToolAgent {
     private final GitApiClient gitApiClient;
     private static final Pattern TICKET_ID_PATTERN = Pattern.compile("([A-Z]{2,}-\\d+)");
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "requirement-linker";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Анализирует коммиты и связывает их с задачами (требованиями).";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey("oldRef") && context.payload().containsKey("newRef");
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String oldRef = (String) context.payload().get("oldRef");
@@ -59,14 +73,17 @@ public class RequirementLinkerAgent implements ToolAgent {
                     }
                     return null;
                 })
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .collectList()
-                .map(links -> new AgentResult(
-                        getName(),
-                        AgentResult.Status.SUCCESS,
-                        "Найдено " + links.size() + " связей между коммитами и задачами.",
-                        Map.of("commitToTicketLinks", links)
-                ))
+                .map(links -> {
+                    String summary = "Найдено " + links.size() + " связей между коммитами и задачами.";
+                    return new AgentResult(
+                            getName(),
+                            AgentResult.Status.SUCCESS,
+                            summary,
+                            Map.of("commitToTicketLinks", links)
+                    );
+                })
                 .toFuture();
     }
 }

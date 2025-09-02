@@ -38,7 +38,7 @@ public class PipelineRegistryService {
      * простого текста для использования в промпте.
      *
      * @return Строка с описанием доступных конвейеров, где каждый
-     * конвейер представлен в виде элемента списка.
+     *         конвейер представлен в виде элемента списка.
      */
     public String getCapabilitiesCatalog() {
         return orchestratorService.getAvailablePipelines().stream()

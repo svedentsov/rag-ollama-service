@@ -387,3 +387,26 @@ app:
       scheduler:
         enabled: true
         cron: "0 0 5 * * ?" # Каждый день в 5 утра
+
+  knowledge-domains:
+    domains:
+      - name: "technical_docs"
+        description: "Техническая документация, архитектурные решения, API-спецификации, гайды по настройке и развертыванию."
+      - name: "test_cases"
+        description: "База знаний по тест-кейсам. Содержит описания тестовых сценариев, шаги воспроизведения и ожидаемые результаты."
+      - name: "hr_policy"
+        description: "Документы кадровой службы: политика отпусков, больничных, правила внутреннего распорядка."
+
+  federation:
+    # Каталог проектов, подлежащих федеративному анализу.
+    # `id` должен соответствовать `projectId` в таблице `test_run_metrics`.
+    projects:
+      - id: "rag-ollama-service"
+        name: "Основной RAG Сервис"
+        gitUrl: "https://github.com/svedentsov/rag-ollama-service.git"
+      - id: "notification-service"
+        name: "Сервис Уведомлений"
+        gitUrl: "https://github.com/svedentsov/notification-service.git"
+      - id: "payment-gateway"
+        name: "Платежный Шлюз"
+        gitUrl: "https://github.com/svedentsov/payment-gateway.git"

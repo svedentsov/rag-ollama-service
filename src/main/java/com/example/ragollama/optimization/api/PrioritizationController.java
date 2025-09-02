@@ -15,6 +15,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Контроллер для AI-агента, отвечающего за автоматическую приоритизацию задач.
+ */
 @RestController
 @RequestMapping("/api/v1/prioritization")
 @RequiredArgsConstructor
@@ -23,6 +26,14 @@ public class PrioritizationController {
 
     private final AgentOrchestratorService orchestratorService;
 
+    /**
+     * Запускает полный конвейер для анализа состояния проекта и генерации
+     * приоритизированного бэклога на спринт.
+     *
+     * @param request DTO с бизнес-целью спринта и периодом для анализа.
+     * @return {@link CompletableFuture} с финальным отчетом, содержащим
+     * приоритизированный список задач.
+     */
     @PostMapping("/plan-sprint")
     @Operation(summary = "Сгенерировать приоритизированный план на спринт",
             description = "Запускает 'prioritization-pipeline', который собирает полную картину о состоянии проекта " +

@@ -21,7 +21,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Финальный агент в конвейере сбора доказательств для аудита.
  * <p>
- * Этот агент агрегирует все "улики", собранные предыдущими агентами,
+ * Этот мета-агент агрегирует все "улики", собранные предыдущими агентами,
  * и использует LLM для генерации единого, человекочитаемого отчета в формате Markdown,
  * который можно предоставить аудитору.
  */
@@ -55,6 +55,7 @@ public class ComplianceReportGeneratorAgent implements ToolAgent {
      */
     @Override
     public boolean canHandle(AgentContext context) {
+        // Запускается как финальный шаг, если есть хотя бы информация об измененных файлах
         return context.payload().containsKey("changedFiles");
     }
 
@@ -63,11 +64,13 @@ public class ComplianceReportGeneratorAgent implements ToolAgent {
      */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
-        log.info("ComplianceReportGeneratorAgent: начало генерации финального отчета...");
+        log.info("ComplianceReportGeneratorAgent: начало генерации финального аудиторского отчета...");
         try {
+            // Создаем копию контекста, чтобы безопасно удалить большие поля
             Map<String, Object> contextForPrompt = new HashMap<>(context.payload());
             contextForPrompt.remove("applicationLogs");
-            contextForPrompt.remove("jacocoReportContent");
+            contextForPrompt.remove("jacocoReportContent"); // Если он там был
+
             String evidenceJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(contextForPrompt);
             String promptString = promptService.render("complianceReportGenerator", Map.of("evidence_json", evidenceJson));
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)

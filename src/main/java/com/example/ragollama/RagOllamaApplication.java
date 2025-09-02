@@ -42,7 +42,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         Neo4jProperties.class,
         FlakinessProperties.class,
         CostProperties.class,
-        FederationProperties.class
+        FederationProperties.class,
+        KnowledgeDomainProperties.class
 })
 public class RagOllamaApplication {
     /**

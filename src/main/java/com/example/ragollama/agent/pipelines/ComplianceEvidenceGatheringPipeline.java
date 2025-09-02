@@ -12,6 +12,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * Конвейер, реализующий полный цикл сбора доказательств и генерации
+ * аудиторского отчета о соответствии (compliance).
+ */
 @Component
 @RequiredArgsConstructor
 public class ComplianceEvidenceGatheringPipeline implements AgentPipeline {
@@ -22,11 +26,17 @@ public class ComplianceEvidenceGatheringPipeline implements AgentPipeline {
     private final TestGapAnalyzerAgent testGapAnalyzer;
     private final ComplianceReportGeneratorAgent reportGenerator;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "compliance-evidence-gathering-pipeline";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public List<QaAgent> getAgents() {
         return List.of(

@@ -34,23 +34,36 @@ public class FederatedInsightsAgent implements QaAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "federated-insights-agent";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Анализирует и сравнивает метрики качества по всем проектам, генерирует стратегический отчет.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return true; // Запускается без специфического контекста
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
+        // Асинхронно собираем данные, затем передаем их в LLM
         return CompletableFuture.supplyAsync(analyticsService::getProjectHealthSummaries)
                 .thenCompose(healthSummaries -> {
                     if (healthSummaries.isEmpty()) {

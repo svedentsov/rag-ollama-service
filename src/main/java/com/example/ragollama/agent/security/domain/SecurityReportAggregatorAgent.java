@@ -21,10 +21,11 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Финальный агент-агрегатор в конвейере безопасности.
+ * Финальный агент-агрегатор в конвейере безопасности ("AI CISO").
  * <p>
- * Собирает результаты от всех сканеров (SAST, DAST, Logs),
- * дедуплицирует их, приоритизирует и формирует единый отчет.
+ * Собирает результаты от всех сканеров (SAST, RBAC, PII),
+ * дедуплицирует их, приоритизирует и формирует единый отчет,
+ * используя LLM для интеллектуального синтеза.
  */
 @Slf4j
 @Component
@@ -35,23 +36,36 @@ public class SecurityReportAggregatorAgent implements ToolAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "security-report-aggregator";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Агрегирует отчеты от всех сканеров безопасности в единый, приоритизированный отчет.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
+        // Запускается, если есть хотя бы один из отчетов для агрегации
         return context.payload().containsKey("sastFindings") ||
                 context.payload().containsKey("risks") ||
                 context.payload().containsKey("privacyReport");
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         Map<String, Object> allFindings = new HashMap<>();
@@ -76,6 +90,13 @@ public class SecurityReportAggregatorAgent implements ToolAgent {
         }
     }
 
+    /**
+     * Безопасно парсит JSON-ответ от LLM в {@link UnifiedSecurityReport}.
+     *
+     * @param jsonResponse Ответ от LLM.
+     * @return Десериализованный объект {@link UnifiedSecurityReport}.
+     * @throws ProcessingException если парсинг не удался.
+     */
     private UnifiedSecurityReport parseLlmResponse(String jsonResponse) {
         try {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);

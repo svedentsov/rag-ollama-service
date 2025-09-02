@@ -15,6 +15,9 @@ import java.util.stream.Collectors;
 /**
  * Сервис для выполнения сложных аналитических SQL-запросов на уровне
  * всех проектов (федерации).
+ * <p>
+ * Инкапсулирует логику доступа к данным, предоставляя вышестоящим агентам
+ * готовые, пред-агрегированные DTO.
  */
 @Service
 @RequiredArgsConstructor
@@ -50,21 +53,22 @@ public class FederatedAnalyticsService {
                 String projectId = rs.getString("project_id");
                 ProjectHealthSummary summary = new ProjectHealthSummary(
                         projectId,
-                        "Unknown",
-                        0,
+                        "Unknown", // Имя будет добавлено позже из конфига
+                        0, // Score будет рассчитан позже
                         rs.getDouble("pass_rate"),
-                        5.0, // Mocked complexity
-                        (int) rs.getLong("total_failures")
+                        5.0, // Mocked complexity score
+                        (int) rs.getLong("total_failures") // Используем total_failures как proxy для critical alerts
                 );
                 results.put(projectId, summary);
             }
             return results;
         }, since);
 
+        // Объединяем данные из БД с конфигурацией, чтобы получить полные DTO
         return federationProperties.projects().stream()
                 .map(proj -> {
                     ProjectHealthSummary summary = intermediateResults.getOrDefault(proj.id(),
-                            new ProjectHealthSummary(proj.id(), proj.name(), 0, 0, 0, 0));
+                            new ProjectHealthSummary(proj.id(), proj.name(), 0, 0.0, 0.0, 0));
                     summary.setProjectName(proj.name());
                     summary.setOverallHealthScore(calculateHealthScore(summary));
                     return summary;
@@ -72,9 +76,16 @@ public class FederatedAnalyticsService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Вычисляет общую оценку здоровья по простой эвристической формуле.
+     *
+     * @param summary Агрегированные метрики проекта.
+     * @return Оценка от 0 до 100.
+     */
     private int calculateHealthScore(ProjectHealthSummary summary) {
+        // Простая взвешенная формула: 80% веса на pass rate, 20% штраф за алерты.
         int score = (int) (summary.getTestPassRate() * 0.8);
-        score -= summary.getCriticalAlertsCount() * 0.2;
+        score -= summary.getCriticalAlertsCount() * 2; // -2 балла за каждый упавший тест
         return Math.max(0, Math.min(100, score));
     }
 }

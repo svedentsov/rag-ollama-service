@@ -1,5 +1,7 @@
 package com.example.ragollama.rag.domain;
 
+import com.example.ragollama.agent.AgentContext;
+import com.example.ragollama.optimization.KnowledgeRouterAgent;
 import com.example.ragollama.rag.agent.ProcessedQueries;
 import com.example.ragollama.rag.agent.QueryProcessingPipeline;
 import com.example.ragollama.rag.api.dto.StreamingResponsePart;
@@ -16,28 +18,22 @@ import org.slf4j.MDC;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
+import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * "Чистый" сервис-оркестратор RAG-конвейера с явной архитектурой.
+ * "Чистый" сервис-оркестратор RAG-конвейера с интеллектуальной маршрутизацией.
  * <p>
- * Эта версия явно демонстрирует все ключевые этапы RAG-процесса:
- * 1.  <b>Prompt Guard:</b> Проверка на атаки.
- * 2.  <b>Query Processing:</b> Улучшение и расширение запроса.
- * 3.  <b>Retrieval:</b> Гибридный поиск и слияние документов.
- * 4.  <b>Reranking:</b> Переранжирование найденных документов.
- * 5.  <b>Augmentation:</b> Сборка финального промпта.
- * 6.  <b>Generation:</b> Генерация ответа.
- * <p>
- * Вся постобработка (аудит, метрики, верификация) делегирована
- * {@link RagPostProcessingOrchestrator} для максимальной чистоты кода.
+ * Эта версия интегрирует {@link KnowledgeRouterAgent} в начало конвейера,
+ * чтобы динамически сужать область поиска перед извлечением документов.
  */
 @Slf4j
 @Service
@@ -52,6 +48,7 @@ public class RagService {
     private final PromptGuardService promptGuardService;
     private final MetricService metricService;
     private final RagPostProcessingOrchestrator postProcessingOrchestrator;
+    private final KnowledgeRouterAgent knowledgeRouterAgent; // <-- НОВАЯ ЗАВИСИМОСТЬ
 
     /**
      * Асинхронно выполняет полный RAG-запрос (не-потоковый).
@@ -136,22 +133,44 @@ public class RagService {
     private Mono<RagFlowContext> prepareRagFlow(String query, List<Message> history, int topK, double similarityThreshold) {
         return Mono.fromRunnable(() -> promptGuardService.checkForInjection(query))
                 .then(Mono.defer(() ->
-                        queryProcessingPipeline.process(query)
-                                .onErrorResume(e -> {
-                                    log.warn("Ошибка в конвейере обработки запроса. Используется оригинальный запрос. Ошибка: {}", e.getMessage());
-                                    return Mono.just(new ProcessedQueries(query, List.of()));
+                        // ШАГ 1: Маршрутизация запроса для получения фильтра
+                        Mono.fromFuture(() -> knowledgeRouterAgent.execute(new AgentContext(Map.of("query", query))))
+                                .flatMap(routerResult -> {
+                                    @SuppressWarnings("unchecked")
+                                    List<String> domains = (List<String>) routerResult.details().get("selectedDomains");
+                                    Filter.Expression domainFilter = buildDomainFilter(domains);
+
+                                    // ШАГ 2: Обработка и извлечение с использованием фильтра
+                                    return queryProcessingPipeline.process(query)
+                                            .onErrorResume(e -> {
+                                                log.warn("Ошибка в конвейере обработки запроса. Используется оригинальный запрос. Ошибка: {}", e.getMessage());
+                                                return Mono.just(new ProcessedQueries(query, List.of()));
+                                            })
+                                            .flatMap(processedQueries -> retrievalStrategy.retrieve(processedQueries, query, topK, similarityThreshold, domainFilter))
+                                            .map(fusedDocs -> rerankingService.rerank(fusedDocs, query))
+                                            .flatMap(rerankedDocuments ->
+                                                    augmentationService.augment(rerankedDocuments, query, history)
+                                                            .map(prompt -> new RagFlowContext(rerankedDocuments, prompt))
+                                            );
                                 })
-                                .flatMap(processedQueries -> retrievalStrategy.retrieve(processedQueries, query, topK, similarityThreshold, null))
-                                .map(fusedDocs -> rerankingService.rerank(fusedDocs, query)) // <-- ЯВНЫЙ ВЫЗОВ РЕРАНЖИРОВАНИЯ
-                                .flatMap(rerankedDocuments ->
-                                        augmentationService.augment(rerankedDocuments, query, history)
-                                                .map(prompt -> new RagFlowContext(rerankedDocuments, prompt))
-                                )
                 ))
                 .onErrorResume(e -> {
                     log.error("Критическая ошибка в RAG-конвейере для запроса '{}'", query, e);
                     return Mono.error(e);
                 });
+    }
+
+    /**
+     * Строит выражение фильтра на основе списка доменов.
+     *
+     * @param domains Список имен доменов.
+     * @return {@link Filter.Expression} или null, если домены не выбраны.
+     */
+    private Filter.Expression buildDomainFilter(List<String> domains) {
+        if (domains == null || domains.isEmpty()) {
+            return null;
+        }
+        return new Filter.Expression(Filter.ExpressionType.IN, new Filter.Key("metadata.doc_category"), new Filter.Value(domains));
     }
 
     /**
