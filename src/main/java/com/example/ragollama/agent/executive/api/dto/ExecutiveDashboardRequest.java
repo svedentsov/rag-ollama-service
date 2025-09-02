@@ -12,13 +12,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * DTO для запроса на генерацию полного Executive Dashboard.
- * Агрегирует все параметры, необходимые для запуска всех губернаторских конвейеров.
+ * DTO для инкапсуляции параметров запроса на генерацию Executive Dashboard.
+ * Используется для валидации @RequestParam в GET-эндпоинте.
  *
  * @param analysisPeriodDays Период для анализа исторических данных.
  * @param competitorUrls     Список URL конкурентов для анализа рынка.
  */
-@Schema(description = "DTO для запроса на генерацию полного Executive Dashboard")
+@Schema(description = "Параметры запроса для генерации Executive Dashboard")
 public record ExecutiveDashboardRequest(
         @Schema(description = "Период для анализа исторических данных в днях", defaultValue = "90")
         @NotNull @Min(30) @Max(365)

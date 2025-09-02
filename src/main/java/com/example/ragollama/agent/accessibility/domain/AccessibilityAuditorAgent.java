@@ -16,23 +16,19 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 
 /**
  * QA-агент, который проводит аудит доступности (a11y) веб-страницы.
- * <p>
  * Реализует гибридный подход:
  * 1. Использует детерминированный {@link AccessibilityScannerService} для поиска нарушений.
  * 2. Использует LLM для анализа, приоритизации и объяснения этих нарушений.
- * <p>
- * Эта версия полностью асинхронна, включая этап сканирования, для обеспечения
- * максимальной производительности.
  */
 @Slf4j
 @Component
@@ -43,7 +39,7 @@ public class AccessibilityAuditorAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
-    private final Executor applicationTaskExecutor;
+    private final AsyncTaskExecutor applicationTaskExecutor;
 
     /**
      * {@inheritDoc}
@@ -73,7 +69,7 @@ public class AccessibilityAuditorAgent implements ToolAgent {
      * Асинхронно выполняет полный конвейер аудита доступности.
      * <p>
      * Конвейер состоит из следующих шагов:
-     * 1. Асинхронное сканирование HTML на предмет нарушений.
+     * 1. Асинхронное сканирование HTML на предмет нарушений в управляемом пуле потоков.
      * 2. Если нарушения найдены, они сериализуются в JSON.
      * 3. Вызывается LLM для анализа JSON и генерации резюме.
      * 4. Ответ LLM парсится и объединяется с исходными данными для формирования финального отчета.
@@ -87,13 +83,13 @@ public class AccessibilityAuditorAgent implements ToolAgent {
 
         // Шаг 1: Асинхронный детерминированный поиск нарушений.
         return CompletableFuture.supplyAsync(() -> scannerService.scan(htmlContent), applicationTaskExecutor)
-                .thenCompose(violations -> {
+                .thenComposeAsync(violations -> {
                     if (violations.isEmpty()) {
                         return CompletableFuture.completedFuture(createSuccessResultWithoutViolations());
                     }
                     // Шаг 2: Если нарушения есть, запускаем LLM для анализа.
                     return processViolationsWithLlm(violations);
-                });
+                }, applicationTaskExecutor);
     }
 
     /**
@@ -108,7 +104,7 @@ public class AccessibilityAuditorAgent implements ToolAgent {
             String promptString = promptService.render("accessibilityAudit", Map.of("violationsJson", violationsJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(llmResponse -> parseLlmResponse(llmResponse, violations)) // <-- ИСПРАВЛЕНИЕ: Убран вызов .content()
+                    .thenApply(llmResponse -> parseLlmResponse(llmResponse, violations))
                     .thenApply(this::createSuccessResultWithReport);
         } catch (JsonProcessingException e) {
             return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации нарушений a11y", e));
@@ -119,7 +115,7 @@ public class AccessibilityAuditorAgent implements ToolAgent {
      * Безопасно парсит JSON-ответ от LLM и объединяет его с исходными данными.
      * Этот метод инкапсулирует логику обработки потенциально невалидного вывода LLM.
      *
-     * @param jsonResponse  Сырой JSON-ответ от языковой модели.
+     * @param jsonResponse  Сырой строковый JSON-ответ от языковой модели.
      * @param rawViolations Исходный список нарушений от сканера, который будет добавлен в финальный отчет.
      * @return Полностью собранный {@link AccessibilityReport}.
      * @throws ProcessingException если LLM вернула невалидный JSON.

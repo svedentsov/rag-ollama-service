@@ -67,7 +67,6 @@ public class QueryProfilerAgent implements ToolAgent {
         String query = (String) context.payload().get("query");
         String promptString = promptService.render("queryProfiler", Map.of("query", query));
 
-        // Используем быструю модель для минимизации задержки
         return llmClient.callChat(new Prompt(promptString), ModelCapability.FAST)
                 .thenApply(this::parseLlmResponse)
                 .thenApply(profile -> {

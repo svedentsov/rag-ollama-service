@@ -3,6 +3,7 @@ package com.example.ragollama.optimization;
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.ToolAgent;
+import com.example.ragollama.optimization.model.InteractionAnalysisReport;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
@@ -22,7 +23,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * AI-агент, выступающий в роли "инженера по промптам".
  * <p>
- * Принимает на вход отчет об неэффективности и исходный текст промпта,
+ * Принимает на вход строго типизированный отчет об неэффективности и исходный текст промпта,
  * а затем генерирует улучшенную версию, которая должна решить обнаруженные проблемы.
  */
 @Slf4j
@@ -47,7 +48,7 @@ public class PromptRefinementAgent implements ToolAgent {
      */
     @Override
     public String getDescription() {
-        return "Анализирует отчет о неэффективности и предлагает улучшенную версию промпта в формате diff.";
+        return "Анализирует неэффективность и предлагает улучшение для промпта.";
     }
 
     /**
@@ -55,7 +56,7 @@ public class PromptRefinementAgent implements ToolAgent {
      */
     @Override
     public boolean canHandle(AgentContext context) {
-        return context.payload().containsKey("interactionAnalysis");
+        return context.payload().get("interactionAnalysis") instanceof InteractionAnalysisReport;
     }
 
     /**
@@ -63,8 +64,7 @@ public class PromptRefinementAgent implements ToolAgent {
      */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
-        Map<String, Object> analysis = (Map<String, Object>) context.payload().get("interactionAnalysis");
-        // Для демонстрации, мы жестко нацеливаемся на промпт планировщика
+        InteractionAnalysisReport analysis = (InteractionAnalysisReport) context.payload().get("interactionAnalysis");
         String targetPromptName = "planningAgent";
         String originalPrompt;
         try {

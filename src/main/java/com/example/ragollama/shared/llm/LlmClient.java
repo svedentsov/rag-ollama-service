@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.ollama.api.OllamaOptions;
+import org.springframework.core.task.AsyncTaskExecutor;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -16,12 +18,8 @@ import reactor.core.publisher.Flux;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * "Чистый" клиент-оркестратор для взаимодействия с LLM с интегрированным контролем квот.
- * <p>
- * Эта версия включает в себя полный цикл FinOps & Governance:
- * 1.  **Pre-check:** Перед вызовом LLM проверяет, не превышена ли квота пользователя.
- * 2.  **Execution:** Вызывает LLM через отказоустойчивый исполнитель.
- * 3.  **Post-tracking:** После успешного ответа асинхронно записывает данные об использовании.
+ * Клиент-оркестратор для взаимодействия с LLM, возвращающий CompletableFuture.
+ * Эта версия использует AsyncTaskExecutor для гарантированной передачи SecurityContext.
  */
 @Component
 @RequiredArgsConstructor
@@ -33,35 +31,34 @@ public class LlmClient {
     private final QuotaService quotaService;
     private final LlmUsageTracker usageTracker;
     private final TokenizationService tokenizationService;
+    private final AsyncTaskExecutor applicationTaskExecutor;
 
     /**
-     * Асинхронно вызывает чат-модель, возвращая только текстовый ответ.
+     * Асинхронно вызывает чат-модель, возвращая текстовый ответ.
      *
      * @param prompt     Промпт для отправки в модель.
      * @param capability Требуемый уровень возможностей модели.
      * @return {@link CompletableFuture} с текстовым ответом от LLM.
-     * @throws QuotaExceededException если лимит пользователя исчерпан.
      */
     public CompletableFuture<String> callChat(Prompt prompt, ModelCapability capability) {
-        String username = getAuthenticatedUsername();
-        int promptTokens = tokenizationService.countTokens(prompt.getContents());
-        if (quotaService.isQuotaExceeded(username, promptTokens)) {
-            return CompletableFuture.failedFuture(
-                    new QuotaExceededException("Месячный лимит токенов исчерпан.")
-            );
-        }
-
-        String modelName = llmRouterService.getModelFor(capability);
-        return resilientExecutor.execute(() -> {
-                    OllamaOptions options = buildOptions(modelName);
-                    return llmGateway.call(prompt, options);
-                })
-                .doOnSuccess(chatResponse -> {
-                    LlmResponse llmResponse = toLlmResponse(chatResponse);
-                    usageTracker.trackUsage(modelName, llmResponse);
-                })
-                .map(chatResponse -> chatResponse.getResult().getOutput().getText())
-                .toFuture();
+        return CompletableFuture.supplyAsync(() -> {
+            String username = getAuthenticatedUsername();
+            int promptTokens = tokenizationService.countTokens(prompt.getContents());
+            if (quotaService.isQuotaExceeded(username, promptTokens)) {
+                throw new QuotaExceededException("Месячный лимит токенов исчерпан.");
+            }
+            return llmRouterService.getModelFor(capability);
+        }, applicationTaskExecutor).thenCompose(modelName ->
+                resilientExecutor.execute(() -> {
+                            OllamaOptions options = buildOptions(modelName);
+                            return llmGateway.call(prompt, options);
+                        }).toFuture()
+                        .thenApply(chatResponse -> {
+                            LlmResponse llmResponse = toLlmResponse(chatResponse);
+                            usageTracker.trackUsage(modelName, llmResponse);
+                            return llmResponse.content();
+                        })
+        );
     }
 
     /**
@@ -70,7 +67,6 @@ public class LlmClient {
      * @param prompt     Промпт для отправки в модель.
      * @param capability Требуемый уровень возможностей модели.
      * @return {@link Flux} с текстовыми частями ответа от LLM.
-     * @throws QuotaExceededException если лимит пользователя исчерпан.
      */
     public Flux<String> streamChat(Prompt prompt, ModelCapability capability) {
         String username = getAuthenticatedUsername();
@@ -87,13 +83,15 @@ public class LlmClient {
     }
 
     private String getAuthenticatedUsername() {
-        return SecurityContextHolder.getContext().getAuthentication().getName();
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated()) {
+            return authentication.getName();
+        }
+        return "system_user";
     }
 
     private OllamaOptions buildOptions(String modelName) {
-        return OllamaOptions.builder()
-                .model(modelName)
-                .build();
+        return OllamaOptions.builder().model(modelName).build();
     }
 
     private LlmResponse toLlmResponse(ChatResponse chatResponse) {

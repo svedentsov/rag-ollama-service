@@ -10,6 +10,7 @@ import com.example.ragollama.shared.tokenization.TokenizationService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.AsyncTaskExecutor;
 
 /**
  * Конфигурационный класс для централизованного создания и настройки бинов, связанных с AI.
@@ -35,7 +36,8 @@ public class AiConfig {
             ResilientLlmExecutor resilientExecutor,
             QuotaService quotaService,
             LlmUsageTracker usageTracker,
-            TokenizationService tokenizationService
+            TokenizationService tokenizationService,
+            AsyncTaskExecutor applicationTaskExecutor
     ) {
         return new LlmClient(
                 llmGateway,
@@ -43,7 +45,8 @@ public class AiConfig {
                 resilientExecutor,
                 quotaService,
                 usageTracker,
-                tokenizationService
+                tokenizationService,
+                applicationTaskExecutor
         );
     }
 }

@@ -10,10 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -21,9 +18,6 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Контроллер для высокоуровневых, стратегических AI-агентов ("Губернаторов"),
  * действующих на уровне всего портфеля проектов.
- * <p>
- * Этот API является точкой входа для получения самых комплексных и ценных
- * аналитических отчетов, предназначенных для принятия управленческих решений.
  */
 @RestController
 @RequestMapping("/api/v1/executive")
@@ -53,18 +47,17 @@ public class ExecutiveController {
      * Собирает и возвращает полную, на 360 градусов, сводку о состоянии всех
      * инженерных процессов в виде единого дашборда для руководства.
      * <p>
-     * Этот эндпоинт асинхронно и параллельно запускает **всех** AI-губернаторов
-     * (по здоровью, скорости, продукту, финансам и архитектуре), агрегирует
-     * их финальные отчеты и представляет в виде единого, целостного объекта.
+     * Этот эндпоинт асинхронно и параллельно запускает **всех** AI-губернаторов,
+     * агрегирует их финальные отчеты и представляет в виде единого, целостного объекта.
      *
-     * @param request DTO со всеми параметрами, необходимыми для полного анализа.
+     * @param request DTO-объект, который Spring автоматически создает из параметров запроса.
      * @return {@link CompletableFuture}, который по завершении будет содержать
      * полностью собранный {@link ExecutiveDashboard}.
      */
-    @PostMapping("/dashboard")
+    @GetMapping("/dashboard")
     @Operation(summary = "Получить сводный дашборд для руководства (Executive Command Center)",
             description = "Асинхронно запускает всех AI-губернаторов и агрегирует их отчеты в единую панель управления.")
-    public CompletableFuture<ExecutiveDashboard> getExecutiveDashboard(@Valid @RequestBody ExecutiveDashboardRequest request) {
+    public CompletableFuture<ExecutiveDashboard> getExecutiveDashboard(@Valid ExecutiveDashboardRequest request) {
         return dashboardService.generateDashboard(request.toAgentContext());
     }
 }

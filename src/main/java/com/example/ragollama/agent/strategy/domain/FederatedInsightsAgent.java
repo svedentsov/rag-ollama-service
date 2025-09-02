@@ -61,7 +61,6 @@ public class FederatedInsightsAgent implements QaAgent {
      */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
-        // <-- ИСПРАВЛЕНИЕ: Используем наш security-aware исполнитель
         return CompletableFuture.supplyAsync(analyticsService::getProjectHealthSummaries, applicationTaskExecutor)
                 .thenCompose(healthSummaries -> {
                     if (healthSummaries.isEmpty()) {

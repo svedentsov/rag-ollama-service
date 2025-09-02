@@ -48,7 +48,7 @@ public class OrchestrationService {
                         case RAG_QUERY ->
                                 Mono.fromFuture(() -> adaptiveRagOrchestrator.processAdaptive(request.toRagQueryRequest()))
                                         .map(response -> UniversalSyncResponse.from(response, intent));
-                        case CHITCHAT ->
+                        case CHITCHAT, UNKNOWN ->
                                 Mono.fromFuture(() -> sessionService.processChatRequestAsync(request.toChatRequest()))
                                         .map(response -> UniversalSyncResponse.from(response, intent));
                         case CODE_GENERATION -> codeGenerationService.generateCode(request.toCodeGenerationRequest())
@@ -57,9 +57,6 @@ public class OrchestrationService {
                                 .map(response -> UniversalSyncResponse.from(response, intent));
                         case SUMMARIZATION -> summarizationService.summarizeAsync(request.context(), null)
                                 .map(summary -> UniversalSyncResponse.from(summary, intent));
-                        case UNKNOWN ->
-                                Mono.fromFuture(() -> sessionService.processChatRequestAsync(request.toChatRequest()))
-                                        .map(response -> UniversalSyncResponse.from(response, intent));
                     };
                 }).toFuture();
     }
@@ -75,7 +72,6 @@ public class OrchestrationService {
                 .flatMapMany(intent -> {
                     log.info("Маршрутизация потокового запроса с намерением: {}. SessionID: {}", intent, request.sessionId());
                     return switch (intent) {
-                        // Потоковая обработка для адаптивного RAG пока не реализована, используем стандартную
                         case RAG_QUERY -> sessionService.processRagRequestStream(request.toRagQueryRequest())
                                 .map(UniversalResponse::from);
                         case CHITCHAT, UNKNOWN -> sessionService.processChatRequestStream(request.toChatRequest())
