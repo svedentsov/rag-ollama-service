@@ -24,14 +24,16 @@ public class PromptService {
     private final Map<String, Template> templateCache = new ConcurrentHashMap<>();
 
     /**
-     * Централизованный каталог всех используемых в приложении промптов.
+     * Централизованный и исчерпывающий каталог всех используемых в приложении промптов.
+     * Ключ - логическое имя промпта, используемое в коде.
+     * Значение - путь к файлу шаблона в ресурсах.
      */
     private static final Map<String, String> TEMPLATE_PATHS = Map.ofEntries(
-            // RAG & Chat
+            // RAG & Chat Core
             Map.entry("ragPrompt", "rag-prompt.ftl"),
             Map.entry("routerAgent", "router-agent-prompt.ftl"),
 
-            // RAG Agents
+            // RAG Agents (Query Processing)
             Map.entry("queryTransformation", "query-transformation-prompt.ftl"),
             Map.entry("multiQuery", "multi-query-prompt.ftl"),
 
@@ -75,21 +77,6 @@ public class PromptService {
             Map.entry("testMentorBot", "test-mentor-bot-prompt.ftl"),
             Map.entry("cypherQueryGenerator", "cypher-query-generator-prompt.ftl"),
             Map.entry("feedbackToTest", "feedback-to-test-prompt.ftl"),
-            Map.entry("canaryDecisionMaker", "canary-decision-maker-prompt.ftl"),
-            Map.entry("checklistBuilder", "checklist-builder-prompt.ftl"),
-            Map.entry("bugPatternDetector", "bug-pattern-detector-prompt.ftl"),
-            Map.entry("refactoringStrategist", "refactoring-strategist-prompt.ftl"),
-            Map.entry("sprintPlanner", "sprint-planner-prompt.ftl"),
-            Map.entry("architecturalReviewSynthesizer", "architectural-review-synthesizer-prompt.ftl"),
-            Map.entry("incidentSummarizer", "incident-summarizer-prompt.ftl"),
-            Map.entry("featureExtraction", "feature-extraction-prompt.ftl"),
-            Map.entry("featureGapAnalysis", "feature-gap-analysis-prompt.ftl"),
-            Map.entry("documentEnhancer", "document-enhancer-prompt.ftl"),
-            Map.entry("resourceAllocator", "resource-allocator-prompt.ftl"),
-            Map.entry("prioritizationAgent", "prioritization-agent-prompt.ftl"),
-            Map.entry("federatedInsights", "federated-insights-prompt.ftl"),
-            Map.entry("knowledgeRouter", "knowledge-router-prompt.ftl"),
-            Map.entry("strategicInitiativePlanner", "strategic-initiative-planner-prompt.ftl"),
 
             // Summarization & Data Generation
             Map.entry("summarization", "summarization-prompt.ftl"),
@@ -111,21 +98,39 @@ public class PromptService {
             Map.entry("crossValidator", "cross-validator-prompt.ftl"),
             Map.entry("trustScorer", "trust-scorer-prompt.ftl"),
 
-            // Strategic & Planning Agents
+            // Strategic & Planning Agents (Governors)
             Map.entry("planningAgent", "planning-agent-prompt.ftl"),
-            Map.entry("autonomousTriage", "autonomous-triage-prompt.ftl"),
-            Map.entry("qaLeadStrategy", "qa-lead-strategy-prompt.ftl"),
-            Map.entry("sdlcStrategy", "sdlc-strategy-prompt.ftl"),
             Map.entry("workflowPlanner", "workflow-planner-prompt.ftl"),
+            Map.entry("sdlcStrategy", "sdlc-strategy-prompt.ftl"),
+            Map.entry("copilotResultSummarizer", "copilot-result-summarizer-prompt.ftl"),
             Map.entry("testTrendAnalyzer", "test-trend-analyzer-prompt.ftl"),
             Map.entry("regressionPredictor", "regression-predictor-prompt.ftl"),
             Map.entry("testDebtSummary", "test-debt-summary-prompt.ftl"),
             Map.entry("riskMatrixSummary", "risk-matrix-summary-prompt.ftl"),
             Map.entry("prReviewAggregator", "pr-review-aggregator-prompt.ftl"),
-            Map.entry("copilotResultSummarizer", "copilot-result-summarizer-prompt.ftl"),
             Map.entry("releaseDecision", "release-decision-prompt.ftl"),
             Map.entry("releaseReadiness", "release-readiness-prompt.ftl"),
             Map.entry("customerImpactAnalyzer", "customer-impact-analyzer-prompt.ftl"),
+            Map.entry("canaryDecisionMaker", "canary-decision-maker-prompt.ftl"),
+            Map.entry("checklistBuilder", "checklist-builder-prompt.ftl"),
+            Map.entry("bugPatternDetector", "bug-pattern-detector-prompt.ftl"),
+            Map.entry("refactoringStrategist", "refactoring-strategist-prompt.ftl"),
+            Map.entry("sprintPlanner", "sprint-planner-prompt.ftl"),
+            Map.entry("architecturalReviewSynthesizer", "architectural-review-synthesizer-prompt.ftl"),
+            Map.entry("incidentSummarizer", "incident-summarizer-prompt.ftl"),
+            Map.entry("featureExtraction", "feature-extraction-prompt.ftl"),
+            Map.entry("featureGapAnalysis", "feature-gap-analysis-prompt.ftl"),
+            Map.entry("documentEnhancer", "document-enhancer-prompt.ftl"),
+            Map.entry("resourceAllocator", "resource-allocator-prompt.ftl"),
+            Map.entry("prioritizationAgent", "prioritization-agent-prompt.ftl"),
+            Map.entry("federatedInsights", "federated-insights-prompt.ftl"),
+            Map.entry("knowledgeRouter", "knowledge-router-prompt.ftl"),
+            Map.entry("strategicInitiativePlanner", "strategic-initiative-planner-prompt.ftl"),
+            Map.entry("architecturalHealthGovernor", "architectural-health-governor-prompt.ftl"),
+            Map.entry("engineeringVelocityGovernor", "engineering-velocity-governor-prompt.ftl"),
+            Map.entry("roiSynthesizer", "roi-synthesizer-prompt.ftl"),
+            Map.entry("userFeedbackClusterer", "user-feedback-clusterer-prompt.ftl"),
+            Map.entry("productPortfolioStrategist", "product-portfolio-strategist-prompt.ftl"),
 
             // Optimization & Meta-Learning
             Map.entry("ragOptimizer", "rag-optimizer-prompt.ftl"),
@@ -133,16 +138,13 @@ public class PromptService {
             Map.entry("errorHandler", "error-handler-prompt.ftl"),
             Map.entry("promptRefinement", "prompt-refinement-prompt.ftl"),
             Map.entry("simulationAnalyzer", "simulation-analyzer-prompt.ftl"),
-            Map.entry("experimentAnalyzer", "experiment-analyzer-prompt.ftl")
+            Map.entry("experimentAnalyzer", "experiment-analyzer-prompt.ftl"),
+            Map.entry("autonomousTriage", "autonomous-triage-prompt.ftl"),
+            Map.entry("qaLeadStrategy", "qa-lead-strategy-prompt.ftl")
     );
 
     /**
      * Загружает и кэширует все известные шаблоны FreeMarker при старте приложения.
-     * <p>
-     * Этот метод вызывается автоматически после создания бина благодаря аннотации
-     * {@code @PostConstruct}. Он итерируется по статической карте {@code TEMPLATE_PATHS},
-     * загружает каждый шаблон и помещает его в потокобезопасный кэш для
-     * быстрого доступа в дальнейшем.
      *
      * @throws IllegalStateException если какой-либо из шаблонов не может быть загружен.
      */
@@ -153,7 +155,7 @@ public class PromptService {
             try {
                 Template template = freemarkerConfig.getTemplate(path);
                 templateCache.put(name, template);
-                log.debug("Шаблон FreeMarker '{}' успешно загружен из '{}'", name, path);
+                log.trace("Шаблон FreeMarker '{}' успешно загружен из '{}'", name, path);
             } catch (IOException e) {
                 log.error("Критическая ошибка: не удалось загрузить шаблон '{}' из '{}'", name, path, e);
                 throw new IllegalStateException("Ошибка инициализации PromptService", e);

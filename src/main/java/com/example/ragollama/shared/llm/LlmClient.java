@@ -9,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.ollama.api.OllamaOptions;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -17,7 +16,12 @@ import reactor.core.publisher.Flux;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * "Чистый" клиент-оркестратор для взаимодействия с LLM с простым и надежным контрактом.
+ * "Чистый" клиент-оркестратор для взаимодействия с LLM с интегрированным контролем квот.
+ * <p>
+ * Эта версия включает в себя полный цикл FinOps & Governance:
+ * 1.  **Pre-check:** Перед вызовом LLM проверяет, не превышена ли квота пользователя.
+ * 2.  **Execution:** Вызывает LLM через отказоустойчивый исполнитель.
+ * 3.  **Post-tracking:** После успешного ответа асинхронно записывает данные об использовании.
  */
 @Component
 @RequiredArgsConstructor
@@ -82,17 +86,8 @@ public class LlmClient {
         }).map(chatResponse -> chatResponse.getResult().getOutput().getText());
     }
 
-    /**
-     * Безопасно получает имя аутентифицированного пользователя.
-     *
-     * @return Имя пользователя или "system_user" в случае отсутствия аутентификации.
-     */
     private String getAuthenticatedUsername() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.isAuthenticated()) {
-            return authentication.getName();
-        }
-        return "system_user"; // Fallback для асинхронных задач без контекста
+        return SecurityContextHolder.getContext().getAuthentication().getName();
     }
 
     private OllamaOptions buildOptions(String modelName) {

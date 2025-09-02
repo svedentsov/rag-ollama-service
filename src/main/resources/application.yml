@@ -414,12 +414,15 @@ app:
   finops:
     quotas:
       enabled: true
+      # Тарифный план по умолчанию для пользователей без явно указанного
       default-tier: "free"
+      # Описание тарифных планов
       tiers:
         free:
-          total-tokens-limit: 100000
+          total-tokens-limit: 100000   # 100 тысяч токенов в месяц
         pro:
-          total-tokens-limit: 5000000
+          total-tokens-limit: 5000000  # 5 миллионов токенов в месяц
+      # Стоимость в USD за 1000 токенов (для отчетов)
       costs:
-        input: 0.0005
-        output: 0.0015
+        input: 0.0005  # Примерная стоимость
+        output: 0.0015 # Примерная стоимость

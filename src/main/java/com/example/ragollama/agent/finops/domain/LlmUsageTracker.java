@@ -23,6 +23,7 @@ public class LlmUsageTracker {
 
     /**
      * Асинхронно сохраняет запись об использовании LLM.
+     * Выполняется в отдельном потоке, чтобы не замедлять ответ пользователю.
      *
      * @param modelName Имя использованной модели.
      * @param response  Объект ответа от LLM, содержащий метаданные об использовании.
@@ -41,9 +42,9 @@ public class LlmUsageTracker {
         LlmUsageLog logEntry = LlmUsageLog.builder()
                 .username(username)
                 .modelName(modelName)
-                .promptTokens((long) usage.getPromptTokens()) // <-- ИСПРАВЛЕНИЕ: Явное приведение Integer к Long
-                .completionTokens((long) usage.getCompletionTokens()) // <-- ИСПРАВЛЕНИЕ: Правильный метод и приведение
-                .totalTokens((long) usage.getTotalTokens()) // <-- ИСПРАВЛЕНИЕ: Явное приведение
+                .promptTokens((long) usage.getPromptTokens())
+                .completionTokens((long) usage.getCompletionTokens())
+                .totalTokens((long) usage.getTotalTokens())
                 .build();
 
         usageLogRepository.save(logEntry);
@@ -55,6 +56,6 @@ public class LlmUsageTracker {
         if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getPrincipal())) {
             return authentication.getName();
         }
-        return "system_user";
+        return "system_user"; // Fallback для системных вызовов
     }
 }

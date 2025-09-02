@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 public class QuotaExceededException extends RuntimeException {
     /**
      * Конструктор с сообщением об ошибке.
+     *
      * @param message Детальное описание причины.
      */
     public QuotaExceededException(String message) {
