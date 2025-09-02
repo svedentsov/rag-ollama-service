@@ -1,11 +1,9 @@
 package com.example.ragollama.shared.config;
 
 import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.LlmGateway;
 import com.example.ragollama.shared.llm.LlmRouterService;
-import com.example.ragollama.shared.metrics.MetricService;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
-import io.github.resilience4j.retry.RetryRegistry;
-import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
+import com.example.ragollama.shared.llm.ResilientLlmExecutor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,38 +11,44 @@ import org.springframework.context.annotation.Configuration;
 /**
  * Конфигурационный класс для централизованного создания и настройки бинов, связанных с AI.
  * <p>
- * Эта версия обновлена для создания `LlmClient` с новым `LlmRouterService`.
+ * Эта финальная версия собирает декомпозированные компоненты (`LlmGateway`,
+ * `ResilientLlmExecutor`, `LlmRouterService`) в единый, отказоустойчивый
+ * и интеллектуальный бин {@link LlmClient}. Она также явно создает
+ * бин {@link ChatClient}, необходимый для работы шлюза.
  */
 @Configuration
 public class AiConfig {
 
     /**
+     * Создает и предоставляет основной бин {@link ChatClient}, который будет
+     * использоваться для низкоуровневого взаимодействия с LLM.
+     *
+     * @param builder Автоматически сконфигурированный строитель ChatClient от Spring AI.
+     * @return Готовый к использованию экземпляр {@link ChatClient}.
+     */
+    @Bean
+    public ChatClient chatClient(ChatClient.Builder builder) {
+        return builder.build();
+    }
+
+    /**
      * Создает и предоставляет единственный, отказоустойчивый и интеллектуальный бин {@link LlmClient}.
      *
-     * @param chatClientBuilder      Автоматически сконфигурированный строитель ChatClient.
-     * @param metricService          Сервис для сбора метрик.
-     * @param llmRouterService       Сервис для выбора модели.
-     * @param circuitBreakerRegistry Реестр Circuit Breaker'ов.
-     * @param retryRegistry          Реестр политик Retry.
-     * @param timeLimiterRegistry    Реестр TimeLimiter'ов.
-     * @return Единственный экземпляр {@link LlmClient} для использования в приложении.
+     * @param llmGateway        Низкоуровневый шлюз для взаимодействия со Spring AI.
+     * @param llmRouterService  Сервис для выбора модели на основе требуемых возможностей.
+     * @param resilientExecutor Декоратор, применяющий политики отказоустойчивости.
+     * @return Финальный, готовый к использованию в приложении экземпляр {@link LlmClient}.
      */
     @Bean
     public LlmClient llmClient(
-            ChatClient.Builder chatClientBuilder,
-            MetricService metricService,
+            LlmGateway llmGateway,
             LlmRouterService llmRouterService,
-            CircuitBreakerRegistry circuitBreakerRegistry,
-            RetryRegistry retryRegistry,
-            TimeLimiterRegistry timeLimiterRegistry
+            ResilientLlmExecutor resilientExecutor
     ) {
         return new LlmClient(
-                chatClientBuilder,
-                metricService,
+                llmGateway,
                 llmRouterService,
-                circuitBreakerRegistry,
-                retryRegistry,
-                timeLimiterRegistry
+                resilientExecutor
         );
     }
 }

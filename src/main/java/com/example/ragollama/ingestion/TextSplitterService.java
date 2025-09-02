@@ -1,95 +1,67 @@
 package com.example.ragollama.ingestion;
 
-import com.example.ragollama.shared.tokenization.TokenizationService;
+import com.example.ragollama.ingestion.splitter.RecursiveTextSplitterStrategy;
+import com.example.ragollama.ingestion.splitter.SplitterConfig;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
- * Кастомный сервис для интеллектуального разбиения текста на чанки.
+ * Сервис-оркестратор для интеллектуального разбиения текста на чанки.
  * <p>
- * Реализует рекурсивную стратегию, которая сохраняет семантическую
- * целостность, разделяя текст сначала по параграфам, затем по предложениям.
- * Это дает полный контроль над процессом чанкинга и не зависит от
- * конкретной реализации в Spring AI.
+ * Эта версия реализует паттерн "Стратегия". Она не содержит логики
+ * разделения сама, а делегирует эту задачу конкретной реализации
+ * {@link com.example.ragollama.ingestion.splitter.SplitterStrategy}.
+ * Это делает сервис гибким и расширяемым.
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class TextSplitterService {
 
-    private final TokenizationService tokenizationService;
     private final IngestionProperties ingestionProperties;
+    private final RecursiveTextSplitterStrategy recursiveStrategy;
 
-    // Регулярное выражение для разделения на предложения, учитывающее точки, восклицательные и вопросительные знаки.
-    private static final Pattern SENTENCE_SPLIT_PATTERN = Pattern.compile("(?<=[.!?])\\s+");
+    private static final List<String> DEFAULT_DELIMITERS = List.of(
+            "\n\n", // Параграфы
+            "\n",   // Новые строки
+            "(?<=[.!?])\\s+" // Предложения
+    );
 
     /**
-     * Разбивает один документ на список чанков.
+     * Разбивает один документ на список чанков, используя конфигурацию по умолчанию.
      *
      * @param document Документ для обработки.
      * @return Список документов-чанков.
      */
     public List<Document> split(Document document) {
-        int chunkSize = ingestionProperties.chunking().defaultChunkSize();
-        int chunkOverlap = ingestionProperties.chunking().chunkOverlap();
-        List<Document> chunks = new ArrayList<>();
-
-        // Сначала делим по параграфам
-        String[] paragraphs = document.getText().split("\n\n");
-        List<String> currentChunkSentences = new ArrayList<>();
-        int currentChunkTokens = 0;
-
-        for (String paragraph : paragraphs) {
-            if (paragraph.isBlank()) continue;
-
-            String[] sentences = SENTENCE_SPLIT_PATTERN.split(paragraph);
-            for (String sentence : sentences) {
-                int sentenceTokens = tokenizationService.countTokens(sentence);
-                if (currentChunkTokens + sentenceTokens > chunkSize && !currentChunkSentences.isEmpty()) {
-                    // Завершаем текущий чанк
-                    chunks.add(createChunk(currentChunkSentences, document));
-                    // Начинаем новый чанк с пересечением
-                    currentChunkSentences = getOverlap(currentChunkSentences, chunkOverlap);
-                    currentChunkTokens = currentChunkSentences.stream().mapToInt(tokenizationService::countTokens).sum();
-                }
-                currentChunkSentences.add(sentence);
-                currentChunkTokens += sentenceTokens;
-            }
-        }
-
-        // Добавляем последний оставшийся чанк
-        if (!currentChunkSentences.isEmpty()) {
-            chunks.add(createChunk(currentChunkSentences, document));
-        }
-
-        return chunks;
+        SplitterConfig defaultConfig = new SplitterConfig(
+                ingestionProperties.chunking().defaultChunkSize(),
+                ingestionProperties.chunking().chunkOverlap(),
+                DEFAULT_DELIMITERS
+        );
+        return split(document, defaultConfig);
     }
 
-    private Document createChunk(List<String> sentences, Document originalDocument) {
-        String chunkText = String.join(" ", sentences).trim();
-        return new Document(chunkText, originalDocument.getMetadata());
-    }
+    /**
+     * Разбивает один документ на список чанков, используя кастомную конфигурацию.
+     *
+     * @param document Документ для обработки.
+     * @param config   Кастомные параметры чанкинга.
+     * @return Список документов-чанков.
+     */
+    public List<Document> split(Document document, SplitterConfig config) {
+        log.debug("Запуск разделения документа '{}' со стратегией '{}'",
+                document.getMetadata().get("source"), recursiveStrategy.getClass().getSimpleName());
 
-    private List<String> getOverlap(List<String> sentences, int overlapTokens) {
-        if (sentences.isEmpty() || overlapTokens <= 0) {
-            return new ArrayList<>();
-        }
+        List<String> stringChunks = recursiveStrategy.split(document.getText(), config);
 
-        List<String> overlapSentences = new ArrayList<>();
-        int currentOverlapTokens = 0;
-        for (int i = sentences.size() - 1; i >= 0; i--) {
-            String sentence = sentences.get(i);
-            int sentenceTokens = tokenizationService.countTokens(sentence);
-            if (currentOverlapTokens + sentenceTokens > overlapTokens) {
-                break;
-            }
-            overlapSentences.add(0, sentence);
-            currentOverlapTokens += sentenceTokens;
-        }
-        return overlapSentences;
+        return stringChunks.stream()
+                .map(chunkText -> new Document(chunkText, document.getMetadata()))
+                .collect(Collectors.toList());
     }
 }

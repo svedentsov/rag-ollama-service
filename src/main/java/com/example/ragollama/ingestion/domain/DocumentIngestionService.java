@@ -1,10 +1,12 @@
 package com.example.ragollama.ingestion.domain;
 
+import com.example.ragollama.agent.config.RabbitMqConfig;
 import com.example.ragollama.ingestion.api.dto.DocumentIngestionRequest;
 import com.example.ragollama.ingestion.domain.model.DocumentJob;
 import com.example.ragollama.ingestion.mappers.DocumentMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -14,10 +16,6 @@ import java.util.UUID;
 
 /**
  * Сервис для управления жизненным циклом документов.
- * <p>
- * В этой версии исправлена проблема гонки состояний (race condition)
- * путем отложенного запуска асинхронной обработки. Воркер теперь
- * вызывается только после успешного коммита основной транзакции.
  */
 @Service
 @RequiredArgsConstructor
@@ -26,11 +24,11 @@ public class DocumentIngestionService {
 
     private final DocumentJobRepository jobRepository;
     private final DocumentMapper documentMapper;
-    private final DocumentProcessingWorker documentProcessingWorker;
+    private final RabbitTemplate rabbitTemplate;
 
     /**
      * Сохраняет метаданные о документе и регистрирует задачу на асинхронную обработку
-     * и индексацию, которая будет запущена после успешного завершения текущей транзакции.
+     * путем отправки сообщения в RabbitMQ после успешного завершения текущей транзакции.
      *
      * @param request DTO с данными документа.
      * @return Уникальный идентификатор (UUID) созданной задачи на обработку (Job ID).
@@ -43,11 +41,16 @@ public class DocumentIngestionService {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                log.debug("Транзакция для Job ID {} успешно закоммичена. Запуск асинхронного воркера.", savedJob.getId());
-                documentProcessingWorker.processDocument(savedJob.getId());
+                log.debug("Транзакция для Job ID {} успешно закоммичена. Отправка сообщения в RabbitMQ.", savedJob.getId());
+                rabbitTemplate.convertAndSend(
+                        RabbitMqConfig.EVENTS_EXCHANGE,
+                        "ingestion.document",
+                        savedJob.getId()
+                );
             }
         });
-        log.info("Документ '{}' успешно сохранен. Асинхронная обработка будет запущена после коммита. Job ID: {}",
+
+        log.info("Документ '{}' успешно сохранен. Задача на индексацию поставлена в очередь. Job ID: {}",
                 savedJob.getSourceName(), savedJob.getId());
         return savedJob.getId();
     }

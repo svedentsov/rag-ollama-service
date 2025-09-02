@@ -9,10 +9,6 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * Конфигурация для RabbitMQ.
- * <p>
- * Эта финальная версия содержит только конфигурацию, необходимую
- * для обработки асинхронных событий от внешних систем (веб-хуков),
- * так как конвейер индексации был переведен на прямой @Async вызов.
  */
 @Configuration
 @EnableRabbit
@@ -20,10 +16,9 @@ public class RabbitMqConfig {
 
     public static final String EVENTS_EXCHANGE = "events.exchange";
     public static final String DEAD_LETTER_QUEUE = "dead.letter.queue";
-
-    // Очереди для веб-хуков
     public static final String GITHUB_EVENTS_QUEUE = "github.events.queue";
     public static final String JIRA_EVENTS_QUEUE = "jira.events.queue";
+    public static final String DOCUMENT_INGESTION_QUEUE = "document.ingestion.queue";
 
     /**
      * Создает обменник типа "topic" для маршрутизации событий.
@@ -36,7 +31,8 @@ public class RabbitMqConfig {
     }
 
     /**
-     * Создает очередь для "мертвых" сообщений.
+     * Создает очередь для "мертвых" сообщений (DLQ).
+     * Все сообщения, которые не удалось обработать, будут попадать сюда.
      *
      * @return Экземпляр {@link Queue}.
      */
@@ -66,6 +62,16 @@ public class RabbitMqConfig {
     }
 
     /**
+     * Создает основную очередь для задач по индексации документов.
+     *
+     * @return Отказоустойчивая, долговечная очередь с настроенной DLQ.
+     */
+    @Bean
+    public Queue documentIngestionQueue() {
+        return createDurableQueue(DOCUMENT_INGESTION_QUEUE);
+    }
+
+    /**
      * Связывает очередь GitHub с обменником по ключу "github.#".
      */
     @Bean
@@ -79,6 +85,14 @@ public class RabbitMqConfig {
     @Bean
     public Binding jiraBinding(TopicExchange exchange, Queue jiraEventsQueue) {
         return BindingBuilder.bind(jiraEventsQueue).to(exchange).with("jira.issue_created");
+    }
+
+    /**
+     * Связывает очередь индексации с обменником по ключу "ingestion.document".
+     */
+    @Bean
+    public Binding documentIngestionBinding(TopicExchange exchange, Queue documentIngestionQueue) {
+        return BindingBuilder.bind(documentIngestionQueue).to(exchange).with("ingestion.document");
     }
 
     /**
@@ -99,7 +113,7 @@ public class RabbitMqConfig {
      */
     private Queue createDurableQueue(String queueName) {
         return QueueBuilder.durable(queueName)
-                .withArgument("x-dead-letter-exchange", "")
+                .withArgument("x-dead-letter-exchange", "") // Используем default exchange для DLQ
                 .withArgument("x-dead-letter-routing-key", DEAD_LETTER_QUEUE)
                 .build();
     }

@@ -3,8 +3,6 @@ package com.example.ragollama.agent.analytics.api;
 import com.example.ragollama.agent.AgentOrchestratorService;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.analytics.api.dto.*;
-import com.example.ragollama.agent.analytics.domain.DefectTrendMinerAgent;
-import com.example.ragollama.agent.analytics.domain.TestMetricsAnalyzerAgent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -17,9 +15,14 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Контроллер для запуска аналитических AI-агентов.
  * <p>
- * Предоставляет API для получения высокоуровневых инсайтов и отчетов
- * на основе исторических данных, собранных системой. Эти отчеты помогают
- * командам QA и разработки принимать data-driven решения.
+ * Эта версия контроллера строго следует принципам Clean Architecture:
+ * <ul>
+ *     <li>Он не имеет прямых зависимостей от конкретных реализаций агентов.</li>
+ *     <li>Все взаимодействия с бизнес-логикой осуществляются через единый фасад
+ *         {@link AgentOrchestratorService}, который запускает именованные конвейеры.</li>
+ *     <li>Это полностью отделяет Web-слой от деталей реализации Application-слоя,
+ *         повышая гибкость и тестируемость.</li>
+ * </ul>
  */
 @RestController
 @RequestMapping("/api/v1/analysis")
@@ -27,8 +30,6 @@ import java.util.concurrent.CompletableFuture;
 @Tag(name = "Analytics Agents API", description = "API для получения аналитических отчетов от AI-агентов")
 public class AnalyticsController {
 
-    private final TestMetricsAnalyzerAgent testMetricsAnalyzerAgent;
-    private final DefectTrendMinerAgent defectTrendMinerAgent;
     private final AgentOrchestratorService orchestratorService;
 
     /**
@@ -45,8 +46,8 @@ public class AnalyticsController {
     @GetMapping("/test-trends")
     @Operation(summary = "Проанализировать тренды в метриках тестов",
             description = "Анализирует сохраненные результаты за период, вычисляет KPI и генерирует выводы и рекомендации с помощью LLM.")
-    public CompletableFuture<AgentResult> analyzeTestTrends(@Valid TestMetricsAnalysisRequest request) {
-        return testMetricsAnalyzerAgent.execute(request.toAgentContext());
+    public CompletableFuture<List<AgentResult>> analyzeTestTrends(@Valid TestMetricsAnalysisRequest request) {
+        return orchestratorService.invokePipeline("test-metrics-analysis-pipeline", request.toAgentContext());
     }
 
     /**
@@ -61,8 +62,8 @@ public class AnalyticsController {
      */
     @GetMapping("/defect-trends")
     @Operation(summary = "Проанализировать и сгруппировать тренды в дефектах")
-    public CompletableFuture<AgentResult> analyzeDefectTrends(@Valid DefectTrendAnalysisRequest request) {
-        return defectTrendMinerAgent.execute(request.toAgentContext());
+    public CompletableFuture<List<AgentResult>> analyzeDefectTrends(@Valid DefectTrendAnalysisRequest request) {
+        return orchestratorService.invokePipeline("defect-trend-analysis-pipeline", request.toAgentContext());
     }
 
     /**

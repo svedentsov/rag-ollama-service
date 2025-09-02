@@ -46,16 +46,20 @@ public class IndexingPipelineService {
         String redactedText = piiRedactionService.redact(request.textContent());
         // ШАГ 2: Очистка текста от HTML и прочего "шума".
         String cleanedText = dataCleaningService.cleanDocumentText(redactedText);
-        // ШАГ 3: Подготовка метаданных и разбиение на чанки.
+
+        // ШАГ 3: Подготовка метаданных.
         Map<String, Object> metadata = new HashMap<>();
         Optional.ofNullable(request.metadata()).ifPresent(metadata::putAll);
         metadata.put("source", request.sourceName());
         metadata.put("documentId", request.documentId());
 
-        List<Document> chunks = textSplitterService.split(new Document(cleanedText, metadata));
+        Document documentToSplit = new Document(cleanedText, metadata);
+
+        // ШАГ 4: Разбиение на чанки с использованием конфигурации по умолчанию.
+        List<Document> chunks = textSplitterService.split(documentToSplit);
         log.debug("Создано {} чанков для документа '{}'", chunks.size(), request.sourceName());
 
-        // ШАГ 4: Индексация и очистка кэша.
+        // ШАГ 5: Индексация и очистка кэша.
         if (!chunks.isEmpty()) {
             vectorStore.add(chunks);
             vectorCacheService.evictAll();

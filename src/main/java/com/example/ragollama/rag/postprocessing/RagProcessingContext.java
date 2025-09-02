@@ -1,6 +1,6 @@
 package com.example.ragollama.rag.postprocessing;
 
-import com.example.ragollama.rag.domain.RagService;
+import com.example.ragollama.rag.domain.model.RagAnswer;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
 
@@ -15,7 +15,7 @@ import java.util.UUID;
  * @param originalQuery Оригинальный, немодифицированный запрос пользователя.
  * @param documents     Список документов, фактически использованных для генерации контекста.
  * @param prompt        Финальный промпт, отправленный в LLM.
- * @param response      Финальный ответ, полученный от LLM.
+ * @param response      Финальный ответ, полученный от LLM, в виде "чистого" доменного объекта {@link RagAnswer}.
  * @param sessionId     Идентификатор сессии, к которой относится взаимодействие.
  */
 public record RagProcessingContext(
@@ -23,7 +23,7 @@ public record RagProcessingContext(
         String originalQuery,
         List<Document> documents,
         Prompt prompt,
-        RagService.RagAnswer response,
+        RagAnswer response,
         UUID sessionId
 ) {
 }

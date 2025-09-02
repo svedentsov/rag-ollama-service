@@ -9,6 +9,7 @@ import com.example.ragollama.rag.api.dto.RagQueryRequest;
 import com.example.ragollama.rag.api.dto.RagQueryResponse;
 import com.example.ragollama.rag.api.dto.StreamingResponsePart;
 import com.example.ragollama.rag.domain.RagService;
+import com.example.ragollama.rag.domain.model.RagAnswer;
 import com.example.ragollama.shared.config.properties.AppProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,13 +23,23 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 /**
  * Сервис-фасад, инкапсулирующий всю логику управления сессиями и историей чата.
  * <p>
- * Эта версия обновлена для передачи `sessionId` в `RagService` для
- * корректной работы аудиторского логирования. Она также использует
- * полностью асинхронный API {@link ChatHistoryService}.
+ * Этот класс является высокоуровневым оркестратором, который связывает
+ * контроллеры с доменными сервисами (`RagService`, `ChatService`). Он отвечает за:
+ * <ul>
+ *     <li>Управление жизненным циклом сессии (создание/получение ID).</li>
+ *     <li>Атомарное сохранение сообщений пользователя и ассистента в историю.</li>
+ *     <li>Извлечение истории сообщений для передачи в LLM.</li>
+ *     <li>Вызов соответствующего доменного сервиса для выполнения бизнес-логики.</li>
+ *     <li>Формирование финального DTO ответа для контроллера.</li>
+ * </ul>
+ * Внутренняя реализация использует универсальный приватный метод-оркестратор
+ * для асинхронных запросов, чтобы устранить дублирование кода и следовать принципу DRY.
  */
 @Service
 @Slf4j
@@ -47,12 +58,16 @@ public class ChatSessionService {
      * @return {@link CompletableFuture} с финальным {@link RagQueryResponse}.
      */
     public CompletableFuture<RagQueryResponse> processRagRequestAsync(RagQueryRequest request) {
-        final UUID sessionId = getOrCreateSessionId(request.sessionId());
-
-        return saveMessageAndGetHistory(sessionId, request.query())
-                .thenCompose(history -> ragService.queryAsync(request.query(), history, request.topK(), request.similarityThreshold(), sessionId))
-                .thenCompose(ragAnswer -> saveMessageAsync(sessionId, MessageRole.ASSISTANT, ragAnswer.answer())
-                        .thenApply(v -> new RagQueryResponse(ragAnswer.answer(), ragAnswer.sourceCitations(), sessionId)));
+        return orchestrateAsyncRequest(
+                request.sessionId(),
+                request.query(),
+                // Функция, выполняющая основную бизнес-логику
+                (query, history) -> ragService.queryAsync(query, history, request.topK(), request.similarityThreshold(), getOrCreateSessionId(request.sessionId())),
+                // Функция для извлечения текстового ответа из доменного объекта
+                RagAnswer::answer,
+                // Функция для создания финального DTO ответа
+                (ragAnswer, sessionId) -> new RagQueryResponse(ragAnswer.answer(), ragAnswer.sourceCitations(), sessionId)
+        );
     }
 
     /**
@@ -91,12 +106,13 @@ public class ChatSessionService {
      * @return {@link CompletableFuture} с финальным {@link ChatResponse}.
      */
     public CompletableFuture<ChatResponse> processChatRequestAsync(ChatRequest request) {
-        final UUID sessionId = getOrCreateSessionId(request.sessionId());
-
-        return saveMessageAndGetHistory(sessionId, request.message())
-                .thenCompose(history -> chatService.processChatRequestAsync(request.message(), history))
-                .thenCompose(aiResponse -> saveMessageAsync(sessionId, MessageRole.ASSISTANT, aiResponse)
-                        .thenApply(v -> new ChatResponse(aiResponse, sessionId)));
+        return orchestrateAsyncRequest(
+                request.sessionId(),
+                request.message(),
+                chatService::processChatRequestAsync,
+                Function.identity(),
+                ChatResponse::new
+        );
     }
 
     /**
@@ -125,6 +141,32 @@ public class ChatSessionService {
     }
 
     /**
+     * Универсальный метод-оркестратор для асинхронных (не-потоковых) запросов.
+     *
+     * @param sessionId       ID сессии из запроса.
+     * @param userMessage     Сообщение пользователя.
+     * @param logicExecutor   Функция, выполняющая основную бизнес-логику (вызов RAG или Chat сервиса).
+     * @param answerExtractor Функция для извлечения текстового ответа из доменного объекта.
+     * @param responseCreator Функция для создания финального DTO ответа.
+     * @param <T>             Тип доменного ответа (например, {@link RagAnswer} или {@link String}).
+     * @param <R>             Тип финального DTO ответа (например, {@link RagQueryResponse} или {@link ChatResponse}).
+     * @return {@link CompletableFuture} с финальным DTO.
+     */
+    private <T, R> CompletableFuture<R> orchestrateAsyncRequest(
+            UUID sessionId,
+            String userMessage,
+            BiFunction<String, List<Message>, CompletableFuture<T>> logicExecutor,
+            Function<T, String> answerExtractor,
+            BiFunction<T, UUID, R> responseCreator) {
+
+        final UUID finalSessionId = getOrCreateSessionId(sessionId);
+        return saveMessageAndGetHistory(finalSessionId, userMessage)
+                .thenCompose(history -> logicExecutor.apply(userMessage, history))
+                .thenCompose(domainResponse -> saveMessageAsync(finalSessionId, MessageRole.ASSISTANT, answerExtractor.apply(domainResponse))
+                        .thenApply(v -> responseCreator.apply(domainResponse, finalSessionId)));
+    }
+
+    /**
      * Атомарно сохраняет сообщение пользователя и загружает актуальную историю чата.
      *
      * @param sessionId   ID сессии.
@@ -145,8 +187,7 @@ public class ChatSessionService {
     }
 
     /**
-     * Асинхронно сохраняет сообщение в базу данных, делегируя вызов
-     * асинхронному {@link ChatHistoryService}.
+     * Асинхронно сохраняет сообщение в базу данных.
      *
      * @param sessionId ID сессии.
      * @param role      Роль отправителя.
@@ -162,8 +203,7 @@ public class ChatSessionService {
     }
 
     /**
-     * Асинхронно загружает историю сообщений из базы данных, делегируя вызов
-     * асинхронному {@link ChatHistoryService}.
+     * Асинхронно загружает историю сообщений из базы данных.
      *
      * @param sessionId ID сессии.
      * @return {@link CompletableFuture} со списком сообщений.
