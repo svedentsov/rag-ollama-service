@@ -37,16 +37,22 @@ public class FullSecurityAuditPipeline implements AgentPipeline {
 
     /**
      * {@inheritDoc}
+     * <p>
+     * Определяет четыре этапа:
+     * 1. Получение измененных файлов.
+     * 2. Параллельный запуск первичных анализаторов кода (SAST, RBAC, PII).
+     * 3. Запуск анализатора рисков, который зависит от результатов RBAC-экстрактора.
+     * 4. Финальная агрегация всех отчетов.
+     *
+     * @return Список этапов конвейера.
      */
     @Override
-    public List<QaAgent> getAgents() {
+    public List<List<QaAgent>> getStages() {
         return List.of(
-                gitInspector,
-                sastAgent,
-                rbacExtractor,
-                authRiskDetector,
-                privacyComplianceAgent,
-                aggregatorAgent
+                List.of(gitInspector),
+                List.of(sastAgent, rbacExtractor, privacyComplianceAgent),
+                List.of(authRiskDetector),
+                List.of(aggregatorAgent)
         );
     }
 }

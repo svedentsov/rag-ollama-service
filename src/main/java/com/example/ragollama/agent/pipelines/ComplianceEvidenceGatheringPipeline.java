@@ -36,15 +36,20 @@ public class ComplianceEvidenceGatheringPipeline implements AgentPipeline {
 
     /**
      * {@inheritDoc}
+     * <p>
+     * Определяет три этапа:
+     * 1. Сбор измененных файлов.
+     * 2. Параллельный запуск анализаторов (связь с требованиями, SAST, пробелы в тестах).
+     * 3. Генерация финального отчета.
+     *
+     * @return Список этапов конвейера.
      */
     @Override
-    public List<QaAgent> getAgents() {
+    public List<List<QaAgent>> getStages() {
         return List.of(
-                gitInspector,
-                requirementLinker,
-                sastAgent,
-                testGapAnalyzer,
-                reportGenerator
+                List.of(gitInspector),
+                List.of(requirementLinker, sastAgent, testGapAnalyzer),
+                List.of(reportGenerator)
         );
     }
 }

@@ -28,9 +28,13 @@ public class BugPatternDetectionPipeline implements AgentPipeline {
 
     /**
      * {@inheritDoc}
+     *
+     * @return Список, содержащий один этап с одним агентом.
      */
     @Override
-    public List<QaAgent> getAgents() {
-        return List.of(bugPatternDetectorAgent);
+    public List<List<QaAgent>> getStages() {
+        return List.of(
+                List.of(bugPatternDetectorAgent)
+        );
     }
 }

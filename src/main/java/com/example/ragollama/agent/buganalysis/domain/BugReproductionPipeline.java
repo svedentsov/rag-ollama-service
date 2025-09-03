@@ -30,9 +30,17 @@ public class BugReproductionPipeline implements AgentPipeline {
 
     /**
      * {@inheritDoc}
+     * <p>
+     * Определяет два последовательных этапа, так как генерация скрипта
+     * зависит от результатов структурирования отчета.
+     *
+     * @return Список этапов конвейера.
      */
     @Override
-    public List<QaAgent> getAgents() {
-        return List.of(summarizerAgent, scriptGeneratorAgent);
+    public List<List<QaAgent>> getStages() {
+        return List.of(
+                List.of(summarizerAgent),      // Этап 1: Структурировать отчет
+                List.of(scriptGeneratorAgent)  // Этап 2: Сгенерировать скрипт
+        );
     }
 }

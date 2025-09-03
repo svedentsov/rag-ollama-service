@@ -1,4 +1,3 @@
-// Упрощенный PrioritizationPipeline
 package com.example.ragollama.agent.pipelines;
 
 import com.example.ragollama.agent.AgentPipeline;
@@ -6,6 +5,7 @@ import com.example.ragollama.agent.QaAgent;
 import com.example.ragollama.optimization.PrioritizationAgent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+
 import java.util.List;
 
 /**
@@ -20,15 +20,23 @@ public class PrioritizationPipeline implements AgentPipeline {
 
     private final PrioritizationAgent prioritizationAgent;
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "prioritization-pipeline";
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * @return Список, содержащий один этап с одним агентом.
+     */
     @Override
-    public List<QaAgent> getAgents() {
-        return List.of(prioritizationAgent);
+    public List<List<QaAgent>> getStages() {
+        return List.of(
+                List.of(prioritizationAgent)
+        );
     }
 }

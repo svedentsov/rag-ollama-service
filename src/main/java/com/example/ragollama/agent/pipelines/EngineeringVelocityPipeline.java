@@ -36,14 +36,18 @@ public class EngineeringVelocityPipeline implements AgentPipeline {
 
     /**
      * {@inheritDoc}
+     * <p>
+     * Определяет два этапа:
+     * 1. Параллельный сбор метрик из всех источников (CI/CD, Git, Jira).
+     * 2. Синтез отчета на основе собранных метрик.
+     *
+     * @return Список этапов конвейера.
      */
     @Override
-    public List<QaAgent> getAgents() {
+    public List<List<QaAgent>> getStages() {
         return List.of(
-                ciCdMetricsFetcherAgent,
-                gitMetricsFetcherAgent,
-                jiraMetricsFetcherAgent,
-                governorAgent
+                List.of(ciCdMetricsFetcherAgent, gitMetricsFetcherAgent, jiraMetricsFetcherAgent),
+                List.of(governorAgent)
         );
     }
 }

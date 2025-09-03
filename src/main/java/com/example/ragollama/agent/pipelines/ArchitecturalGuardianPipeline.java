@@ -31,9 +31,22 @@ class ArchitecturalGuardianPipeline implements AgentPipeline {
         return "architectural-guardian-pipeline";
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Определяет три этапа:
+     * 1. Получение измененных файлов.
+     * 2. Параллельный запуск всех аналитических агентов.
+     * 3. Финальный синтез отчета на основе результатов всех анализаторов.
+     *
+     * @return Список этапов конвейера.
+     */
     @Override
-    public List<QaAgent> getAgents() {
-        return List.of(gitInspector, archConsistencyMapper, testMentorBot,
-                performanceBottleneckFinder, privacyComplianceChecker, reviewSynthesizer);
+    public List<List<QaAgent>> getStages() {
+        return List.of(
+                List.of(gitInspector),
+                List.of(archConsistencyMapper, testMentorBot, performanceBottleneckFinder, privacyComplianceChecker),
+                List.of(reviewSynthesizer)
+        );
     }
 }

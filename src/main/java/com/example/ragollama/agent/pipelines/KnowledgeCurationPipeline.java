@@ -20,8 +20,19 @@ public class KnowledgeCurationPipeline implements AgentPipeline {
         return "knowledge-curation-pipeline";
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Определяет два последовательных этапа: сначала поиск кандидатов
+     * на курирование, затем их обогащение.
+     *
+     * @return Список этапов конвейера.
+     */
     @Override
-    public List<QaAgent> getAgents() {
-        return List.of(finderAgent, enhancerAgent);
+    public List<List<QaAgent>> getStages() {
+        return List.of(
+                List.of(finderAgent),
+                List.of(enhancerAgent)
+        );
     }
 }

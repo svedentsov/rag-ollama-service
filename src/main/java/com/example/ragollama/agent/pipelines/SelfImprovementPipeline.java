@@ -21,8 +21,20 @@ public class SelfImprovementPipeline implements AgentPipeline {
         return "self-improvement-pipeline";
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Определяет два последовательных этапа: сначала анализ логов
+     * для поиска неэффективности, затем генерация предложений по
+     * улучшению промптов на основе этого анализа.
+     *
+     * @return Список этапов конвейера.
+     */
     @Override
-    public List<QaAgent> getAgents() {
-        return List.of(analyzerAgent, refinementAgent);
+    public List<List<QaAgent>> getStages() {
+        return List.of(
+                List.of(analyzerAgent),
+                List.of(refinementAgent)
+        );
     }
 }

@@ -9,9 +9,9 @@ import java.util.List;
 
 /**
  * Реализация конвейера для проведения аудита доступности (a11y).
- * <p>
- * Этот класс является самодостаточной "Стратегией", которая определяет
- * последовательность агентов для выполнения задачи.
+ *
+ * <p>Этот конвейер состоит из одного этапа, содержащего одного агента,
+ * так как в данном простом сценарии нет параллельных задач.
  */
 @Component
 @RequiredArgsConstructor
@@ -29,9 +29,13 @@ public class AccessibilityAuditPipeline implements AgentPipeline {
 
     /**
      * {@inheritDoc}
+     *
+     * @return Список, содержащий один этап с одним агентом.
      */
     @Override
-    public List<QaAgent> getAgents() {
-        return List.of(accessibilityAuditorAgent);
+    public List<List<QaAgent>> getStages() {
+        return List.of(
+                List.of(accessibilityAuditorAgent)
+        );
     }
 }

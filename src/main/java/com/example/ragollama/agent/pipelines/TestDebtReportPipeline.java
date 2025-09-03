@@ -30,9 +30,13 @@ public class TestDebtReportPipeline implements AgentPipeline {
 
     /**
      * {@inheritDoc}
+     *
+     * @return Список, содержащий один этап с одним агентом.
      */
     @Override
-    public List<QaAgent> getAgents() {
-        return List.of(testDebtAnalyzerAgent);
+    public List<List<QaAgent>> getStages() {
+        return List.of(
+                List.of(testDebtAnalyzerAgent)
+        );
     }
 }

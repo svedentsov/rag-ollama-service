@@ -22,8 +22,15 @@ public class FeedbackToTestPipeline implements AgentPipeline {
         return "feedback-to-test-pipeline";
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @return Список, содержащий один этап с одним агентом.
+     */
     @Override
-    public List<QaAgent> getAgents() {
-        return List.of(feedbackToTestAgent);
+    public List<List<QaAgent>> getStages() {
+        return List.of(
+                List.of(feedbackToTestAgent)
+        );
     }
 }

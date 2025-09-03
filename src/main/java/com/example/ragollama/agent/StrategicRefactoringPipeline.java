@@ -23,8 +23,20 @@ class StrategicRefactoringPipeline implements AgentPipeline {
         return "strategic-refactoring-pipeline";
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Определяет два этапа:
+     * 1. Параллельный сбор данных о техдолге и паттернах багов.
+     * 2. Синтез стратегии рефакторинга на основе собранных данных.
+     *
+     * @return Список этапов конвейера.
+     */
     @Override
-    public List<QaAgent> getAgents() {
-        return List.of(testDebtAnalyzer, bugPatternDetector, refactoringStrategist);
+    public List<List<QaAgent>> getStages() {
+        return List.of(
+                List.of(testDebtAnalyzer, bugPatternDetector),
+                List.of(refactoringStrategist)
+        );
     }
 }

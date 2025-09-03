@@ -33,9 +33,17 @@ public class ConsistencyCheckPipeline implements AgentPipeline {
 
     /**
      * {@inheritDoc}
+     * <p>
+     * Определяет два последовательных этапа, так как валидация зависит
+     * от результатов сбора доказательств.
+     *
+     * @return Список этапов конвейера.
      */
     @Override
-    public List<QaAgent> getAgents() {
-        return List.of(consistencyCheckerAgent, crossValidatorAgent);
+    public List<List<QaAgent>> getStages() {
+        return List.of(
+                List.of(consistencyCheckerAgent),
+                List.of(crossValidatorAgent)
+        );
     }
 }

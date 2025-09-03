@@ -23,8 +23,19 @@ class IncidentResponsePipeline implements AgentPipeline {
         return "incident-response-pipeline";
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Определяет два последовательных этапа: сначала получение информации
+     * о недавних изменениях, затем анализ и синтез отчета.
+     *
+     * @return Список этапов конвейера.
+     */
     @Override
-    public List<QaAgent> getAgents() {
-        return List.of(gitInspector, incidentSummarizer);
+    public List<List<QaAgent>> getStages() {
+        return List.of(
+                List.of(gitInspector),
+                List.of(incidentSummarizer)
+        );
     }
 }

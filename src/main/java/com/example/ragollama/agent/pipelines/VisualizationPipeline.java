@@ -20,8 +20,19 @@ public class VisualizationPipeline implements AgentPipeline {
         return "visualization-pipeline";
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Определяет два последовательных этапа: сначала агрегация данных,
+     * затем генерация визуализации на их основе.
+     *
+     * @return Список этапов конвейера.
+     */
     @Override
-    public List<QaAgent> getAgents() {
-        return List.of(dataSummarizerAgent, chartGeneratorAgent);
+    public List<List<QaAgent>> getStages() {
+        return List.of(
+                List.of(dataSummarizerAgent),
+                List.of(chartGeneratorAgent)
+        );
     }
 }

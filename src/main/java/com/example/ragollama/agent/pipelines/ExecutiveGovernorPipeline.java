@@ -32,12 +32,17 @@ public class ExecutiveGovernorPipeline implements AgentPipeline {
 
     /**
      * {@inheritDoc}
+     * <p>
+     * Определяет два последовательных этапа, так как планирование инициатив
+     * полностью зависит от результатов федеративного анализа.
+     *
+     * @return Список этапов конвейера.
      */
     @Override
-    public List<QaAgent> getAgents() {
+    public List<List<QaAgent>> getStages() {
         return List.of(
-                federatedInsightsAgent,
-                strategicInitiativePlannerAgent
+                List.of(federatedInsightsAgent),
+                List.of(strategicInitiativePlannerAgent)
         );
     }
 }

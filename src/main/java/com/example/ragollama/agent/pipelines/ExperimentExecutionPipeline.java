@@ -21,8 +21,19 @@ public class ExperimentExecutionPipeline implements AgentPipeline {
         return "experiment-execution-pipeline";
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Определяет два последовательных этапа: сначала запуск эксперимента,
+     * затем анализ его результатов.
+     *
+     * @return Список этапов конвейера.
+     */
     @Override
-    public List<QaAgent> getAgents() {
-        return List.of(managerAgent, analysisAgent);
+    public List<List<QaAgent>> getStages() {
+        return List.of(
+                List.of(managerAgent),
+                List.of(analysisAgent)
+        );
     }
 }

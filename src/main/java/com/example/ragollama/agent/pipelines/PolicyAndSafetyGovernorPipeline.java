@@ -44,19 +44,20 @@ public class PolicyAndSafetyGovernorPipeline implements AgentPipeline {
 
     /**
      * {@inheritDoc}
+     * <p>
+     * Определяет три этапа:
+     * 1. Получение измененных файлов.
+     * 2. Параллельный запуск всех анализаторов политик (SAST, архитектура, приватность, лицензии).
+     * 3. Агрегация всех отчетов и вынесение финального вердикта.
+     *
+     * @return Список этапов конвейера.
      */
     @Override
-    public List<QaAgent> getAgents() {
-        // ПРИМЕЧАНИЕ: Наш текущий AgentOrchestrator выполняет агентов последовательно.
-        // Для истинного параллелизма потребовался бы более сложный оркестратор (как WorkflowExecutionService).
-        // Но даже при последовательном выполнении, этот конвейер решает основную бизнес-задачу.
+    public List<List<QaAgent>> getStages() {
         return List.of(
-                gitInspector,
-                sastAgent,
-                archConsistencyMapper,
-                privacyComplianceAgent,
-                scaComplianceAgent,
-                policyGuardianAgent
+                List.of(gitInspector),
+                List.of(sastAgent, archConsistencyMapper, privacyComplianceAgent, scaComplianceAgent),
+                List.of(policyGuardianAgent)
         );
     }
 }

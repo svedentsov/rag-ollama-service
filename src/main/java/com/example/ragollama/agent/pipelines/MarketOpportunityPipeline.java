@@ -29,9 +29,17 @@ public class MarketOpportunityPipeline implements AgentPipeline {
 
     /**
      * {@inheritDoc}
+     * <p>
+     * Определяет два последовательных этапа: сначала сбор данных с сайта конкурента,
+     * затем их анализ.
+     *
+     * @return Список этапов конвейера.
      */
     @Override
-    public List<QaAgent> getAgents() {
-        return List.of(webCrawler, featureGapAnalyzer);
+    public List<List<QaAgent>> getStages() {
+        return List.of(
+                List.of(webCrawler),
+                List.of(featureGapAnalyzer)
+        );
     }
 }

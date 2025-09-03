@@ -4,6 +4,7 @@ import com.example.ragollama.shared.exception.ProcessingException;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -13,15 +14,11 @@ import java.util.stream.Collectors;
 
 /**
  * Сервис-оркестратор, который управляет выполнением конвейеров AI-агентов.
- * <p>
- * Эта версия реализует паттерн "Стратегия". Оркестратор автоматически обнаруживает
- * все бины, реализующие {@link AgentPipeline}, и предоставляет API для их
- * асинхронного запуска по имени. Он не содержит логики композиции конвейеров,
- * а лишь делегирует выполнение соответствующей "стратегии" (реализации конвейера).
- * <p>
- * Внутренняя реализация использует функциональный подход с `Stream.reduce`
- * для построения асинхронной цепочки вызовов, что повышает читаемость и
- * соответствует современным практикам.
+ *
+ * <p>Эта версия реализует модель "Staged Execution" (поэтапное выполнение).
+ * Оркестратор выполняет агентов внутри одного этапа параллельно, а сами
+ * этапы — последовательно. Это позволяет значительно повысить производительность
+ * за счет распараллеливания независимых I/O-bound задач.
  *
  * @see AgentPipeline
  */
@@ -30,18 +27,26 @@ import java.util.stream.Collectors;
 public class AgentOrchestratorService {
 
     private final Map<String, AgentPipeline> pipelines;
+    private final AsyncTaskExecutor applicationTaskExecutor;
 
     /**
      * Конструктор, который автоматически обнаруживает все доступные конвейеры
      * (бины, реализующие {@link AgentPipeline}) и инициализирует их реестр.
+     * <p>
+     * Этот конструктор является единственным в классе, что соответствует
+     * лучшим практикам Dependency Injection. Он явно принимает все
+     * необходимые зависимости.
      *
-     * @param pipelineProvider Провайдер для ленивого получения списка бинов конвейеров.
+     * @param pipelineProvider        Провайдер для ленивого получения списка бинов конвейеров.
+     * @param applicationTaskExecutor Пул потоков для асинхронного выполнения.
      */
-    public AgentOrchestratorService(ObjectProvider<List<AgentPipeline>> pipelineProvider) {
+    public AgentOrchestratorService(ObjectProvider<List<AgentPipeline>> pipelineProvider, AsyncTaskExecutor applicationTaskExecutor) {
+        this.applicationTaskExecutor = applicationTaskExecutor;
         List<AgentPipeline> pipelineBeans = pipelineProvider.getIfAvailable(Collections::emptyList);
         this.pipelines = pipelineBeans.stream()
                 .collect(Collectors.toUnmodifiableMap(AgentPipeline::getName, Function.identity()));
     }
+
 
     /**
      * Инициализирует сервис и логирует информацию о зарегистрированных конвейерах.
@@ -64,11 +69,11 @@ public class AgentOrchestratorService {
     }
 
     /**
-     * Асинхронно запускает конвейер по его имени.
-     * <p>
-     * Метод находит соответствующую стратегию {@link AgentPipeline}, получает от нее
-     * упорядоченный список агентов и последовательно выполняет каждого из них,
-     * передавая и обогащая {@link AgentContext} на каждом шаге.
+     * Асинхронно запускает конвейер по его имени, используя модель поэтапного выполнения.
+     *
+     * <p>Метод находит соответствующую стратегию {@link AgentPipeline}, получает от нее
+     * список этапов и последовательно выполняет каждый из них. Агенты внутри одного
+     * этапа запускаются параллельно.
      *
      * @param pipelineName   Уникальное имя конвейера.
      * @param initialContext Начальный контекст с входными данными.
@@ -86,33 +91,45 @@ public class AgentOrchestratorService {
             );
         }
 
-        List<QaAgent> agentsInPipeline = pipeline.getAgents();
-        log.info("Запуск конвейера '{}' с {} агентами.", pipelineName, agentsInPipeline.size());
+        List<List<QaAgent>> stages = pipeline.getStages();
+        log.info("Запуск конвейера '{}' с {} этапами.", pipelineName, stages.size());
+
         PipelineExecutionState initialState = new PipelineExecutionState(initialContext, List.of());
-        CompletableFuture<PipelineExecutionState> executionChain = agentsInPipeline.stream()
-                .reduce(CompletableFuture.completedFuture(initialState),
-                        (stateFuture, agent) -> stateFuture.thenCompose(state -> executeAgent(agent, state, pipelineName)),
-                        (f1, f2) -> f1.thenCombine(f2, (s1, s2) -> s2)
-                );
+        CompletableFuture<PipelineExecutionState> executionChain = CompletableFuture.completedFuture(initialState);
+
+        for (List<QaAgent> stageAgents : stages) {
+            executionChain = executionChain.thenComposeAsync(
+                    currentState -> executeStage(stageAgents, currentState, pipelineName),
+                    applicationTaskExecutor
+            );
+        }
+
         return executionChain.thenApply(PipelineExecutionState::results);
     }
 
     /**
-     * Выполняет одного агента и обновляет состояние конвейера.
+     * Параллельно выполняет всех агентов одного этапа.
      *
-     * @param agent        Агент для выполнения.
-     * @param state        Текущее состояние конвейера.
-     * @param pipelineName Имя конвейера (для логирования).
-     * @return {@link CompletableFuture} с новым состоянием.
+     * @param agentsInStage Список агентов для параллельного запуска.
+     * @param state         Текущее состояние конвейера.
+     * @param pipelineName  Имя конвейера (для логирования).
+     * @return {@link CompletableFuture} с новым состоянием после завершения этапа.
      */
-    private CompletableFuture<PipelineExecutionState> executeAgent(QaAgent agent, PipelineExecutionState state, String pipelineName) {
-        log.debug("Выполнение агента '{}' в конвейере '{}'", agent.getName(), pipelineName);
-        if (!agent.canHandle(state.currentContext)) {
-            log.warn("Агент '{}' пропущен, так как не может обработать текущий контекст.", agent.getName());
-            return CompletableFuture.completedFuture(state);
-        }
-        return agent.execute(state.currentContext)
-                .thenApply(state::addResult);
+    private CompletableFuture<PipelineExecutionState> executeStage(List<QaAgent> agentsInStage, PipelineExecutionState state, String pipelineName) {
+        log.debug("Выполнение этапа в конвейере '{}' с {} агентами.", pipelineName, agentsInStage.size());
+
+        List<CompletableFuture<AgentResult>> stageFutures = agentsInStage.stream()
+                .filter(agent -> agent.canHandle(state.currentContext))
+                .map(agent -> agent.execute(state.currentContext))
+                .toList();
+
+        return CompletableFuture.allOf(stageFutures.toArray(new CompletableFuture[0]))
+                .thenApply(v -> {
+                    List<AgentResult> stageResults = stageFutures.stream()
+                            .map(CompletableFuture::join)
+                            .toList();
+                    return state.addResults(stageResults);
+                });
     }
 
     /**
@@ -125,18 +142,21 @@ public class AgentOrchestratorService {
      */
     private record PipelineExecutionState(AgentContext currentContext, List<AgentResult> results) {
         /**
-         * Создает новый экземпляр состояния, добавляя результат последнего
-         * выполненного агента и обогащая контекст для следующего шага.
+         * Создает новый экземпляр состояния, добавляя результаты последнего
+         * выполненного этапа и обогащая контекст для следующего.
          *
-         * @param newResult Результат работы предыдущего агента.
+         * @param newResults Результаты работы агентов предыдущего этапа.
          * @return Новый, обновленный экземпляр {@link PipelineExecutionState}.
          */
-        public PipelineExecutionState addResult(AgentResult newResult) {
-            List<AgentResult> newResults = new ArrayList<>(this.results);
-            newResults.add(newResult);
-            Map<String, Object> newPayload = new java.util.HashMap<>(this.currentContext.payload());
-            newPayload.putAll(newResult.details());
-            return new PipelineExecutionState(new AgentContext(newPayload), Collections.unmodifiableList(newResults));
+        public PipelineExecutionState addResults(List<AgentResult> newResults) {
+            if (newResults == null || newResults.isEmpty()) {
+                return this;
+            }
+            List<AgentResult> updatedResults = new ArrayList<>(this.results);
+            updatedResults.addAll(newResults);
+            Map<String, Object> newPayload = new HashMap<>(this.currentContext.payload());
+            newResults.forEach(result -> newPayload.putAll(result.details()));
+            return new PipelineExecutionState(new AgentContext(newPayload), Collections.unmodifiableList(updatedResults));
         }
     }
 }

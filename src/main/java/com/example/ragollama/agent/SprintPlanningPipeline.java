@@ -21,8 +21,19 @@ class SprintPlanningPipeline implements AgentPipeline {
         return "sprint-planning-pipeline";
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Определяет два последовательных этапа: сначала анализ паттернов багов,
+     * затем планирование спринта на основе этого анализа.
+     *
+     * @return Список этапов конвейера.
+     */
     @Override
-    public List<QaAgent> getAgents() {
-        return List.of(bugPatternDetector, sprintPlanner);
+    public List<List<QaAgent>> getStages() {
+        return List.of(
+                List.of(bugPatternDetector),
+                List.of(sprintPlanner)
+        );
     }
 }
