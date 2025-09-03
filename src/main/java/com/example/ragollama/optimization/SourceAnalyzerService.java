@@ -9,10 +9,21 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Детерминированный сервис для анализа метаданных источников (документов).
+ * <p>
+ * Выполняет объективные, основанные на правилах, вычисления для оценки
+ * таких качеств, как актуальность и авторитетность, предоставляя числовые
+ * оценки для дальнейшего использования в Trust Score.
+ */
 @Slf4j
 @Service
 public class SourceAnalyzerService {
 
+    /**
+     * Карта авторитетности источников. Ключ - префикс имени источника,
+     * значение - оценка от 0 до 100.
+     */
     private static final Map<String, Integer> AUTHORITY_MAP = Map.of(
             "Confluence-Policy", 100,
             "Confluence", 80,
@@ -21,6 +32,12 @@ public class SourceAnalyzerService {
     );
     private static final int DEFAULT_AUTHORITY = 70;
 
+    /**
+     * Анализирует список документов и вычисляет среднюю оценку их актуальности.
+     *
+     * @param documents Список документов из RAG-контекста.
+     * @return Средняя оценка актуальности (0-100).
+     */
     public int analyzeRecency(List<Document> documents) {
         if (documents == null || documents.isEmpty()) return 0;
 
@@ -32,6 +49,12 @@ public class SourceAnalyzerService {
         return (int) totalScore;
     }
 
+    /**
+     * Анализирует список документов и вычисляет среднюю оценку их авторитетности.
+     *
+     * @param documents Список документов из RAG-контекста.
+     * @return Средняя оценка авторитетности (0-100).
+     */
     public int analyzeAuthority(List<Document> documents) {
         if (documents == null || documents.isEmpty()) return 0;
 
@@ -43,6 +66,12 @@ public class SourceAnalyzerService {
         return (int) averageAuthority;
     }
 
+    /**
+     * Вычисляет оценку актуальности для одного документа на основе его временной метки.
+     *
+     * @param doc Документ для анализа.
+     * @return Оценка от 0 до 100.
+     */
     private long getRecencyScoreForDocument(Document doc) {
         try {
             Object timestampObj = doc.getMetadata().get("timestamp"); // Предполагаем наличие такого поля
@@ -60,6 +89,12 @@ public class SourceAnalyzerService {
         return 60; // Средняя оценка по умолчанию
     }
 
+    /**
+     * Вычисляет оценку авторитетности для одного документа на основе его источника.
+     *
+     * @param doc Документ для анализа.
+     * @return Оценка от 0 до 100.
+     */
     private int getAuthorityScoreForDocument(Document doc) {
         String source = (String) doc.getMetadata().getOrDefault("source", "");
         return AUTHORITY_MAP.entrySet().stream()

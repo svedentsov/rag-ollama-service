@@ -2,6 +2,7 @@ package com.example.ragollama.evaluation.domain;
 
 import com.example.ragollama.monitoring.domain.FeedbackLogRepository;
 import com.example.ragollama.monitoring.domain.RagAuditLogRepository;
+import com.example.ragollama.rag.domain.model.SourceCitation;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -11,6 +12,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Доменный сервис для сбора полного контекста по ID обратной связи.
@@ -62,7 +64,13 @@ public class FeedbackAnalysisService {
                                 .originalQuery(auditLog.getOriginalQuery())
                                 .badAnswer(auditLog.getLlmAnswer())
                                 .userComment(feedbackLog.getUserComment())
-                                .retrievedDocumentIds(Optional.ofNullable(auditLog.getContextDocuments()).orElse(Collections.emptyList()))
+                                .retrievedDocumentIds(
+                                        Optional.ofNullable(auditLog.getSourceCitations())
+                                                .orElse(Collections.emptyList())
+                                                .stream()
+                                                .map(SourceCitation::chunkId)
+                                                .collect(Collectors.toList())
+                                )
                                 .build()));
     }
 }

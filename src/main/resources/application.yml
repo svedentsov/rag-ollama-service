@@ -16,8 +16,9 @@ spring:
   mvc:
     async:
       # САМЫЙ ВНЕШНИЙ УРОВЕНЬ: Таймаут для асинхронных запросов в контроллерах.
+      # Увеличено для предоставления большего запаса времени для LLM.
       # Должен быть больше всех вложенных таймаутов.
-      request-timeout: 290s
+      request-timeout: 580s
 
   # --- FreeMarker Template Engine Configuration ---
   freemarker:
@@ -248,8 +249,8 @@ app:
 
   http-client:
     connect-timeout: 10s # Таймаут на установку TCP-соединения
-    response-timeout: 285s # Общий таймаут на получение ответа
-    read-write-timeout: 285s # Таймаут на чтение/запись данных
+    response-timeout: 580s # Общий таймаут на получение ответа
+    read-write-timeout: 580s # Таймаут на чтение/запись данных
 
   task-executor: # Настройки основного пула потоков для @Async задач.
     core-pool-size: 4

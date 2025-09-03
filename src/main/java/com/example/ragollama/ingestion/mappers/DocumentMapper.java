@@ -7,11 +7,12 @@ import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Компонент-маппер, отвечающий за преобразование DTO в доменные сущности.
  * <p>
- * Эта версия корректно переносит метаданные контроля доступа (RBAC)
+ * Эта версия корректно переносит метаданные контроля доступа (RBAC) и версионирования
  * из запроса в соответствующее поле сущности {@link DocumentJob}.
  */
 @Component
@@ -25,9 +26,8 @@ public class DocumentMapper {
      */
     public DocumentJob toNewDocumentJob(DocumentIngestionRequest request) {
         Map<String, Object> finalMetadata = new HashMap<>();
-        if (request.metadata() != null) {
-            finalMetadata.putAll(request.metadata());
-        }
+        Optional.ofNullable(request.metadata()).ifPresent(finalMetadata::putAll);
+        Optional.ofNullable(request.versionMetadata()).ifPresent(finalMetadata::putAll);
 
         // Добавляем метаданные контроля доступа
         finalMetadata.put("isPublic", request.isPublic());

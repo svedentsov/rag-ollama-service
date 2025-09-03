@@ -2,6 +2,7 @@ package com.example.ragollama.monitoring;
 
 import com.example.ragollama.monitoring.domain.RagAuditLogRepository;
 import com.example.ragollama.monitoring.model.RagAuditLog;
+import com.example.ragollama.rag.domain.model.SourceCitation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -19,7 +20,8 @@ import java.util.concurrent.CompletableFuture;
  * <p>
  * Обеспечивает персистентное сохранение полного контекста каждого запроса
  * (включая промпт, контекст, ответ) для целей отладки, анализа и комплаенса.
- * Эта версия явно принимает `requestId` для надежной трассировки.
+ * Эта версия принимает на вход `List<SourceCitation>` для сохранения
+ * полной информации об источниках.
  */
 @Slf4j
 @Service
@@ -30,17 +32,13 @@ public class AuditLoggingService {
 
     /**
      * Асинхронно сохраняет полную запись о RAG-взаимодействии в базу данных.
-     * <p>
-     * Метод выполняется в отдельном потоке, чтобы не влиять на задержку
-     * ответа основному пользователю. Возвращает {@link CompletableFuture} для
-     * возможности отслеживания завершения операции.
      *
-     * @param requestId        Уникальный идентификатор HTTP-запроса, переданный явно.
-     * @param sessionId        Идентификатор сессии диалога.
-     * @param originalQuery    Исходный запрос пользователя.
-     * @param contextDocuments Список источников, использованных в контексте.
-     * @param finalPrompt      Финальный промпт, отправленный в LLM.
-     * @param llmAnswer        Ответ, сгенерированный LLM.
+     * @param requestId       Уникальный идентификатор HTTP-запроса.
+     * @param sessionId       Идентификатор сессии диалога.
+     * @param originalQuery   Исходный запрос пользователя.
+     * @param sourceCitations Список структурированных цитат.
+     * @param finalPrompt     Финальный промпт, отправленный в LLM.
+     * @param llmAnswer       Ответ, сгенерированный LLM.
      * @return {@link CompletableFuture}, который завершается после сохранения.
      */
     @Async("applicationTaskExecutor")
@@ -49,7 +47,7 @@ public class AuditLoggingService {
             String requestId,
             UUID sessionId,
             String originalQuery,
-            List<String> contextDocuments,
+            List<SourceCitation> sourceCitations,
             String finalPrompt,
             String llmAnswer) {
         try {
@@ -64,7 +62,7 @@ public class AuditLoggingService {
                     .sessionId(sessionId)
                     .username(username)
                     .originalQuery(originalQuery)
-                    .contextDocuments(contextDocuments)
+                    .sourceCitations(sourceCitations)
                     .finalPrompt(finalPrompt)
                     .llmAnswer(llmAnswer)
                     .build();

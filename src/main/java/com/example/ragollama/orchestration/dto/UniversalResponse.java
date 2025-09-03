@@ -1,8 +1,9 @@
 package com.example.ragollama.orchestration.dto;
 
-import com.example.ragollama.agent.codegeneration.api.dto.CodeGenerationResponse;
 import com.example.ragollama.agent.buganalysis.api.dto.BugAnalysisResponse;
+import com.example.ragollama.agent.codegeneration.api.dto.CodeGenerationResponse;
 import com.example.ragollama.rag.api.dto.StreamingResponsePart;
+import com.example.ragollama.rag.domain.model.SourceCitation;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
@@ -33,8 +34,8 @@ public sealed interface UniversalResponse {
     record Content(String text) implements UniversalResponse {
     }
 
-    @Schema(description = "Список документов-источников, использованных для RAG-ответа")
-    record Sources(List<String> sources) implements UniversalResponse {
+    @Schema(description = "Список структурированных цитат, использованных для RAG-ответа")
+    record Sources(List<SourceCitation> sources) implements UniversalResponse {
     }
 
     @Schema(description = "Результат работы агента кодогенерации")

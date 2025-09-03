@@ -1,5 +1,6 @@
 package com.example.ragollama.monitoring.model;
 
+import com.example.ragollama.rag.domain.model.SourceCitation;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
@@ -16,6 +17,8 @@ import java.util.UUID;
  * <p>
  * Каждая запись в таблице {@code rag_audit_log} является полным "слепком"
  * одного RAG-запроса, содержащим все данные, необходимые для анализа и отладки.
+ * В этой версии поле для хранения источников обновлено для поддержки
+ * структурированных цитат.
  */
 @Getter
 @Builder
@@ -45,11 +48,12 @@ public class RagAuditLog {
     private String originalQuery;
 
     /**
-     * Список имен документов-источников, хранится в формате JSONB для эффективности.
+     * Список структурированных цитат, использованных в ответе.
+     * Хранится в формате JSONB для эффективности и гибкости.
      */
     @Type(JsonType.class)
-    @Column(name = "context_documents", columnDefinition = "jsonb")
-    private List<String> contextDocuments;
+    @Column(name = "source_citations", columnDefinition = "jsonb")
+    private List<SourceCitation> sourceCitations;
 
     @Lob
     @Column(name = "final_prompt", columnDefinition = "TEXT")

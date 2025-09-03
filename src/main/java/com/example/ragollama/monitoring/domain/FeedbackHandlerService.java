@@ -3,12 +3,15 @@ package com.example.ragollama.monitoring.domain;
 import com.example.ragollama.monitoring.model.FeedbackLog;
 import com.example.ragollama.monitoring.model.RagAuditLog;
 import com.example.ragollama.monitoring.model.TrainingDataPair;
+import com.example.ragollama.rag.domain.model.SourceCitation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -34,18 +37,21 @@ public class FeedbackHandlerService {
         RagAuditLog auditLog = auditLogRepository.findByRequestId(feedbackLog.getRequestId())
                 .orElse(null);
 
-        if (auditLog == null || auditLog.getContextDocuments() == null || auditLog.getContextDocuments().isEmpty()) {
+        if (auditLog == null || auditLog.getSourceCitations() == null || auditLog.getSourceCitations().isEmpty()) {
             log.warn("Не найден аудит или контекст для requestId {}. Обучающие данные не будут сгенерированы.", feedbackLog.getRequestId());
             return;
         }
 
         String query = auditLog.getOriginalQuery();
         String label = feedbackLog.getIsHelpful() ? "positive" : "negative";
+        int createdPairs = 0;
 
-        for (String docIdStr : auditLog.getContextDocuments()) {
+        for (SourceCitation citation : Optional.ofNullable(auditLog.getSourceCitations()).orElse(Collections.emptyList())) {
             try {
-                // Предполагаем, что в context_documents хранятся ID документов в виде UUID
-                UUID documentId = UUID.fromString(docIdStr);
+                // ID чанка хранится в виде {documentId}:{chunkIndex}
+                String documentIdStr = citation.chunkId().split(":")[0];
+                UUID documentId = UUID.fromString(documentIdStr);
+
                 TrainingDataPair trainingPair = TrainingDataPair.builder()
                         .queryText(query)
                         .documentId(documentId)
@@ -53,12 +59,14 @@ public class FeedbackHandlerService {
                         .sourceFeedback(feedbackLog)
                         .build();
                 trainingDataRepository.save(trainingPair);
-            } catch (IllegalArgumentException e) {
-                log.error("Не удалось распарсить documentId '{}' как UUID для requestId {}", docIdStr, feedbackLog.getRequestId());
+                createdPairs++;
+            } catch (Exception e) {
+                log.error("Не удалось распарсить documentId из chunkId '{}' для requestId {}",
+                        citation.chunkId(), feedbackLog.getRequestId(), e);
             }
         }
 
         log.info("Сгенерировано {} обучающих пар(ы) с меткой '{}' для requestId {}",
-                auditLog.getContextDocuments().size(), label, feedbackLog.getRequestId());
+                createdPairs, label, feedbackLog.getRequestId());
     }
 }

@@ -13,7 +13,6 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * Конфигурация для Spring Web MVC.
- * <p>
  * Регистрирует кастомные компоненты, такие как фильтры и интерсепторы,
  * для обработки веб-запросов. В этой версии удалена кастомная конфигурация
  * {@code configureAsyncSupport}, чтобы полностью полагаться на автоконфигурацию

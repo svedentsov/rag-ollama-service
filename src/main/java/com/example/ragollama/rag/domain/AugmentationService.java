@@ -17,11 +17,12 @@ import java.util.stream.Collectors;
 
 /**
  * Сервис, отвечающий за этап обогащения (Augmentation) в RAG-конвейере.
- * <p>
- * Его задача - принять извлеченные документы и исходный запрос,
+ *
+ * <p>Его задача - принять извлеченные документы и исходный запрос,
  * применить к ним различные бизнес-правила и эвристики через цепочку
  * "Советников" (Advisors), а затем, используя результат, сформировать
- * финальный, готовый к отправке в LLM промпт.
+ * финальный, готовый к отправке в LLM промпт со структурированным контекстом
+ * для поддержки inline-цитирования.
  */
 @Service
 @Slf4j
@@ -44,23 +45,42 @@ public class AugmentationService {
     public Mono<Prompt> augment(List<Document> documents, String query, List<Message> chatHistory) {
         RagContext initialContext = new RagContext(query);
         initialContext.setDocuments(documents);
-        // Последовательно применяем всех советников к контексту
+
         Mono<RagContext> finalContextMono = Flux.fromIterable(advisors)
                 .reduce(Mono.just(initialContext), (contextMono, advisor) -> contextMono.flatMap(advisor::advise))
                 .flatMap(mono -> mono);
+
         return finalContextMono.map(finalContext -> {
-            // Собираем финальный контекст с учетом лимита токенов
             List<Document> documentsForContext = contextAssemblerService.assembleContext(finalContext.getDocuments());
-            // Готовим модель для рендеринга шаблона
-            finalContext.getPromptModel().put("documents", documentsForContext);
+            String structuredContext = formatContextForCitation(documentsForContext);
+
+            finalContext.getPromptModel().put("structuredContext", structuredContext);
             finalContext.getPromptModel().put("question", query);
             String historyString = formatHistory(chatHistory);
             finalContext.getPromptModel().put("history", historyString);
-            // Рендерим шаблон
+
             String promptString = promptService.render("ragPrompt", finalContext.getPromptModel());
             log.debug("Этап Augmentation успешно завершен. Использовано {} документов в контексте.", documentsForContext.size());
             return new Prompt(promptString);
         });
+    }
+
+    /**
+     * Форматирует список документов в XML-подобную структуру для LLM.
+     *
+     * @param documents Список документов для форматирования.
+     * @return Строка со структурированным контекстом.
+     */
+    private String formatContextForCitation(List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return "<no_documents_found />";
+        }
+        return documents.stream()
+                .map(doc -> String.format("<document id=\"%s\" source=\"%s\">\n%s\n</document>",
+                        doc.getMetadata().get("chunkId"),
+                        doc.getMetadata().get("source"),
+                        doc.getText()))
+                .collect(Collectors.joining("\n\n"));
     }
 
     /**

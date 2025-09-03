@@ -3,7 +3,6 @@ package com.example.ragollama.rag.agent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
@@ -12,7 +11,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Сервис-оркестратор, управляющий конвейером AI-агентов для обработки запросов.
- * <p>
  * Эта версия возвращает структурированный объект {@link ProcessedQueries},
  * явно разделяя "основной" (трансформированный) запрос от "расширенных"
  * (сгенерированных), что позволяет вызывающей стороне строить более
@@ -23,7 +21,8 @@ import java.util.concurrent.atomic.AtomicReference;
 @RequiredArgsConstructor
 public class QueryProcessingPipeline {
 
-    private final List<QueryEnhancementAgent> agents;
+    private final QueryTransformationAgent transformationAgent;
+    private final MultiQueryGeneratorAgent multiQueryGeneratorAgent;
 
     /**
      * Асинхронно выполняет весь конвейер агентов для заданного запроса.
@@ -33,31 +32,23 @@ public class QueryProcessingPipeline {
      * {@link ProcessedQueries} с разделенными запросами.
      */
     public Mono<ProcessedQueries> process(String query) {
-        log.info("Запуск конвейера обработки запроса с {} агентами.", agents.size());
-        if (agents.isEmpty()) {
-            return Mono.just(new ProcessedQueries(query, List.of()));
-        }
+        log.info("Запуск параллельного конвейера обработки запроса.");
 
-        AtomicReference<String> primaryQueryRef = new AtomicReference<>(query);
-        List<String> expansionQueries = new ArrayList<>();
+        Mono<List<String>> transformationMono = transformationAgent.enhance(query);
+        Mono<List<String>> expansionMono = multiQueryGeneratorAgent.enhance(query);
 
-        return Flux.fromIterable(agents)
-                .flatMap(agent -> agent.enhance(query)
-                        .doOnNext(results -> {
-                            if (agent instanceof QueryTransformationAgent && !results.isEmpty()) {
-                                primaryQueryRef.set(results.getFirst());
-                            } else {
-                                expansionQueries.addAll(results);
-                            }
-                        }))
-                .then(Mono.fromCallable(() -> {
-                    // Удаляем дубликаты и возможный primary query из списка расширенных
-                    expansionQueries.remove(primaryQueryRef.get());
+        return Mono.zip(transformationMono, expansionMono)
+                .map(tuple -> {
+                    String primaryQuery = tuple.getT1().isEmpty() ? query : tuple.getT1().getFirst();
+                    List<String> expansionQueries = new ArrayList<>(tuple.getT2());
+                    // Удаляем дубликаты и основной запрос из списка расширенных
+                    expansionQueries.remove(query);
+                    expansionQueries.remove(primaryQuery);
                     List<String> uniqueExpansion = expansionQueries.stream().distinct().toList();
-                    ProcessedQueries result = new ProcessedQueries(primaryQueryRef.get(), uniqueExpansion);
+                    ProcessedQueries result = new ProcessedQueries(primaryQuery, uniqueExpansion);
                     log.info("Конвейер завершен. Primary: '{}', Expansion ({} шт): {}",
                             result.primaryQuery(), result.expansionQueries().size(), result.expansionQueries());
                     return result;
-                }));
+                });
     }
 }

@@ -31,9 +31,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * "Чистый" сервис-оркестратор RAG-конвейера с интеллектуальной маршрутизацией.
- * <p>
- * Эта версия интегрирует {@link KnowledgeRouterAgent} в начало конвейера,
- * чтобы динамически сужать область поиска перед извлечением документов.
  */
 @Slf4j
 @Service
@@ -48,7 +45,7 @@ public class RagService {
     private final PromptGuardService promptGuardService;
     private final MetricService metricService;
     private final RagPostProcessingOrchestrator postProcessingOrchestrator;
-    private final KnowledgeRouterAgent knowledgeRouterAgent; // <-- НОВАЯ ЗАВИСИМОСТЬ
+    private final KnowledgeRouterAgent knowledgeRouterAgent;
 
     /**
      * Асинхронно выполняет полный RAG-запрос (не-потоковый).

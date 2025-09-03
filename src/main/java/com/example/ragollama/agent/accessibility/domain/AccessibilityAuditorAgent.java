@@ -10,7 +10,6 @@ import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
-import com.example.ragollama.shared.util.JsonExtractorUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -26,19 +25,33 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который проводит аудит доступности (a11y) веб-страницы.
- * Реализует гибридный подход:
- * 1. Использует детерминированный {@link AccessibilityScannerService} для поиска нарушений.
- * 2. Использует LLM для анализа, приоритизации и объяснения этих нарушений.
+ *
+ * <p>Реализует гибридный подход:
+ * <ol>
+ *     <li>Использует детерминированный инструмент {@link AccessibilityScannerService} для поиска нарушений.</li>
+ *     <li>Использует LLM для анализа, приоритизации и объяснения этих нарушений на естественном языке.</li>
+ * </ol>
+ * <p>
+ * Этот класс является чистым оркестратором, делегируя парсинг ответа LLM
+ * специализированному компоненту {@link AccessibilityReportParser}.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class AccessibilityAuditorAgent implements ToolAgent {
 
+    /**
+     * Публичная константа, определяющая ключ для доступа к отчету о доступности
+     * в деталях {@link AgentResult}. Делает контракт между агентом и потребителями
+     * его результата явным и типобезопасным.
+     */
+    public static final String ACCESSIBILITY_REPORT_KEY = "accessibilityReport";
+
     private final AccessibilityScannerService scannerService;
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final AccessibilityReportParser reportParser;
     private final AsyncTaskExecutor applicationTaskExecutor;
 
     /**
@@ -67,12 +80,14 @@ public class AccessibilityAuditorAgent implements ToolAgent {
 
     /**
      * Асинхронно выполняет полный конвейер аудита доступности.
-     * <p>
-     * Конвейер состоит из следующих шагов:
-     * 1. Асинхронное сканирование HTML на предмет нарушений в управляемом пуле потоков.
-     * 2. Если нарушения найдены, они сериализуются в JSON.
-     * 3. Вызывается LLM для анализа JSON и генерации резюме.
-     * 4. Ответ LLM парсится и объединяется с исходными данными для формирования финального отчета.
+     *
+     * <p>Конвейер состоит из следующих шагов:
+     * <ol>
+     *     <li>Асинхронное сканирование HTML на предмет нарушений в управляемом пуле потоков.</li>
+     *     <li>Если нарушения найдены, они сериализуются в JSON.</li>
+     *     <li>Вызывается LLM для анализа JSON и генерации резюме.</li>
+     *     <li>Ответ LLM парсится и объединяется с исходными данными для формирования финального отчета.</li>
+     * </ol>
      *
      * @param context Контекст, содержащий HTML-код страницы в поле `htmlContent`.
      * @return {@link CompletableFuture} с финальным отчетом {@link AgentResult}.
@@ -104,30 +119,11 @@ public class AccessibilityAuditorAgent implements ToolAgent {
             String promptString = promptService.render("accessibilityAudit", Map.of("violationsJson", violationsJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(llmResponse -> parseLlmResponse(llmResponse, violations))
+                    .thenApply(llmResponse -> reportParser.parse(llmResponse, violations))
                     .thenApply(this::createSuccessResultWithReport);
         } catch (JsonProcessingException e) {
+            log.error("Критическая ошибка: не удалось сериализовать список нарушений a11y в JSON.", e);
             return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации нарушений a11y", e));
-        }
-    }
-
-    /**
-     * Безопасно парсит JSON-ответ от LLM и объединяет его с исходными данными.
-     * Этот метод инкапсулирует логику обработки потенциально невалидного вывода LLM.
-     *
-     * @param jsonResponse  Сырой строковый JSON-ответ от языковой модели.
-     * @param rawViolations Исходный список нарушений от сканера, который будет добавлен в финальный отчет.
-     * @return Полностью собранный {@link AccessibilityReport}.
-     * @throws ProcessingException если LLM вернула невалидный JSON.
-     */
-    private AccessibilityReport parseLlmResponse(String jsonResponse, List<AccessibilityViolation> rawViolations) {
-        try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
-            AccessibilityReport summaryReport = objectMapper.readValue(cleanedJson, AccessibilityReport.class);
-            return new AccessibilityReport(summaryReport.summary(), summaryReport.topRecommendations(), rawViolations);
-        } catch (JsonProcessingException e) {
-            log.error("Не удалось распарсить JSON-ответ от a11y LLM: {}", jsonResponse, e);
-            throw new ProcessingException("LLM-аудитор вернул невалидный JSON.", e);
         }
     }
 
@@ -142,7 +138,7 @@ public class AccessibilityAuditorAgent implements ToolAgent {
                 getName(),
                 AgentResult.Status.SUCCESS,
                 report.summary(),
-                Map.of("accessibilityReport", report)
+                Map.of(ACCESSIBILITY_REPORT_KEY, report)
         );
     }
 
@@ -158,7 +154,7 @@ public class AccessibilityAuditorAgent implements ToolAgent {
                 getName(),
                 AgentResult.Status.SUCCESS,
                 summary,
-                Map.of("accessibilityReport", emptyReport)
+                Map.of(ACCESSIBILITY_REPORT_KEY, emptyReport)
         );
     }
 }
