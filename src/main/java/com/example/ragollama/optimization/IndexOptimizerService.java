@@ -61,14 +61,10 @@ public class IndexOptimizerService {
     /**
      * Обнаруживает и удаляет документы, которые были удалены из источника правды
      * (в данном примере - из таблицы `document_jobs`).
-     * <p>
-     * В реальной системе здесь могла бы быть логика сверки с внешним API (Confluence, Jira).
-     * Для демонстрации, мы имитируем удаление, находя "старые" завершенные задачи.
      */
     @Transactional
     public void cleanupStaleDocuments() {
         log.info("Запуск этапа очистки устаревших документов...");
-        // Например, удалим все, что было успешно обработано более 7 дней назад.
         OffsetDateTime threshold = OffsetDateTime.now().minusDays(7);
         List<UUID> staleJobIds = documentJobRepository.findCompletedJobsBefore(threshold);
 
@@ -81,9 +77,7 @@ public class IndexOptimizerService {
                 staleJobIds.size(), staleJobIds.stream().map(UUID::toString).collect(Collectors.joining(", ")));
 
         for (UUID jobId : staleJobIds) {
-            // Удаляем связанные чанки из vector_store
             int deletedChunks = vectorStoreRepository.deleteByDocumentId(jobId);
-            // Удаляем саму запись о задаче
             documentJobRepository.deleteById(jobId);
             log.info("Удалено {} чанков для документа с Job ID: {}", deletedChunks, jobId);
         }
@@ -91,8 +85,7 @@ public class IndexOptimizerService {
     }
 
     /**
-     * Выполняет команду `VACUUM` на таблице `vector_store` для оптимизации хранения
-     * и обновления статистики в PostgreSQL.
+     * Выполняет команду `VACUUM` на таблице `vector_store`.
      */
     public void vacuumVectorStore() {
         log.info("Выполнение команды VACUUM для таблицы 'vector_store'...");

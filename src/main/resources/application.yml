@@ -222,8 +222,10 @@ app:
     enabled: true
     strategies:
       keyword-boost:
-        enabled: true
+        enabled: false
         boost-factor: 0.5
+      llm:
+        enabled: true
 
   rate-limiting:
     enabled: true
@@ -301,7 +303,7 @@ app:
   optimization:
     index:
       enabled: true
-      cron: "0 0 4 * * ?"
+      cron: "0 0 4 * * ?" # Каждый день в 4 часа утра
       stale-document-detection:
         enabled: true
 

@@ -1,5 +1,6 @@
 package com.example.ragollama.crawler.confluence.tool;
 
+import com.example.ragollama.crawler.confluence.ConfluenceProperties;
 import com.example.ragollama.crawler.confluence.tool.dto.ConfluencePageDto;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -12,7 +13,6 @@ import io.github.resilience4j.timelimiter.TimeLimiter;
 import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
@@ -39,28 +39,23 @@ public class ConfluenceApiClient {
     private Retry retry;
     private TimeLimiter timeLimiter;
 
-
     /**
      * Конструктор, который создает и настраивает {@link WebClient} для Confluence.
      *
      * @param webClientBuilder       Строитель {@link WebClient} из общей конфигурации.
-     * @param baseUrl                Базовый URL вашего инстанса Confluence.
-     * @param apiUser                Email пользователя для аутентификации.
-     * @param apiToken               API токен, сгенерированный в Confluence.
+     * @param properties             Типобезопасная конфигурация для Confluence.
      * @param circuitBreakerRegistry Реестр Circuit Breaker'ов.
      * @param retryRegistry          Реестр Retry.
      * @param timeLimiterRegistry    Реестр Time Limiter'ов.
      */
     public ConfluenceApiClient(WebClient.Builder webClientBuilder,
-                               @Value("${app.integrations.confluence.base-url}") String baseUrl,
-                               @Value("${app.integrations.confluence.api-user}") String apiUser,
-                               @Value("${app.integrations.confluence.api-token}") String apiToken,
+                               ConfluenceProperties properties,
                                CircuitBreakerRegistry circuitBreakerRegistry,
                                RetryRegistry retryRegistry,
                                TimeLimiterRegistry timeLimiterRegistry) {
         this.webClient = webClientBuilder
-                .baseUrl(baseUrl)
-                .defaultHeaders(h -> h.setBasicAuth(apiUser, apiToken))
+                .baseUrl(properties.baseUrl())
+                .defaultHeaders(h -> h.setBasicAuth(properties.apiUser(), properties.apiToken()))
                 .build();
         this.circuitBreakerRegistry = circuitBreakerRegistry;
         this.retryRegistry = retryRegistry;
@@ -91,7 +86,7 @@ public class ConfluenceApiClient {
     }
 
     /**
-     * Получает полный контент страницы, включая ее тело.
+     * Получает полный контент страницы, включая ее тело и информацию о версии.
      *
      * @param pageId ID страницы в Confluence.
      * @return {@link Mono} с DTO страницы, содержащим ее контент.
@@ -101,7 +96,7 @@ public class ConfluenceApiClient {
         Mono<ConfluencePageDto> requestMono = webClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/rest/api/page/{id}")
-                        .queryParam("expand", "body.storage,space") // Запрашиваем тело в формате хранения и информацию о пространстве
+                        .queryParam("expand", "body.storage,space,version")
                         .build(pageId))
                 .retrieve()
                 .bodyToMono(ConfluencePageDto.class);
@@ -119,7 +114,6 @@ public class ConfluenceApiClient {
     private Flux<ConfluencePageDto> fetchPaginatedPages(String initialUri) {
         return applyResilience(webClient.get().uri(initialUri).retrieve().bodyToMono(ConfluencePageDto.PaginatedResponse.class))
                 .expand(response -> {
-                    // Если есть ссылка на следующую страницу, делаем следующий запрос, иначе завершаем
                     if (response.links() != null && response.links().next() != null) {
                         log.debug("Confluence API: загрузка следующей страницы...");
                         return applyResilience(webClient.get().uri(response.links().next()).retrieve().bodyToMono(ConfluencePageDto.PaginatedResponse.class));

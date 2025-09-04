@@ -19,11 +19,25 @@ ext {
     resilience4jVersion = '2.3.0'
     jgitVersion = '6.9.0.202403050737-r'
     swaggerParserVersion = '2.1.22'
-
-    // Flyway + PG
     flywayVersion = '11.11.1'
-    flywayPostgresModuleVersion = "${flywayVersion}"
     postgresqlVersion = '42.7.7'
+    springdocOpenapiVersion = '2.6.0'
+    micrometerPrometheusVersion = '1.13.1'
+    contextPropagationVersion = '1.1.1'
+    jsoupVersion = '1.7.2'
+    jakartaXmlBindVersion = '4.0.2'
+    glassfishJaxbVersion = '4.0.5'
+    jtokkitVersion = '1.1.0'
+    hypersistenceUtilsVersion = '3.8.1'
+    javaparserVersion = '3.27.0'
+    pmdVersion = '7.16.0'
+    bucket4jVersion = '8.14.0'
+    playwrightVersion = '1.44.0'
+    commonsMathVersion = '3.6.1'
+    awaitilityVersion = '4.2.1'
+    lombokMapstructBindingVersion = '0.2.0'
+    javaxJaxbApiVersion = '2.3.1'
+    glassfishJaxbRuntimeVersion = '2.3.3'
 }
 
 repositories {
@@ -40,7 +54,7 @@ dependencyManagement {
 }
 
 dependencies {
-    // Spring Boot Starters
+    // --- Spring Boot Starters ---
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
@@ -49,67 +63,63 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-aop'
     implementation 'org.springframework.boot:spring-boot-starter-amqp'
     implementation 'org.springframework.boot:spring-boot-starter-freemarker'
+    implementation 'org.springframework.boot:spring-boot-starter-data-neo4j'
 
-    // HTTP-клиент Reactor Netty, необходимый для WebClient
+    // --- HTTP Client for WebClient ---
     implementation 'io.projectreactor.netty:reactor-netty-http'
 
-    // Spring AI
+    // --- Spring AI & RAG ---
     implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
     implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
+    implementation "com.knuddels:jtokkit:${jtokkitVersion}"
 
-    // Flyway (core + pg module)
-    implementation "org.flywaydb:flyway-core:${flywayVersion}"
-    implementation "org.flywaydb:flyway-database-postgresql:${flywayPostgresModuleVersion}"
-
-    // PostgreSQL JDBC
+    // --- Database & Persistence ---
     runtimeOnly "org.postgresql:postgresql:${postgresqlVersion}"
+    implementation "org.flywaydb:flyway-core:${flywayVersion}"
+    implementation "org.flywaydb:flyway-database-postgresql:${flywayVersion}"
+    implementation "io.hypersistence:hypersistence-utils-hibernate-63:${hypersistenceUtilsVersion}"
 
-    // JAXB / XML (для OpenAPI/Jackson/JAXB-совместимости)
-    runtimeOnly 'javax.xml.bind:jaxb-api:2.3.1'
-    runtimeOnly 'org.glassfish.jaxb:jaxb-runtime:2.3.3'
-    implementation 'com.fasterxml.jackson.module:jackson-module-jaxb-annotations'
+    // --- Resilience & Rate Limiting ---
+    implementation 'io.github.resilience4j:resilience4j-spring-boot3'
+    implementation 'io.github.resilience4j:resilience4j-reactor'
+    implementation "com.bucket4j:bucket4j_jdk17-core:${bucket4jVersion}"
 
-    // Утилиты и Code Generation
+    // --- Observability & API Docs ---
+    implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocOpenapiVersion}"
+    implementation "io.micrometer:micrometer-registry-prometheus:${micrometerPrometheusVersion}"
+    implementation "io.micrometer:context-propagation:${contextPropagationVersion}"
+
+    // --- Code Generation & Utilities ---
     compileOnly "org.projectlombok:lombok:${lombokVersion}"
     annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
     compileOnly "org.mapstruct:mapstruct:${mapstructVersion}"
     annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
-    annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
-    implementation 'com.github.javaparser:javaparser-core:3.27.0'
-    implementation 'net.sourceforge.pmd:pmd-java:7.16.0'
+    annotationProcessor "org.projectlombok:lombok-mapstruct-binding:${lombokMapstructBindingVersion}"
+    implementation "org.jsoup:jsoup:${jsoupVersion}"
 
-    // Observability & Docs
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
-    implementation 'io.micrometer:micrometer-registry-prometheus'
-    implementation 'io.micrometer:context-propagation:1.1.1'
-    implementation 'org.jsoup:jsoup:1.17.2'
-
-    // JAXB API for OpenAPI/Swagger compatibility on Java 11+ (jakarta)
-    implementation 'jakarta.xml.bind:jakarta.xml.bind-api:4.0.2'
-    runtimeOnly 'org.glassfish.jaxb:jaxb-runtime:4.0.5'
-
-    // Графовая база данных Neo4j
-    implementation 'org.springframework.boot:spring-boot-starter-data-neo4j'
-
-    // Отказоустойчивость и RAG-компоненты
-    implementation 'io.github.resilience4j:resilience4j-spring-boot3'
-    implementation 'io.github.resilience4j:resilience4j-reactor'
-    implementation 'com.bucket4j:bucket4j_jdk17-core:8.14.0'
-    implementation 'com.knuddels:jtokkit:1.1.0'
-    implementation 'io.hypersistence:hypersistence-utils-hibernate-63:3.8.1'
-
-    // Инструменты агентов
+    // --- Agent Tooling & Code Analysis ---
+    implementation "com.github.javaparser:javaparser-core:${javaparserVersion}"
+    implementation "net.sourceforge.pmd:pmd-java:${pmdVersion}"
     implementation "org.eclipse.jgit:org.eclipse.jgit:${jgitVersion}"
     implementation "io.swagger.parser.v3:swagger-parser:${swaggerParserVersion}"
-    implementation 'com.microsoft.playwright:playwright:1.44.0'
-    implementation 'org.apache.commons:commons-math3:3.6.1'
+    implementation "com.microsoft.playwright:playwright:${playwrightVersion}"
+    implementation "org.apache.commons:commons-math3:${commonsMathVersion}"
 
-    // Тестирование
+    // --- JAXB APIs for Java 11+ ---
+    // Новый (Jakarta) неймспейс, используемый в Spring Boot 3
+    implementation "jakarta.xml.bind:jakarta.xml.bind-api:${jakartaXmlBindVersion}"
+    runtimeOnly "org.glassfish.jaxb:jaxb-runtime:${glassfishJaxbVersion}"
+
+    // Старый (javax) неймспейс, необходимый для обратной совместимости со springdoc-openapi
+    runtimeOnly "javax.xml.bind:jaxb-api:${javaxJaxbApiVersion}"
+    runtimeOnly "org.glassfish.jaxb:jaxb-runtime:${glassfishJaxbRuntimeVersion}"
+
+    // --- Testing ---
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'io.projectreactor:reactor-test'
-    testImplementation 'org.awaitility:awaitility:4.2.1'
+    testImplementation "org.awaitility:awaitility:${awaitilityVersion}"
 }
 
 tasks.withType(Test) {

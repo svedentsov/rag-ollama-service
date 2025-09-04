@@ -7,13 +7,12 @@ import java.util.List;
 
 /**
  * DTO для десериализации ответа от Confluence API при запросе страницы.
- * <p>
- * Содержит только те поля, которые необходимы для работы краулера.
  *
  * @param id       Уникальный идентификатор страницы.
  * @param spaceKey Ключ пространства, которому принадлежит страница.
  * @param title    Заголовок страницы.
  * @param body     Объект, содержащий тело страницы.
+ * @param version  Объект с информацией о версии и дате изменения.
  * @param links    Карта со ссылками, включая ссылку на UI.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -22,6 +21,7 @@ public record ConfluencePageDto(
         @JsonProperty("spaceKey") String spaceKey,
         String title,
         Body body,
+        Version version,
         @JsonProperty("_links") Links links
 ) {
     /**
@@ -40,6 +40,15 @@ public record ConfluencePageDto(
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Storage(String value) {
+    }
+
+    /**
+     * DTO для информации о версии страницы.
+     *
+     * @param when Дата и время последнего изменения в формате ISO-8601.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Version(String when) {
     }
 
     /**

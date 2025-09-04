@@ -1,5 +1,6 @@
 package com.example.ragollama.agent.jira.tool;
 
+import com.example.ragollama.agent.config.JiraProperties;
 import com.example.ragollama.agent.jira.tool.dto.JiraIssueDto;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -12,7 +13,6 @@ import io.github.resilience4j.timelimiter.TimeLimiter;
 import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -44,24 +44,20 @@ public class JiraApiClient {
     /**
      * Конструктор, который создает и настраивает {@link WebClient} для Jira.
      *
-     * @param webClientBuilder     Строитель {@link WebClient} из общей конфигурации.
-     * @param baseUrl              Базовый URL вашего инстанса Jira.
-     * @param apiUser              Email пользователя для аутентификации.
-     * @param apiToken             API токен, сгенерированный в Jira.
+     * @param webClientBuilder       Строитель {@link WebClient} из общей конфигурации.
+     * @param properties             Типобезопасная конфигурация для Jira.
      * @param circuitBreakerRegistry Реестр Circuit Breaker'ов.
      * @param retryRegistry          Реестр Retry.
      * @param timeLimiterRegistry    Реестр Time Limiter'ов.
      */
     public JiraApiClient(WebClient.Builder webClientBuilder,
-                         @Value("${app.integrations.jira.base-url}") String baseUrl,
-                         @Value("${app.integrations.jira.api-user}") String apiUser,
-                         @Value("${app.integrations.jira.api-token}") String apiToken,
+                         JiraProperties properties, // Заменяем множество @Value на один объект
                          CircuitBreakerRegistry circuitBreakerRegistry,
                          RetryRegistry retryRegistry,
                          TimeLimiterRegistry timeLimiterRegistry) {
         this.webClient = webClientBuilder
-                .baseUrl(baseUrl)
-                .defaultHeaders(h -> h.setBasicAuth(apiUser, apiToken))
+                .baseUrl(properties.baseUrl())
+                .defaultHeaders(h -> h.setBasicAuth(properties.apiUser(), properties.apiToken()))
                 .build();
         this.circuitBreakerRegistry = circuitBreakerRegistry;
         this.retryRegistry = retryRegistry;
@@ -104,7 +100,6 @@ public class JiraApiClient {
      */
     public Mono<Void> postCommentToIssue(String issueKey, String comment) {
         log.info("Публикация комментария в задачу Jira: {}", issueKey);
-        // API Jira для комментариев требует сложной структуры Atlassian Document Format
         Map<String, Object> body = Map.of(
                 "body", Map.of(
                         "type", "doc",
@@ -135,7 +130,7 @@ public class JiraApiClient {
      * Применяет общую цепочку отказоустойчивости к Mono-паблишеру.
      *
      * @param publisher Исходный {@link Mono} с запросом.
-     * @param <T> Тип ответа.
+     * @param <T>       Тип ответа.
      * @return {@link Mono}, обернутый в Retry, TimeLimiter и CircuitBreaker.
      */
     private <T> Mono<T> applyResilience(Mono<T> publisher) {

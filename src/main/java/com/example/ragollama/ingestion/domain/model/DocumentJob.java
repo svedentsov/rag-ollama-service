@@ -46,6 +46,7 @@ public class DocumentJob {
 
     /**
      * Текущий статус задачи.
+     *
      * @see JobStatus
      */
     @NotNull

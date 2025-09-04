@@ -36,7 +36,7 @@ public class ConfluenceCrawlerService {
      * <p>
      * Метод выполняется в отдельном потоке, чтобы не блокировать основной
      * поток приложения. Каждому проиндексированному документу присваивается
-     * указанная категория в метаданных.
+     * указанная категория в метаданных, а также временная метка последнего изменения.
      *
      * @param spaceKey Ключ пространства для краулинга.
      * @param category Категория для присвоения документам.
@@ -59,7 +59,7 @@ public class ConfluenceCrawlerService {
                     )
                     .doOnComplete(() -> log.info("Краулинг пространства {} успешно завершен.", spaceKey))
                     .doOnError(error -> log.error("Ошибка во время краулинга пространства {}:", spaceKey, error))
-                    .blockLast(); // Блокируемся до завершения потока в рамках @Async метода
+                    .blockLast();
         } finally {
             lock.set(false);
             log.info("Блокировка для пространства '{}' снята.", spaceKey);
@@ -79,19 +79,20 @@ public class ConfluenceCrawlerService {
             return;
         }
 
-        // Confluence хранит контент в XHTML, очищаем его от тегов с помощью Jsoup
         String cleanText = Jsoup.parse(page.body().storage().value()).text();
         String sourceName = String.format("Confluence-%s: %s", page.spaceKey(), page.title());
 
-        Map<String, Object> metadata = Map.of(
-                "doc_type", "confluence_page",
-                "doc_category", category, // <-- Добавляем нашу категорию
-                "confluence_id", page.id(),
-                "confluence_url", page.links().webui()
-        );
+        Map<String, Object> metadata = new java.util.HashMap<>();
+        metadata.put("doc_type", "confluence_page");
+        metadata.put("doc_category", category);
+        metadata.put("confluence_id", page.id());
+        metadata.put("confluence_url", page.links().webui());
+        if (page.version() != null && page.version().when() != null) {
+            metadata.put("last_modified", page.version().when());
+        }
 
         IndexingRequest request = new IndexingRequest(
-                page.id(), // Используем ID страницы как уникальный documentId
+                page.id(),
                 sourceName,
                 cleanText,
                 metadata

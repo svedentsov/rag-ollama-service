@@ -18,9 +18,6 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Сервис-оркестратор, который является единой точкой входа для всех запросов.
- * <p>
- * Эта версия интегрирует {@link AdaptiveRagOrchestrator} для обработки RAG-запросов,
- * делегируя ему выбор и выполнение оптимальной RAG-стратегии.
  */
 @Slf4j
 @Service
@@ -28,11 +25,11 @@ import java.util.concurrent.CompletableFuture;
 public class OrchestrationService {
 
     private final RouterAgentService router;
-    private final ChatSessionService sessionService;
+    private final ChatApplicationService chatApplicationService;
     private final CodeGenerationService codeGenerationService;
     private final BugAnalysisService bugAnalysisService;
     private final SummarizationService summarizationService;
-    private final AdaptiveRagOrchestrator adaptiveRagOrchestrator;
+    private final AdaptiveRagOrchestrator adaptiveRagOrchestrator; // <-- ЗАВИСИМОСТЬ
 
     /**
      * Обрабатывает унифицированный запрос от пользователя, возвращая полный ответ после его генерации.
@@ -46,10 +43,11 @@ public class OrchestrationService {
                     log.info("Маршрутизация запроса с намерением: {}. SessionID: {}", intent, request.sessionId());
                     return switch (intent) {
                         case RAG_QUERY ->
+                            // ИСПОЛЬЗУЕМ АДАПТИВНЫЙ ОРКЕСТРАТОР
                                 Mono.fromFuture(() -> adaptiveRagOrchestrator.processAdaptive(request.toRagQueryRequest()))
                                         .map(response -> UniversalSyncResponse.from(response, intent));
                         case CHITCHAT, UNKNOWN ->
-                                Mono.fromFuture(() -> sessionService.processChatRequestAsync(request.toChatRequest()))
+                                Mono.fromFuture(() -> chatApplicationService.processChatRequestAsync(request.toChatRequest()))
                                         .map(response -> UniversalSyncResponse.from(response, intent));
                         case CODE_GENERATION -> codeGenerationService.generateCode(request.toCodeGenerationRequest())
                                 .map(response -> UniversalSyncResponse.from(response, intent));
@@ -72,13 +70,14 @@ public class OrchestrationService {
                 .flatMapMany(intent -> {
                     log.info("Маршрутизация потокового запроса с намерением: {}. SessionID: {}", intent, request.sessionId());
                     return switch (intent) {
-                        case RAG_QUERY -> sessionService.processRagRequestStream(request.toRagQueryRequest())
-                                .map(UniversalResponse::from);
-                        case CHITCHAT, UNKNOWN -> sessionService.processChatRequestStream(request.toChatRequest())
-                                .map(UniversalResponse::from);
-                        case CODE_GENERATION ->
-                                Flux.from(sessionService.processChatRequestStream(request.toChatRequest()))
+                        case RAG_QUERY ->
+                                chatApplicationService.processChatRequestStream(request.toChatRequest())
                                         .map(UniversalResponse::from);
+                        case CHITCHAT, UNKNOWN ->
+                                chatApplicationService.processChatRequestStream(request.toChatRequest())
+                                        .map(UniversalResponse::from);
+                        case CODE_GENERATION -> chatApplicationService.processChatRequestStream(request.toChatRequest())
+                                .map(UniversalResponse::from);
                         case BUG_ANALYSIS -> bugAnalysisService.analyzeBugReport(request.query())
                                 .map(UniversalResponse::from)
                                 .flux();

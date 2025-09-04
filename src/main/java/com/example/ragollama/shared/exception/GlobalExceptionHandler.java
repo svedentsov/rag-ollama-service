@@ -66,6 +66,22 @@ public class GlobalExceptionHandler {
         return problemDetail;
     }
 
+    /**
+     * Обрабатывает исключение {@link QuotaExceededException}, возникающее при
+     * превышении пользователем лимита на использование LLM.
+     *
+     * @param e Исключение {@link QuotaExceededException}.
+     * @return {@link ProblemDetail} с кодом 429 (Too Many Requests).
+     */
+    @ExceptionHandler(QuotaExceededException.class)
+    public ProblemDetail handleQuotaExceededException(QuotaExceededException e) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, e.getMessage());
+        problemDetail.setTitle("Quota Exceeded");
+        problemDetail.setProperty("timestamp", Instant.now());
+        metricService.incrementApiError(HttpStatus.TOO_MANY_REQUESTS.value());
+        log.warn("Пользователь превысил квоту: {}", e.getMessage());
+        return problemDetail;
+    }
 
     /**
      * Обрабатывает исключения, возникшие на этапе извлечения документов (Retrieval).

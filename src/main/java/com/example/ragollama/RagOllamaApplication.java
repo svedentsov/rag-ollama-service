@@ -34,6 +34,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         EvaluationProperties.class,
         IngestionProperties.class,
         ConfluenceProperties.class,
+        JiraProperties.class,
         GitProperties.class,
         PiiRedactionService.PiiRedactionProperties.class,
         LlmRouterService.LlmProperties.class,

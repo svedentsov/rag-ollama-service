@@ -74,7 +74,7 @@ public class SourceAnalyzerService {
      */
     private long getRecencyScoreForDocument(Document doc) {
         try {
-            Object timestampObj = doc.getMetadata().get("timestamp"); // Предполагаем наличие такого поля
+            Object timestampObj = doc.getMetadata().get("last_modified");
             if (timestampObj instanceof String timestampStr) {
                 long daysOld = ChronoUnit.DAYS.between(OffsetDateTime.parse(timestampStr), OffsetDateTime.now());
                 if (daysOld <= 7) return 100; // Последняя неделя

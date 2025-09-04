@@ -32,6 +32,7 @@ public class PromptService {
             // RAG & Chat Core
             Map.entry("ragPrompt", "rag-prompt.ftl"),
             Map.entry("routerAgent", "router-agent-prompt.ftl"),
+            Map.entry("historySummarizer", "history-summarizer-prompt.ftl"),
 
             // RAG Agents (Query Processing)
             Map.entry("queryTransformation", "query-transformation-prompt.ftl"),
@@ -77,6 +78,7 @@ public class PromptService {
             Map.entry("testMentorBot", "test-mentor-bot-prompt.ftl"),
             Map.entry("cypherQueryGenerator", "cypher-query-generator-prompt.ftl"),
             Map.entry("feedbackToTest", "feedback-to-test-prompt.ftl"),
+            Map.entry("llmReranker", "llm-reranker-prompt.ftl"),
 
             // Summarization & Data Generation
             Map.entry("summarization", "summarization-prompt.ftl"),

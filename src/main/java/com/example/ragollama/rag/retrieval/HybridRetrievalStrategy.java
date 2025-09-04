@@ -23,11 +23,12 @@ import java.util.List;
 /**
  * Реализует адаптивную гибридную стратегию извлечения документов.
  * <p>
- * Эта версия выполняет векторный и полнотекстовый поиск параллельно,
- * применяет фильтры безопасности на основе ролей пользователя и
- * интеллектуально использует различные формы запроса (основной,
- * расширенные, оригинальный) для каждого типа поиска, повышая
- * производительность и релевантность.
+ * Эта версия реализует двухэтапный поиск для оптимизации производительности:
+ * 1. Сначала выполняется только точный векторный поиск.
+ * 2. Если результатов недостаточно (меньше порога `expansionMinDocsThreshold`),
+ * запускается второй, более широкий этап поиска (FTS, expansion queries),
+ * и результаты сливаются.
+ * Это позволяет быстро отвечать на простые запросы, экономя ресурсы.
  */
 @Slf4j
 @Service
@@ -44,7 +45,7 @@ public class HybridRetrievalStrategy {
     private final AccessControlService accessControlService;
 
     /**
-     * Асинхронно извлекает и сливает документы, применяя фильтры безопасности.
+     * Асинхронно извлекает и сливает документы, применяя адаптивную логику и фильтры безопасности.
      *
      * @param processedQueries    Объект с основным и расширенными запросами.
      * @param originalQuery       Оригинальный запрос пользователя для FTS.
@@ -67,17 +68,29 @@ public class HybridRetrievalStrategy {
 
         Filter.Expression securityFilter = accessControlService.buildAccessFilter();
         Filter.Expression finalFilter = combineFilters(securityFilter, businessFilter);
+        int expansionThreshold = retrievalProperties.hybrid().expansionMinDocsThreshold();
 
-        // Запускаем все поиски параллельно на выделенном пуле потоков
-        Mono<List<Document>> primaryVectorSearch = executeVectorSearch(List.of(processedQueries.primaryQuery()), topK, similarityThreshold, finalFilter);
-        Mono<List<Document>> expansionVectorSearch = executeVectorSearch(processedQueries.expansionQueries(), topK, similarityThreshold, finalFilter);
-        Mono<List<Document>> ftsSearch = executeFtsSearch(originalQuery);
+        // Этап 1: Выполняем только точный (primary) векторный поиск.
+        return executeVectorSearch(List.of(processedQueries.primaryQuery()), topK, similarityThreshold, finalFilter)
+                .flatMap(primaryResults -> {
+                    // Этап 2: Проверяем, достаточно ли результатов.
+                    if (primaryResults.size() >= expansionThreshold) {
+                        log.info("Адаптивный поиск: найдено достаточно ({}) документов на первом этапе. Пропуск расширенного поиска.", primaryResults.size());
+                        return Mono.just(primaryResults);
+                    }
 
-        return Mono.zip(primaryVectorSearch, expansionVectorSearch, ftsSearch)
-                .map(tuple -> {
-                    List<List<Document>> searchResults = List.of(tuple.getT1(), tuple.getT2(), tuple.getT3());
-                    log.debug("Получено документов: точный={}, расширенный={}, fts={}", tuple.getT1().size(), tuple.getT2().size(), tuple.getT3().size());
-                    return fusionService.reciprocalRankFusion(searchResults);
+                    log.info("Адаптивный поиск: найдено мало ({}) документов. Запуск расширенного поиска (FTS + Expansion).", primaryResults.size());
+
+                    // Запускаем параллельно вторую волну поиска
+                    Mono<List<Document>> expansionVectorSearch = executeVectorSearch(processedQueries.expansionQueries(), topK, similarityThreshold, finalFilter);
+                    Mono<List<Document>> ftsSearch = executeFtsSearch(originalQuery);
+
+                    return Mono.zip(expansionVectorSearch, ftsSearch)
+                            .map(tuple -> {
+                                // Сливаем результаты первой и второй волны
+                                List<List<Document>> allResults = List.of(primaryResults, tuple.getT1(), tuple.getT2());
+                                return fusionService.reciprocalRankFusion(allResults);
+                            });
                 });
     }
 
@@ -86,7 +99,7 @@ public class HybridRetrievalStrategy {
             return Mono.just(List.of());
         }
         return Mono.fromCallable(() ->
-                        queries.parallelStream() // Безопасно, т.к. выполняется внутри Schedulers.fromExecutor
+                        queries.parallelStream()
                                 .flatMap(query -> {
                                     SearchRequest.Builder requestBuilder = SearchRequest.builder()
                                             .query(query)
