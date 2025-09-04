@@ -4,15 +4,17 @@ import com.example.ragollama.agent.config.Neo4jProperties;
 import com.example.ragollama.agent.knowledgegraph.model.GraphNode;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
-import org.neo4j.driver.*;
+import org.neo4j.driver.AuthTokens;
+import org.neo4j.driver.Driver;
+import org.neo4j.driver.GraphDatabase;
+import org.neo4j.driver.Session;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
 
 /**
  * Низкоуровневый сервис для взаимодействия с графовой базой данных Neo4j.
- * <p>
- * Инкапсулирует всю логику работы с драйвером Neo4j и языком запросов Cypher,
+ * <p>Инкапсулирует всю логику работы с драйвером Neo4j и языком запросов Cypher,
  * предоставляя вышестоящим агентам простые и понятные методы для
  * манипулирования графом.
  */
@@ -34,8 +36,7 @@ public class GraphStorageService {
 
     /**
      * Идемпотентно создает узел в графе.
-     * <p>
-     * Использует оператор `MERGE`, который находит узел по `entityId` или
+     * <p>Использует оператор `MERGE`, который находит узел по `entityId` или
      * создает новый, если он не существует. Это предотвращает дублирование.
      *
      * @param node DTO с информацией об узле.

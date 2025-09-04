@@ -8,8 +8,7 @@ import reactor.core.publisher.Mono;
 
 /**
  * Определяет контракт для низкоуровневого шлюза к языковой модели.
- * <p>
- * Эта версия возвращает полный объект {@link ChatResponse} от Spring AI,
+ * <p>Эта версия возвращает полный объект {@link ChatResponse} от Spring AI,
  * чтобы вышестоящие слои могли извлечь метаданные об использовании.
  */
 public interface LlmGateway {

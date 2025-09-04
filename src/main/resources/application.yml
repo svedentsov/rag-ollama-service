@@ -222,10 +222,10 @@ app:
     enabled: true
     strategies:
       keyword-boost:
-        enabled: false
-        boost-factor: 0.5
+        enabled: false # Выключено по умолчанию, так как LLM-реранкер мощнее
+        boost-factor: 0.1
       llm:
-        enabled: true
+        enabled: true # Включаем мощный LLM-реранкер
 
   rate-limiting:
     enabled: true

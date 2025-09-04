@@ -16,7 +16,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -24,12 +23,10 @@ import java.util.stream.Collectors;
 
 /**
  * Стратегия переранжирования, использующая LLM для оценки релевантности.
- * <p>
- * Принимает список документов-кандидатов и использует языковую модель
+ * <p>Принимает список документов-кандидатов и использует языковую модель
  * для их оценки и сортировки в порядке убывания релевантности
  * относительно исходного запроса.
- * <p>
- * Активируется свойством {@code app.reranking.strategies.llm.enabled=true}.
+ * <p>Активируется свойством {@code app.reranking.strategies.llm.enabled=true}.
  */
 @Slf4j
 @Component
@@ -42,7 +39,8 @@ public class LlmRerankerStrategy implements RerankingStrategy {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
-    private record RankedDocument(String chunkId, int relevanceScore, String justification) {}
+    private record RankedDocument(String chunkId, int relevanceScore, String justification) {
+    }
 
     /**
      * {@inheritDoc}
@@ -98,7 +96,8 @@ public class LlmRerankerStrategy implements RerankingStrategy {
     private List<RankedDocument> parseLlmResponse(String jsonResponse) {
         try {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
-            return objectMapper.readValue(cleanedJson, new TypeReference<>() {});
+            return objectMapper.readValue(cleanedJson, new TypeReference<>() {
+            });
         } catch (JsonProcessingException e) {
             throw new ProcessingException("LlmReranker LLM вернул невалидный JSON.", e);
         }

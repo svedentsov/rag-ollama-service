@@ -1,5 +1,6 @@
 package com.example.ragollama.agent.openapi.tools;
 
+import com.example.ragollama.agent.openapi.api.dto.OpenApiSourceRequest;
 import com.example.ragollama.agent.openapi.model.EndpointInfo;
 import com.example.ragollama.shared.exception.ProcessingException;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -16,14 +17,27 @@ import java.util.Optional;
 
 /**
  * Инфраструктурный сервис, инкапсулирующий логику парсинга OpenAPI спецификаций.
- * <p>
- * Использует библиотеку {@code swagger-parser} для надежного разбора
+ * <p>Использует библиотеку {@code swagger-parser} для надежного разбора
  * спецификаций из различных источников (URL, текст) в структурированный
- * Java-объект {@link OpenAPI}.
+ * Java-объект {@link OpenAPI}. Эта версия адаптирована для работы с
+ * полиморфным DTO {@link OpenApiSourceRequest}.
  */
 @Slf4j
 @Service
 public class OpenApiSpecParser {
+
+    /**
+     * Универсальный метод для парсинга спецификации из полиморфного источника.
+     *
+     * @param source DTO с источником (URL или контент).
+     * @return Распарсенный объект {@link OpenAPI}.
+     */
+    public OpenAPI parse(OpenApiSourceRequest source) {
+        return switch (source) {
+            case OpenApiSourceRequest.ByUrl byUrl -> parseFromUrl(byUrl.value());
+            case OpenApiSourceRequest.ByContent byContent -> parseFromContent(byContent.value());
+        };
+    }
 
     /**
      * Парсит спецификацию из строки.

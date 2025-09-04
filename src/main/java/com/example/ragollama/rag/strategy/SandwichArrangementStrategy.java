@@ -9,14 +9,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Реализация {@link ContextArrangementStrategy}, применяющая
- * стратегию "Сэндвич" (Sandwich/Reordering).
- * <p>
- * Эта стратегия борется с проблемой "Lost in the Middle" у LLM, помещая
+ * Реализация {@link ContextArrangementStrategy}, применяющая стратегию "Сэндвич" (Sandwich/Reordering).
+ * <p>Эта стратегия борется с проблемой "Lost in the Middle" у LLM, помещая
  * самые релевантные документы в начало и конец списка, где у модели
  * максимальное "внимание". Наименее релевантные документы оказываются в середине.
- * <p>
- * Активируется при {@code app.rag.arrangement-strategy=sandwich}.
+ * <p>Активируется при {@code app.rag.arrangement-strategy=sandwich}.
  */
 @Slf4j
 @Component
@@ -32,8 +29,7 @@ public class SandwichArrangementStrategy implements ContextArrangementStrategy {
 
     /**
      * Переупорядочивает список документов для стратегии "Сэндвич".
-     * <p>
-     * Пример: [d1, d2, d3, d4, d5, d6] -> [d1, d6, d2, d5, d3, d4]
+     * <p>Пример: [d1, d2, d3, d4, d5, d6] -> [d1, d6, d2, d5, d3, d4]
      *
      * @param sortedDocs Исходный список, отсортированный по убыванию релевантности.
      * @return Новый список, переупорядоченный для оптимального восприятия LLM.
