@@ -4,6 +4,7 @@ import com.example.ragollama.agent.AgentOrchestratorService;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.architecture.api.dto.ArchConsistencyRequest;
 import com.example.ragollama.agent.architecture.api.dto.ArchitecturalGuidanceRequest;
+import com.example.ragollama.agent.architecture.api.dto.VisualizationRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -17,7 +18,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Контроллер для AI-агентов, выполняющих архитектурный надзор.
+ * Контроллер для AI-агентов, выполняющих архитектурный надзор и анализ.
  */
 @RestController
 @RequestMapping("/api/v1/agents/architecture")
@@ -49,5 +50,17 @@ public class ArchitectureAgentController {
     @Operation(summary = "Получить полное архитектурное ревью для изменений (AI Governor)")
     public CompletableFuture<List<AgentResult>> getFullArchitecturalReview(@Valid @RequestBody ArchitecturalGuidanceRequest request) {
         return orchestratorService.invokePipeline("architectural-guardian-pipeline", request.toAgentContext());
+    }
+
+    /**
+     * Запускает конвейер для анализа зависимостей и генерации диаграммы.
+     *
+     * @param request DTO с Git-ссылками, определяющими диапазон анализа.
+     * @return {@link CompletableFuture} с результатом, содержащим код диаграммы в формате Mermaid.js.
+     */
+    @PostMapping("/visualize")
+    @Operation(summary = "Сгенерировать диаграмму зависимостей для изменений")
+    public CompletableFuture<List<AgentResult>> visualizeDependencies(@Valid @RequestBody VisualizationRequest request) {
+        return orchestratorService.invokePipeline("architecture-visualization-pipeline", request.toAgentContext());
     }
 }

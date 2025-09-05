@@ -19,11 +19,20 @@ public class VectorStoreSource implements KnowledgeSource {
     private final QueryProcessingPipeline queryProcessingPipeline;
     private final HybridRetrievalStrategy retrievalStrategy;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getSourceName() {
         return "VectorStore (Документация)";
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param claim Утверждение для проверки.
+     * @return {@link Mono} со списком текстовых содержимых найденных документов.
+     */
     @Override
     public Mono<List<String>> findEvidence(String claim) {
         return queryProcessingPipeline.process(claim)

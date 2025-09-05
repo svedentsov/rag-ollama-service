@@ -53,17 +53,12 @@ public class BugDuplicateDetectorAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     * <p>
-     * Эта версия использует Project Reactor для асинхронной обработки и
-     * возвращает результат в виде {@link CompletableFuture} для совместимости
-     * с {@link AgentOrchestratorService}.
      */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String bugReportText = (String) context.payload().get(BUG_REPORT_TEXT_KEY);
-
         return bugAnalysisService.analyzeBugReport(bugReportText)
-                .map(analysisResponse -> {
+                .thenApply(analysisResponse -> {
                     String summary;
                     if (analysisResponse.isDuplicate()) {
                         summary = String.format("Обнаружен возможный дубликат. Похожие тикеты: %s",
@@ -71,7 +66,6 @@ public class BugDuplicateDetectorAgent implements ToolAgent {
                     } else {
                         summary = "Похожих баг-репортов не найдено. Вероятно, тикет уникален.";
                     }
-
                     return new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,
@@ -82,6 +76,6 @@ public class BugDuplicateDetectorAgent implements ToolAgent {
                                     "improvedDescription", analysisResponse.improvedDescription()
                             )
                     );
-                }).toFuture();
+                });
     }
 }

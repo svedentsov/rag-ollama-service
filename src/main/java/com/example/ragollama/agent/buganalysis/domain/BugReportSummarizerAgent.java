@@ -95,7 +95,7 @@ public class BugReportSummarizerAgent implements ToolAgent {
                             "Баг-репорт успешно проанализирован и структурирован.",
                             Map.of(
                                     "bugReportSummary", summary,
-                                    "bugReportText", improvedTextForNextAgent // <-- Обогащаем контекст для следующего шага!
+                                    "bugReportText", improvedTextForNextAgent
                             )
                     );
                 });

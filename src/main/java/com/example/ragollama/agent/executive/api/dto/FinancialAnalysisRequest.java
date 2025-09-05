@@ -19,6 +19,11 @@ public record FinancialAnalysisRequest(
         @NotNull @Min(30) @Max(365)
         Integer analysisPeriodDays
 ) {
+    /**
+     * Преобразует DTO в {@link AgentContext} для передачи в конвейер.
+     *
+     * @return Контекст для запуска агента.
+     */
     public AgentContext toAgentContext() {
         return new AgentContext(Map.of("analysisPeriodDays", this.analysisPeriodDays));
     }

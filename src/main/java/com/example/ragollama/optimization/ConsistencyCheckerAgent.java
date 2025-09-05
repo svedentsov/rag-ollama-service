@@ -24,21 +24,35 @@ public class ConsistencyCheckerAgent implements ToolAgent {
 
     private final List<KnowledgeSource> knowledgeSources;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "consistency-checker";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Собирает доказательства из всех источников знаний для проверки утверждения.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey("claim");
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @return {@link CompletableFuture} с результатом, содержащим карту "источник" -> "доказательства".
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String claim = (String) context.payload().get("claim");

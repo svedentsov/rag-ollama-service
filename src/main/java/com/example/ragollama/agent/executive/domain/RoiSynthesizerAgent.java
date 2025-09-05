@@ -22,8 +22,8 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Финальный мета-агент "AI CFO".
- * <p>
- * Синтезирует все финансовые, инженерные и продуктовые данные в единый,
+ *
+ * <p>Синтезирует все финансовые, инженерные и продуктовые данные в единый,
  * стратегический отчет о рентабельности инвестиций (ROI).
  */
 @Slf4j
@@ -35,29 +35,42 @@ public class RoiSynthesizerAgent implements ToolAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "roi-synthesizer-agent";
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Агрегирует все финансовые, инженерные и продуктовые метрики для расчета ROI и формирования рекомендаций.";
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * @return {@code true} если в контексте присутствуют все необходимые данные от агентов-сборщиков.
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         // Запускается, когда собраны все необходимые данные
         return context.payload().containsKey("cloudCosts") &&
                 context.payload().containsKey("llmCosts") &&
-                context.payload().containsKey("jiraEffort") &&
+                context.payload().containsKey("jiraMetrics") &&
                 context.payload().containsKey("productAnalytics");
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * @param context Контекст со всеми собранными данными.
+     * @return {@link CompletableFuture} с финальным финансовым отчетом.
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         log.info("RoiSynthesizerAgent: Начало синтеза финансового отчета...");
@@ -66,7 +79,7 @@ public class RoiSynthesizerAgent implements ToolAgent {
         Map<String, Object> financialInputs = new HashMap<>();
         financialInputs.put("cloudCosts", context.payload().get("cloudCosts"));
         financialInputs.put("llmCosts", context.payload().get("llmCosts"));
-        financialInputs.put("jiraEffort", context.payload().get("jiraEffort"));
+        financialInputs.put("jiraEffort", context.payload().get("jiraMetrics"));
         financialInputs.put("productAnalytics", context.payload().get("productAnalytics"));
 
         try {

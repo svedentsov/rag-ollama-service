@@ -12,30 +12,48 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Агент-сборщик, имитирующий получение данных о затратах на инфраструктуру.
+ *
+ * <p>В реальной системе здесь была бы интеграция с API облачного провайдера
+ * (AWS Cost Explorer, Azure Cost Management API и т.д.).
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class CloudCostFetcherAgent implements ToolAgent {
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "cloud-cost-fetcher";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Собирает данные о затратах на облачную инфраструктуру.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
-        return true;
+        return true; // Агент не требует специфических входных данных
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @return {@link CompletableFuture} с результатом, содержащим mock-данные о затратах.
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         return CompletableFuture.supplyAsync(() -> {
             log.info("Сбор mock-данных о затратах на инфраструктуру...");
+            // Имитация данных о месячных затратах в USD
             Map<String, Double> cloudCosts = Map.of(
                     "rag-ollama-service-compute", 1250.75,
                     "postgres-db-instance", 450.20,

@@ -15,6 +15,10 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Реальный агент-аналитик для расчета стоимости использования LLM.
+ *
+ * <p>Этот агент выполняет SQL-запрос к таблице `llm_usage_log` для
+ * агрегации данных об использовании токенов и рассчитывает их
+ * стоимость на основе тарифов, заданных в {@link QuotaProperties}.
  */
 @Slf4j
 @Component
@@ -23,21 +27,33 @@ public class LlmCostAnalysisAgent implements ToolAgent {
     private final JdbcTemplate jdbcTemplate;
     private final QuotaProperties quotaProperties;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "llm-cost-analyzer";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Рассчитывает стоимость использования LLM на основе логов.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
-        return true;
+        return true; // Агент не требует специфических входных данных
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         return CompletableFuture.supplyAsync(() -> {

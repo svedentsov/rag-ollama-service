@@ -67,6 +67,8 @@ public class JiraTicketCreatorAgent implements ToolAgent {
         String title = (String) context.payload().get("title");
         String description = (String) context.payload().get("description");
         log.info("Запрос на создание тикета в Jira: {}", title);
+        // ВАЖНО: В реальной системе здесь будет вызов jiraApiClient.createIssue(...)
+        // Для демонстрации возвращаем mock-результат.
         return CompletableFuture.supplyAsync(() -> {
             String mockIssueKey = "PROJ-" + (new java.util.Random().nextInt(900) + 100);
             String summary = "Тикет '" + title + "' успешно создан с ключом " + mockIssueKey;

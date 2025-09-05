@@ -29,7 +29,7 @@ public class OrchestrationService {
     private final CodeGenerationService codeGenerationService;
     private final BugAnalysisService bugAnalysisService;
     private final SummarizationService summarizationService;
-    private final AdaptiveRagOrchestrator adaptiveRagOrchestrator; // <-- ЗАВИСИМОСТЬ
+    private final AdaptiveRagOrchestrator adaptiveRagOrchestrator;
 
     /**
      * Обрабатывает унифицированный запрос от пользователя, возвращая полный ответ после его генерации.
@@ -51,8 +51,10 @@ public class OrchestrationService {
                                         .map(response -> UniversalSyncResponse.from(response, intent));
                         case CODE_GENERATION -> codeGenerationService.generateCode(request.toCodeGenerationRequest())
                                 .map(response -> UniversalSyncResponse.from(response, intent));
-                        case BUG_ANALYSIS -> bugAnalysisService.analyzeBugReport(request.query())
-                                .map(response -> UniversalSyncResponse.from(response, intent));
+                        case BUG_ANALYSIS -> Mono.fromFuture(
+                                bugAnalysisService.analyzeBugReport(request.query())
+                                        .thenApply(response -> UniversalSyncResponse.from(response, intent))
+                        );
                         case SUMMARIZATION -> summarizationService.summarizeAsync(request.context(), null)
                                 .map(summary -> UniversalSyncResponse.from(summary, intent));
                     };
@@ -70,15 +72,14 @@ public class OrchestrationService {
                 .flatMapMany(intent -> {
                     log.info("Маршрутизация потокового запроса с намерением: {}. SessionID: {}", intent, request.sessionId());
                     return switch (intent) {
-                        case RAG_QUERY ->
-                                chatApplicationService.processChatRequestStream(request.toChatRequest())
-                                        .map(UniversalResponse::from);
+                        case RAG_QUERY -> chatApplicationService.processChatRequestStream(request.toChatRequest())
+                                .map(UniversalResponse::from);
                         case CHITCHAT, UNKNOWN ->
                                 chatApplicationService.processChatRequestStream(request.toChatRequest())
                                         .map(UniversalResponse::from);
                         case CODE_GENERATION -> chatApplicationService.processChatRequestStream(request.toChatRequest())
                                 .map(UniversalResponse::from);
-                        case BUG_ANALYSIS -> bugAnalysisService.analyzeBugReport(request.query())
+                        case BUG_ANALYSIS -> Mono.fromFuture(() -> bugAnalysisService.analyzeBugReport(request.query()))
                                 .map(UniversalResponse::from)
                                 .flux();
                         case SUMMARIZATION -> summarizationService.summarizeAsync(request.context(), null)

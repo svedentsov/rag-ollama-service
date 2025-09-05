@@ -1,8 +1,8 @@
 package com.example.ragollama.agent.copilot.api;
 
+import com.example.ragollama.agent.copilot.QaCopilotService;
 import com.example.ragollama.agent.copilot.api.dto.CopilotRequest;
 import com.example.ragollama.agent.copilot.api.dto.CopilotResponse;
-import com.example.ragollama.agent.copilot.QaCopilotService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
