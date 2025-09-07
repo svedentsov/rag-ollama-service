@@ -8,16 +8,15 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * Конфигурация для Spring Web MVC.
- * Регистрирует кастомные компоненты, такие как фильтры и интерсепторы,
- * для обработки веб-запросов. В этой версии удалена кастомная конфигурация
- * {@code configureAsyncSupport}, чтобы полностью полагаться на автоконфигурацию
- * Spring Boot, которая корректно работает с `micrometer-context-propagation`
- * для асинхронной обработки и трассировки.
+ * *
+ * <p>Регистрирует кастомные компоненты, такие как фильтры и интерсепторы,
+ * а также настраивает глобальную политику CORS для всего приложения.
  */
 @Configuration
 @RequiredArgsConstructor
@@ -27,8 +26,6 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     /**
      * Регистрирует интерсептор для ограничения частоты запросов.
-     * Интерсептор будет применяться ко всем эндпоинтам, начинающимся с "/api/",
-     * если свойство `app.rate-limiting.enabled` установлено в `true`.
      *
      * @param registry Реестр, в который добавляется интерсептор.
      */
@@ -41,10 +38,6 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     /**
      * Регистрирует сервлет-фильтр {@link RequestIdFilter} для трассировки запросов.
-     * Фильтр добавляет уникальный ID к каждому входящему запросу, помещая его
-     * в MDC (для логов) и в заголовок ответа (`X-Request-ID`).
-     * Установка {@code Ordered.HIGHEST_PRECEDENCE} гарантирует, что этот фильтр
-     * будет выполнен самым первым в цепочке.
      *
      * @return Объект регистрации для фильтра.
      */
@@ -54,5 +47,28 @@ public class WebMvcConfig implements WebMvcConfigurer {
         registrationBean.setFilter(new RequestIdFilter());
         registrationBean.setOrder(Ordered.HIGHEST_PRECEDENCE);
         return registrationBean;
+    }
+
+    /**
+     * Создаем глобальную конфигурацию CORS.
+     * *
+     * <p>Этот метод является стандартным способом настройки CORS в Spring MVC
+     * при отсутствии Spring Security. Он позволяет запросы с любых портов
+     * на localhost, что идеально для локальной разработки.
+     *
+     * @return Конфигуратор Web MVC с настроенными правилами CORS.
+     */
+    @Bean
+    public WebMvcConfigurer corsConfigurer() {
+        return new WebMvcConfigurer() {
+            @Override
+            public void addCorsMappings(CorsRegistry registry) {
+                registry.addMapping("/api/**") // Применяем только к нашему API
+                        .allowedOriginPatterns("http://localhost:*", "http://192.168.*:*") // Разрешаем localhost и локальную сеть
+                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                        .allowedHeaders("*")
+                        .allowCredentials(true);
+            }
+        };
     }
 }

@@ -3,7 +3,7 @@ package com.example.ragollama.indexing;
 import com.example.ragollama.ingestion.TextSplitterService;
 import com.example.ragollama.ingestion.cleaning.DataCleaningService;
 import com.example.ragollama.shared.caching.VectorCacheService;
-import com.example.ragollama.shared.security.PiiRedactionService;
+import com.example.ragollama.shared.processing.PiiRedactionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;

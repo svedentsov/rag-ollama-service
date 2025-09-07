@@ -61,4 +61,16 @@
     <logger name="org.springframework.security" level="info"/>
     <logger name="com.zaxxer.hikari" level="info"/>
 
+    <!-- =================================================================== -->
+    <!-- Подавляем избыточные ERROR-логи для 404 ошибок                      -->
+    <!-- =================================================================== -->
+    <!-- Этот логгер понижает уровень для исключений NoResourceFoundException,
+         которые генерируются при запросе несуществующих статических ресурсов
+         (например, служебные запросы от браузерных DevTools).
+         `additivity="false"` предотвращает передачу сообщения в root-логгер. -->
+    <logger name="org.springframework.web.servlet.resource.ResourceHttpRequestHandler" level="warn" additivity="false">
+        <appender-ref ref="Console"/>
+        <appender-ref ref="RollingFile"/>
+    </logger>
+
 </configuration>

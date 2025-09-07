@@ -26,6 +26,9 @@ import java.util.concurrent.CompletableFuture;
 @RequiredArgsConstructor
 public class TestPrioritizerAgent implements ToolAgent {
 
+    /**
+     * Константа для ключа в контексте агента, содержащего diff.
+     */
     public static final String GIT_DIFF_CONTENT_KEY = "gitDiffContent";
     private final TestCaseService testCaseService;
 

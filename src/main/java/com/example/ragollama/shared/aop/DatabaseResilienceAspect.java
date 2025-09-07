@@ -57,7 +57,7 @@ public class DatabaseResilienceAspect {
      * @throws Throwable если выполнение метода завершилось исключением после
      *                   всех попыток повторения, или если Circuit Breaker разомкнут.
      */
-    @Around("@annotation(com.example.ragollama.aop.ResilientDatabaseOperation)")
+    @Around("@annotation(com.example.ragollama.shared.aop.ResilientDatabaseOperation)")
     public Object applyResilience(ProceedingJoinPoint joinPoint) throws Throwable {
         Supplier<Object> supplier = () -> {
             try {

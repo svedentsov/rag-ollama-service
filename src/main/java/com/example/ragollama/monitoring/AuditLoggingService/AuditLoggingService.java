@@ -1,4 +1,4 @@
-package com.example.ragollama.monitoring;
+package com.example.ragollama.monitoring.AuditLoggingService;
 
 import com.example.ragollama.monitoring.domain.RagAuditLogRepository;
 import com.example.ragollama.monitoring.model.RagAuditLog;
@@ -6,8 +6,6 @@ import com.example.ragollama.rag.domain.model.SourceCitation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,11 +49,7 @@ public class AuditLoggingService {
             String finalPrompt,
             String llmAnswer) {
         try {
-            String username = "SYSTEM";
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getPrincipal())) {
-                username = authentication.getName();
-            }
+            String username = "anonymous";
 
             RagAuditLog auditLog = RagAuditLog.builder()
                     .requestId(requestId)

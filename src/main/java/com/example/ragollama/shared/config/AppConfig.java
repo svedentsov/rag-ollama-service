@@ -17,7 +17,6 @@ import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.http.codec.json.Jackson2JsonDecoder;
 import org.springframework.http.codec.json.Jackson2JsonEncoder;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
-import org.springframework.security.task.DelegatingSecurityContextAsyncTaskExecutor;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Hooks;
 import reactor.netty.http.client.HttpClient;
@@ -79,13 +78,13 @@ public class AppConfig {
     }
 
     /**
-     * Создает единый пул потоков для всех асинхронных задач с поддержкой Security Context и MDC.
+     * Создает единый пул потоков для всех асинхронных задач с поддержкой MDC.
      *
-     * <p>Базовый {@link ThreadPoolTaskExecutor} оборачивается в декораторы, которые
-     * гарантируют, что и {@code SecurityContext}, и контекст логирования {@code MDC}
-     * будут автоматически переданы из вызывающего потока в поток, выполняющий задачу.
+     * <p>Базовый {@link ThreadPoolTaskExecutor} оборачивается в декоратор, который
+     * гарантирует, что контекст логирования {@code MDC} будет автоматически передан
+     * из вызывающего потока в поток, выполняющий задачу.
      *
-     * @return Сконфигурированный и безопасный для Spring Security и логирования {@link AsyncTaskExecutor}.
+     * @return Сконфигурированный и безопасный для логирования {@link AsyncTaskExecutor}.
      */
     @Bean
     public AsyncTaskExecutor applicationTaskExecutor() {
@@ -97,7 +96,8 @@ public class AppConfig {
         executor.setThreadNamePrefix(executorProps.threadNamePrefix());
         executor.setTaskDecorator(new MdcTaskDecorator());
         executor.initialize();
-        return new DelegatingSecurityContextAsyncTaskExecutor(executor);
+        // УДАЛЕНО: Обертка DelegatingSecurityContextAsyncTaskExecutor больше не нужна.
+        return executor;
     }
 
     /**

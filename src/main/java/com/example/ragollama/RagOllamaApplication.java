@@ -9,7 +9,7 @@ import com.example.ragollama.rag.domain.reranking.RerankingProperties;
 import com.example.ragollama.rag.retrieval.RetrievalProperties;
 import com.example.ragollama.shared.config.properties.AppProperties;
 import com.example.ragollama.shared.llm.LlmRouterService;
-import com.example.ragollama.shared.security.PiiRedactionService;
+import com.example.ragollama.shared.processing.PiiRedactionService;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

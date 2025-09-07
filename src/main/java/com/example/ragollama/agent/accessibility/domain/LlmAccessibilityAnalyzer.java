@@ -52,7 +52,7 @@ public class LlmAccessibilityAnalyzer {
      *
      * @param violations Список технических нарушений, обнаруженных сканером.
      * @return {@link CompletableFuture}, который по завершении будет содержать
-     *         полностью сформированный {@link AccessibilityReport}.
+     * полностью сформированный {@link AccessibilityReport}.
      * @throws ProcessingException если происходит критическая ошибка при сериализации данных в JSON.
      */
     public CompletableFuture<AccessibilityReport> analyze(List<AccessibilityViolation> violations) {

@@ -92,6 +92,8 @@ public class FeatureGapAnalysisAgent implements ToolAgent {
 
     /**
      * Извлекает фичи нашего продукта, используя RAG по собственной базе знаний.
+     *
+     * @return {@link Mono} со строкой, содержащей JSON-массив фичей.
      */
     private Mono<String> extractFeaturesFromOurKnowledgeBase() {
         return testCaseService.findRelevantTestCases("Все возможности продукта")
@@ -103,6 +105,9 @@ public class FeatureGapAnalysisAgent implements ToolAgent {
 
     /**
      * Вызывает LLM для извлечения структурированного списка фич из произвольного текста.
+     *
+     * @param text Текст для анализа.
+     * @return {@link Mono} со строкой, содержащей JSON-массив фичей.
      */
     private Mono<String> extractFeaturesFromText(String text) {
         String promptString = promptService.render("featureExtraction", Map.of("context", text));
@@ -111,6 +116,9 @@ public class FeatureGapAnalysisAgent implements ToolAgent {
 
     /**
      * Безопасно парсит JSON-ответ от LLM в {@link FeatureGapReport}.
+     *
+     * @param jsonResponse Ответ от LLM.
+     * @return Десериализованный объект {@link FeatureGapReport}.
      */
     private FeatureGapReport parseLlmResponse(String jsonResponse) {
         try {

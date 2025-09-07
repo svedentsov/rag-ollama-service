@@ -94,6 +94,9 @@ public class E2EFlowSynthesizerAgent implements ToolAgent {
     /**
      * Выполняет поиск релевантных документов (API-спецификаций, существующих тестов)
      * для предоставления контекста LLM.
+     *
+     * @param userStory Описание пользовательского сценария.
+     * @return {@link Mono} со списком релевантных документов.
      */
     private Mono<List<Document>> findRelevantContext(String userStory) {
         return testCaseService.findRelevantTestCases(userStory);

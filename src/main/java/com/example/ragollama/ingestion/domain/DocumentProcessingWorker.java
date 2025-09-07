@@ -3,14 +3,12 @@ package com.example.ragollama.ingestion.domain;
 import com.example.ragollama.indexing.IndexingPipelineService;
 import com.example.ragollama.indexing.IndexingRequest;
 import com.example.ragollama.ingestion.domain.model.DocumentJob;
-import com.example.ragollama.ingestion.domain.model.JobStatus;
 import com.example.ragollama.shared.exception.ProcessingException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
@@ -18,9 +16,9 @@ import java.util.UUID;
 /**
  * Асинхронный воркер для обработки и индексации документов.
  * <p>
- * В этой версии воркер делегирует всю основную логику конвейера
- * переиспользуемому сервису {@link IndexingPipelineService},
- * отвечая только за управление жизненным циклом {@link DocumentJob}.
+ * Этот компонент инкапсулирует всю бизнес-логику жизненного цикла одной задачи.
+ * Метод {@code processDocument} выполняется в отдельном потоке из пула
+ * `applicationTaskExecutor` и в собственной транзакции.
  */
 @Slf4j
 @Component
@@ -31,54 +29,34 @@ public class DocumentProcessingWorker {
     private final IndexingPipelineService indexingPipelineService;
 
     /**
-     * Асинхронно выполняет полный цикл обработки одного документа.
-     * <p>
-     * Метод извлекает задачу из базы данных, преобразует ее в универсальный
-     * запрос на индексацию и передает его в {@link IndexingPipelineService}.
-     * Управляет статусом задачи в БД, оборачивая логику в try-catch для
-     * надежной обработки ошибок.
+     * Асинхронно и транзакционно выполняет полный цикл обработки одного документа.
      *
      * @param jobId Идентификатор задачи для обработки.
      */
     @Async("applicationTaskExecutor")
+    @Transactional
     public void processDocument(UUID jobId) {
         try (MDC.MDCCloseable mdc = MDC.putCloseable("requestId", "ingest-" + jobId.toString().substring(0, 8))) {
             log.info("Начата асинхронная обработка документа. Job ID: {}", jobId);
-            updateJobStatus(jobId, JobStatus.PROCESSING, null);
             DocumentJob job = jobRepository.findById(jobId)
                     .orElseThrow(() -> new ProcessingException("Задача с ID " + jobId + " не найдена после захвата."));
-            // Преобразуем Job в универсальный запрос и делегируем выполнение
-            IndexingRequest indexingRequest = new IndexingRequest(
-                    job.getId().toString(),
-                    job.getSourceName(),
-                    job.getTextContent(),
-                    job.getMetadata()
-            );
-            indexingPipelineService.process(indexingRequest);
-            updateJobStatus(jobId, JobStatus.COMPLETED, null);
-        } catch (Exception e) {
-            log.error("Критическая ошибка при обработке документа. Job ID: {}", jobId, e);
-            updateJobStatus(jobId, JobStatus.FAILED, e.getMessage());
-        }
-    }
-
-    /**
-     * Обновляет статус задачи в отдельной, новой транзакции.
-     * Это гарантирует, что статус будет сохранен даже если основная
-     * транзакция обработки будет отменена.
-     *
-     * @param jobId        Идентификатор задачи для обновления.
-     * @param newStatus    Новый статус.
-     * @param errorMessage Сообщение об ошибке, если статус FAILED.
-     */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void updateJobStatus(UUID jobId, JobStatus newStatus, String errorMessage) {
-        jobRepository.findById(jobId).ifPresent(job -> {
-            job.setStatus(newStatus);
-            if (newStatus == JobStatus.FAILED) {
-                job.setErrorMessage(errorMessage);
+            try {
+                IndexingRequest indexingRequest = new IndexingRequest(
+                        job.getId().toString(),
+                        job.getSourceName(),
+                        job.getTextContent(),
+                        job.getMetadata()
+                );
+                indexingPipelineService.process(indexingRequest);
+                job.markAsCompleted();
+            } catch (Exception e) {
+                log.error("Критическая ошибка при обработке документа. Job ID: {}", jobId, e);
+                job.markAsFailed(e.getMessage());
             }
             jobRepository.save(job);
-        });
+
+        } catch (Exception e) {
+            log.error("Неустранимая ошибка на начальном этапе обработки Job ID: {}", jobId, e);
+        }
     }
 }

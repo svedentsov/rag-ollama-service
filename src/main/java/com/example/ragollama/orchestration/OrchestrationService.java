@@ -26,6 +26,7 @@ public class OrchestrationService {
 
     private final RouterAgentService router;
     private final ChatApplicationService chatApplicationService;
+    private final RagApplicationService ragApplicationService;
     private final CodeGenerationService codeGenerationService;
     private final BugAnalysisService bugAnalysisService;
     private final SummarizationService summarizationService;
@@ -43,7 +44,6 @@ public class OrchestrationService {
                     log.info("Маршрутизация запроса с намерением: {}. SessionID: {}", intent, request.sessionId());
                     return switch (intent) {
                         case RAG_QUERY ->
-                            // ИСПОЛЬЗУЕМ АДАПТИВНЫЙ ОРКЕСТРАТОР
                                 Mono.fromFuture(() -> adaptiveRagOrchestrator.processAdaptive(request.toRagQueryRequest()))
                                         .map(response -> UniversalSyncResponse.from(response, intent));
                         case CHITCHAT, UNKNOWN ->
@@ -72,13 +72,14 @@ public class OrchestrationService {
                 .flatMapMany(intent -> {
                     log.info("Маршрутизация потокового запроса с намерением: {}. SessionID: {}", intent, request.sessionId());
                     return switch (intent) {
-                        case RAG_QUERY -> chatApplicationService.processChatRequestStream(request.toChatRequest())
+                        case RAG_QUERY -> ragApplicationService.processRagRequestStream(request.toRagQueryRequest())
                                 .map(UniversalResponse::from);
                         case CHITCHAT, UNKNOWN ->
                                 chatApplicationService.processChatRequestStream(request.toChatRequest())
                                         .map(UniversalResponse::from);
-                        case CODE_GENERATION -> chatApplicationService.processChatRequestStream(request.toChatRequest())
-                                .map(UniversalResponse::from);
+                        case CODE_GENERATION -> codeGenerationService.generateCode(request.toCodeGenerationRequest())
+                                .map(UniversalResponse::from)
+                                .flux();
                         case BUG_ANALYSIS -> Mono.fromFuture(() -> bugAnalysisService.analyzeBugReport(request.query()))
                                 .map(UniversalResponse::from)
                                 .flux();

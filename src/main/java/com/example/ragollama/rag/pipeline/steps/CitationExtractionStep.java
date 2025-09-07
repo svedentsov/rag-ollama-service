@@ -4,7 +4,7 @@ import com.example.ragollama.rag.domain.model.RagAnswer;
 import com.example.ragollama.rag.domain.model.SourceCitation;
 import com.example.ragollama.rag.pipeline.RagFlowContext;
 import com.example.ragollama.rag.pipeline.RagPipelineStep;
-import com.example.ragollama.shared.security.PiiRedactionService;
+import com.example.ragollama.shared.processing.PiiRedactionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;

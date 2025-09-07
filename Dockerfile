@@ -1,37 +1,31 @@
-# --- Этап 1: Сборка проекта ---
+# --- Этап 1: Сборка бэкенда ---
 # Используем официальный образ Gradle с нужной версией JDK.
-FROM gradle:8.8-jdk21 AS build
+FROM gradle:8.8-jdk21 AS builder
 
-# Устанавливаем рабочую директорию внутри контейнера
 WORKDIR /app
 
-# Копируем файлы Gradle. Этот слой будет кэширован, если файлы сборки не изменятся,
-# что ускоряет последующие сборки, т.к. зависимости не будут скачиваться заново.
+# Копируем файлы Gradle для кэширования зависимостей
 COPY build.gradle settings.gradle ./
+COPY gradlew .
+COPY gradle ./gradle
+RUN ./gradlew dependencies --no-daemon
 
-# Скачиваем все зависимости.
-RUN gradle dependencies --no-daemon
-
-# Копируем исходный код проекта
+# Копируем исходный код бэкенда
 COPY src ./src
 
 # Собираем приложение в исполняемый JAR-файл.
-# Пропускаем тесты (-x test), так как их следует запускать отдельно в CI/CD пайплайне.
-RUN gradle build -x test --no-daemon
+RUN ./gradlew build -x test --no-daemon
 
-# --- Этап 2: Запуск приложения ---
+
+# --- Этап 2: Финальный образ ---
 # Используем минималистичный образ с JRE.
 FROM eclipse-temurin:21-jre-jammy
 
-# Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем собранный JAR-файл из стадии 'build' в текущий образ.
-# Gradle помещает артефакты в build/libs
-COPY --from=build /app/build/libs/app.jar app.jar
+# Копируем собранный JAR-файл бэкенда
+COPY --from=builder /app/build/libs/app.jar app.jar
 
-# Сообщаем Docker, что контейнер будет слушать на порту 8080.
 EXPOSE 8080
 
-# Команда, которая будет выполнена при запуске контейнера.
 ENTRYPOINT ["java", "-jar", "app.jar"]

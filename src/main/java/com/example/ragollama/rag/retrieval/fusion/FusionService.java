@@ -1,4 +1,4 @@
-package com.example.ragollama.rag.domain.retrieval;
+package com.example.ragollama.rag.retrieval.fusion;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 /**
  * Сервис, реализующий слияние результатов из различных источников поиска
  * с использованием алгоритма Reciprocal Rank Fusion (RRF).
+ * <p>
  * RRF позволяет эффективно объединять ранжированные списки, не требуя
  * нормализации оценок релевантности, что делает его идеальным для гибридного поиска.
  */

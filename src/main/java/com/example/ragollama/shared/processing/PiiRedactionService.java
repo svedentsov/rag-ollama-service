@@ -1,4 +1,4 @@
-package com.example.ragollama.shared.security;
+package com.example.ragollama.shared.processing;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -15,8 +15,8 @@ import java.util.stream.Collectors;
 /**
  * Сервис, отвечающий за обнаружение и маскирование персональных данных (PII)
  * и секретов в тексте.
- * <p>
- * Сервис использует набор настраиваемых регулярных выражений, которые
+ * *
+ * <p>Сервис использует набор настраиваемых регулярных выражений, которые
  * загружаются из {@code application.yml}. Это позволяет гибко управлять
  * правилами безопасности без изменения кода.
  */

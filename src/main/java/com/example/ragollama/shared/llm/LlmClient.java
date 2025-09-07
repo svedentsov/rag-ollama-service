@@ -10,8 +10,6 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.ollama.api.OllamaOptions;
 import org.springframework.core.task.AsyncTaskExecutor;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
@@ -42,7 +40,7 @@ public class LlmClient {
      */
     public CompletableFuture<String> callChat(Prompt prompt, ModelCapability capability) {
         return CompletableFuture.supplyAsync(() -> {
-            String username = getAuthenticatedUsername();
+            String username = "anonymous_user";
             int promptTokens = tokenizationService.countTokens(prompt.getContents());
             if (quotaService.isQuotaExceeded(username, promptTokens)) {
                 throw new QuotaExceededException("Месячный лимит токенов исчерпан.");
@@ -69,7 +67,7 @@ public class LlmClient {
      * @return {@link Flux} с текстовыми частями ответа от LLM.
      */
     public Flux<String> streamChat(Prompt prompt, ModelCapability capability) {
-        String username = getAuthenticatedUsername();
+        String username = "anonymous_user";
         int promptTokens = tokenizationService.countTokens(prompt.getContents());
         if (quotaService.isQuotaExceeded(username, promptTokens)) {
             return Flux.error(new QuotaExceededException("Месячный лимит токенов исчерпан."));
@@ -80,14 +78,6 @@ public class LlmClient {
             OllamaOptions options = buildOptions(modelName);
             return llmGateway.stream(prompt, options);
         }).map(chatResponse -> chatResponse.getResult().getOutput().getText());
-    }
-
-    private String getAuthenticatedUsername() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.isAuthenticated()) {
-            return authentication.getName();
-        }
-        return "system_user";
     }
 
     private OllamaOptions buildOptions(String modelName) {

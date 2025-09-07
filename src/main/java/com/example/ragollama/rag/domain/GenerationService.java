@@ -7,7 +7,7 @@ import com.example.ragollama.rag.domain.model.SourceCitation;
 import com.example.ragollama.shared.exception.GenerationException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
-import com.example.ragollama.shared.security.PiiRedactionService;
+import com.example.ragollama.shared.processing.PiiRedactionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;

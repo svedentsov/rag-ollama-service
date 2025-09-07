@@ -4,10 +4,13 @@ import com.example.ragollama.orchestration.OrchestrationService;
 import com.example.ragollama.orchestration.dto.UniversalRequest;
 import com.example.ragollama.orchestration.dto.UniversalResponse;
 import com.example.ragollama.orchestration.dto.UniversalSyncResponse;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,20 +23,16 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Универсальный контроллер, являющийся единой точкой входа для всех
  * интерактивных запросов к AI-системе.
- * <p>
- * Этот контроллер реализует паттерн "Фасад" на уровне API, скрывая
- * внутреннюю сложность системы от клиента. Он принимает все запросы
- * в унифицированном формате {@link UniversalRequest} и делегирует их
- * обработку {@link OrchestrationService}, который использует Router Agent
- * для выбора подходящего конвейера обработки.
  */
 @RestController
 @RequestMapping("/api/v1/orchestrator")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "Universal AI Orchestrator", description = "Единый API для взаимодействия с системой (RAG, Chat, Agents)")
 public class UniversalController {
 
     private final OrchestrationService orchestrationService;
+    private final ObjectMapper objectMapper; // Добавляем ObjectMapper для сериализации
 
     /**
      * Обрабатывает любой пользовательский запрос и возвращает полный ответ после его генерации.
@@ -42,8 +41,7 @@ public class UniversalController {
      * @return {@link CompletableFuture} с полным, агрегированным ответом {@link UniversalSyncResponse}.
      */
     @PostMapping("/ask")
-    @Operation(summary = "Универсальный синхронный эндпоинт (полный ответ)",
-            description = "Отправляет запрос AI-оркестратору и ожидает полный ответ в виде единого JSON-объекта.")
+    @Operation(summary = "Универсальный синхронный эндпоинт (полный ответ)")
     public CompletableFuture<UniversalSyncResponse> ask(@Valid @RequestBody UniversalRequest request) {
         return orchestrationService.processSync(request);
     }
@@ -52,12 +50,34 @@ public class UniversalController {
      * Обрабатывает любой пользовательский запрос в потоковом режиме (Server-Sent Events).
      *
      * @param request Унифицированный DTO с запросом от пользователя.
-     * @return Реактивный поток {@link Flux} со структурированными событиями.
+     * @return Реактивный поток {@link Flux} со строками в формате SSE.
      */
     @PostMapping(value = "/ask-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    @Operation(summary = "Универсальный потоковый эндпоинт (SSE)",
-            description = "Отправляет запрос AI-оркестратору и получает ответ в виде потока SSE. Система сама определяет, как обработать запрос (RAG, чат, генерация кода).")
-    public Flux<UniversalResponse> askStream(@Valid @RequestBody UniversalRequest request) {
-        return orchestrationService.processStream(request);
+    @Operation(summary = "Универсальный потоковый эндпоинт (SSE)")
+    public Flux<String> askStream(@Valid @RequestBody UniversalRequest request) {
+        return orchestrationService.processStream(request)
+                .map(this::formatAsSse);
+    }
+
+    /**
+     * Сериализует объект ответа в строку и форматирует ее в соответствии
+     * со спецификацией Server-Sent Events.
+     *
+     * @param response Объект для отправки.
+     * @return Строка в формате "data: {...}\n\n".
+     */
+    private String formatAsSse(UniversalResponse response) {
+        try {
+            String json = objectMapper.writeValueAsString(response);
+            return "data: " + json + "\n\n";
+        } catch (JsonProcessingException e) {
+            log.error("Не удалось сериализовать SSE-событие в JSON", e);
+            try {
+                String errorJson = objectMapper.writeValueAsString(new UniversalResponse.Error("Ошибка сериализации на сервере"));
+                return "data: " + errorJson + "\n\n";
+            } catch (JsonProcessingException ex) {
+                return "data: {\"type\":\"error\",\"message\":\"Критическая ошибка сериализации\"}\n\n";
+            }
+        }
     }
 }

@@ -1,6 +1,6 @@
 package com.example.ragollama.rag.postprocessing;
 
-import com.example.ragollama.monitoring.AuditLoggingService;
+import com.example.ragollama.monitoring.AuditLoggingService.AuditLoggingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;

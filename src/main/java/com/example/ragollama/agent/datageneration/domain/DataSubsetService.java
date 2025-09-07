@@ -1,6 +1,6 @@
 package com.example.ragollama.agent.datageneration.domain;
 
-import com.example.ragollama.shared.security.PiiRedactionService;
+import com.example.ragollama.shared.processing.PiiRedactionService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;

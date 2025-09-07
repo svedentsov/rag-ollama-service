@@ -4,7 +4,6 @@ import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.ToolAgent;
 import com.example.ragollama.agent.accessibility.model.AccessibilityReport;
-import com.example.ragollama.agent.accessibility.model.AccessibilityViolation;
 import com.example.ragollama.agent.accessibility.tools.AccessibilityScannerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,7 +11,6 @@ import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -25,8 +23,8 @@ import java.util.concurrent.CompletableFuture;
  *     <li>Детерминированный поиск нарушений с помощью {@link AccessibilityScannerService}.</li>
  *     <li>Интеллектуальный анализ и обогащение найденных нарушений с помощью {@link LlmAccessibilityAnalyzer}.</li>
  * </ol>
- * <p>
- * Такая декомпозиция значительно повышает тестируемость и читаемость кода, изолируя
+ *
+ * <p>Такая декомпозиция значительно повышает тестируемость и читаемость кода, изолируя
  * бизнес-логику от деталей реализации взаимодействия с LLM.
  */
 @Slf4j
@@ -47,6 +45,8 @@ public class AccessibilityAuditorAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
+     *
+     * @return Уникальное имя агента.
      */
     @Override
     public String getName() {
@@ -55,6 +55,8 @@ public class AccessibilityAuditorAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
+     *
+     * @return Человекочитаемое описание назначения агента.
      */
     @Override
     public String getDescription() {
@@ -63,6 +65,9 @@ public class AccessibilityAuditorAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
+     *
+     * @param context Контекст выполнения, который должен содержать `htmlContent`.
+     * @return {@code true}, если контекст содержит необходимый ключ.
      */
     @Override
     public boolean canHandle(AgentContext context) {

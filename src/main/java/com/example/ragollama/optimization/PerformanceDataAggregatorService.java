@@ -3,8 +3,8 @@ package com.example.ragollama.optimization;
 import com.example.ragollama.evaluation.RagEvaluationService;
 import com.example.ragollama.evaluation.model.EvaluationResult;
 import com.example.ragollama.ingestion.IngestionProperties;
-import com.example.ragollama.monitoring.domain.FeedbackLogRepository;
 import com.example.ragollama.monitoring.KnowledgeGapRepository;
+import com.example.ragollama.monitoring.domain.FeedbackLogRepository;
 import com.example.ragollama.rag.retrieval.RetrievalProperties;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +15,7 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 
 /**
  * Сервис-агрегатор, собирающий все данные, необходимые для работы
@@ -43,13 +44,14 @@ public class PerformanceDataAggregatorService {
             List<String> recentNegativeFeedback,
             List<String> recentKnowledgeGaps,
             Map<String, Object> currentConfig
-    ) {}
+    ) {
+    }
 
     /**
      * Асинхронно собирает полный снимок производительности системы.
      *
      * @return {@link CompletableFuture}, который по завершении будет содержать
-     *         объект {@link PerformanceSnapshot}.
+     * объект {@link PerformanceSnapshot}.
      */
     public CompletableFuture<PerformanceSnapshot> aggregatePerformanceData() {
         Mono<EvaluationResult> evalMono = evaluationService.evaluate();
@@ -67,18 +69,19 @@ public class PerformanceDataAggregatorService {
                         .toList());
 
         // Когда все данные собраны, конструируем финальный объект
-        return evalMono.toFuture().thenCombine(feedbackFuture, (evalResult, feedback) ->
-                gapsFuture.thenApply(gaps ->
-                        PerformanceSnapshot.builder()
-                                .evaluationResult(evalResult)
-                                .recentNegativeFeedback(feedback)
-                                .recentKnowledgeGaps(gaps)
-                                .currentConfig(Map.of(
-                                        "retrieval", retrievalProperties,
-                                        "ingestion", ingestionProperties
-                                ))
-                                .build()
-                )
-        ).thenCompose(snapshot -> snapshot);
+        return evalMono.toFuture()
+                .thenCombine(feedbackFuture, (evalResult, feedback) ->
+                        gapsFuture.thenApply(gaps ->
+                                PerformanceSnapshot.builder()
+                                        .evaluationResult(evalResult)
+                                        .recentNegativeFeedback(feedback)
+                                        .recentKnowledgeGaps(gaps)
+                                        .currentConfig(Map.of(
+                                                "retrieval", retrievalProperties,
+                                                "ingestion", ingestionProperties
+                                        ))
+                                        .build()
+                        )
+                ).thenCompose(Function.identity());
     }
 }
