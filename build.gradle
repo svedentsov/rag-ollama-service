@@ -36,8 +36,6 @@ ext {
     commonsMathVersion = '3.6.1'
     awaitilityVersion = '4.2.1'
     lombokMapstructBindingVersion = '0.2.0'
-    javaxJaxbApiVersion = '2.3.1'
-    glassfishJaxbRuntimeVersion = '2.3.3'
     djlVersion = '0.27.0'
 }
 
@@ -66,7 +64,6 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-amqp'
     implementation 'org.springframework.boot:spring-boot-starter-freemarker'
     implementation 'org.springframework.boot:spring-boot-starter-data-neo4j'
-    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
     // --- HTTP Client for WebClient ---
     implementation 'io.projectreactor.netty:reactor-netty-http'
@@ -112,11 +109,9 @@ dependencies {
     implementation "com.microsoft.playwright:playwright:${playwrightVersion}"
     implementation "org.apache.commons:commons-math3:${commonsMathVersion}"
 
-    // --- JAXB APIs for Java 11+ ---
+    // --- JAXB APIs for Java 11+ (Unified to Jakarta) ---
     implementation "jakarta.xml.bind:jakarta.xml.bind-api:${jakartaXmlBindVersion}"
     runtimeOnly "org.glassfish.jaxb:jaxb-runtime:${glassfishJaxbVersion}"
-    runtimeOnly "javax.xml.bind:jaxb-api:${javaxJaxbApiVersion}"
-    runtimeOnly "org.glassfish.jaxb:jaxb-runtime:${glassfishJaxbRuntimeVersion}"
 
     // --- Testing ---
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

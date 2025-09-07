@@ -52,7 +52,7 @@ spring:
     enabled: true
     locations: classpath:db/migration # Путь к SQL-миграциям.
   cache:
-    type: redis
+    type: simple
     cache-names:
       - vector_search_results # Кэш для результатов RAG-поиска.
       - token_counts # Кэш для подсчета токенов.
@@ -61,10 +61,6 @@ spring:
     caffeine:
       # Общие настройки для всех кэшей. Для кэша сессий задаем время жизни.
       spec: "maximumSize=500,expireAfterAccess=30m"
-  data: # Эта секция предоставляет "адрес" Redis-сервера.
-    redis:
-      host: localhost # Для локального запуска. При запуске в Docker Compose это значение будет 'redis'.
-      port: 6379
 
   # --- RabbitMQ Configuration ---
   rabbitmq:

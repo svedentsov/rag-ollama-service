@@ -1,5 +1,6 @@
 package com.example.ragollama.shared.llm;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -18,10 +19,10 @@ import java.util.stream.Collectors;
 
 /**
  * Сервис-роутер, отвечающий за интеллектуальный выбор LLM для выполнения запроса.
- * <p>
- * Реализует логику отказоустойчивости на уровне моделей: если основная модель,
+ * <p> Реализует логику отказоустойчивости на уровне моделей: если основная модель,
  * настроенная для определенной возможности, недоступна, сервис автоматически
- * переключится на резервную (fallback) модель.
+ * переключится на резервную (fallback) модель. Это повышает общую надежность
+ * системы, делая ее менее чувствительной к временной недоступности отдельных моделей в Ollama.
  */
 @Slf4j
 @Service
@@ -33,9 +34,14 @@ public class LlmRouterService {
 
     /**
      * Выбирает наиболее подходящую и доступную модель для запроса.
+     * <p> Метод сначала пытается использовать основную модель, настроенную для
+     * требуемого уровня возможностей. Если она отсутствует в списке доступных
+     * моделей Ollama, предпринимается попытка использовать резервную модель.
+     * Если и она недоступна, выбрасывается исключение.
      *
-     * @param capability Требуемый уровень возможностей модели.
+     * @param capability Требуемый уровень возможностей модели (например, FAST, BALANCED).
      * @return Имя доступной модели для использования в запросе.
+     * @throws IllegalStateException если ни одна подходящая модель не найдена.
      */
     public String getModelFor(ModelCapability capability) {
         String primaryModel = llmProperties.getModels().get(capability);
@@ -61,25 +67,48 @@ public class LlmRouterService {
 
     /**
      * Внутренний компонент для управления состоянием доступных моделей в Ollama.
+     * <p> Этот класс инкапсулирует логику взаимодействия с Ollama API для получения
+     * списка загруженных моделей. Результаты кэшируются для снижения нагрузки
+     * и повышения производительности.
      */
     @Service
     public static class OllamaModelManager {
         private final WebClient.Builder webClientBuilder;
         private final String ollamaBaseUrl;
+
         public OllamaModelManager(WebClient.Builder webClientBuilder,
                                   @Value("${spring.ai.ollama.base-url}") String ollamaBaseUrl) {
             this.webClientBuilder = webClientBuilder;
             this.ollamaBaseUrl = ollamaBaseUrl;
         }
 
-        private record OllamaTagResponse(List<OllamaModel> models) {}
-        private record OllamaModel(String name) {}
+        /**
+         * DTO для десериализации корневого объекта ответа от Ollama /api/tags.
+         *
+         * @param models Список моделей.
+         */
+        private record OllamaTagResponse(List<OllamaModel> models) {
+        }
+
+        /**
+         * DTO для десериализации объекта одной модели.
+         * <p>Аннотация {@code @JsonIgnoreProperties(ignoreUnknown = true)} делает
+         * парсинг устойчивым к будущим изменениям в Ollama API, позволяя
+         * игнорировать новые, неизвестные нам поля.
+         *
+         * @param name Имя модели (например, 'llama3:latest').
+         */
+        @JsonIgnoreProperties(ignoreUnknown = true)
+        private record OllamaModel(String name) {
+        }
 
         /**
          * Получает список всех доступных (загруженных) моделей из Ollama.
-         * Результат кэшируется.
+         * <p> Результат кэшируется в кэше с именем 'ollama_available_models'.
+         * Кэш является синхронизированным, чтобы предотвратить множественные
+         * одновременные запросы к Ollama API при старте или при истечении TTL.
          *
-         * @return Множество имен доступных моделей.
+         * @return Множество имен доступных моделей без тега ':latest'.
          */
         @Cacheable(value = "ollama_available_models", sync = true)
         public Set<String> getAvailableModels() {
@@ -109,12 +138,19 @@ public class LlmRouterService {
 
     /**
      * Типобезопасная конфигурация для маппинга возможностей на имена моделей.
+     * Загружает настройки из {@code application.yml} с префиксом {@code app.llm}.
      */
     @Getter
     @Setter
     @ConfigurationProperties(prefix = "app.llm")
     public static class LlmProperties {
+        /**
+         * Имя резервной модели, которая будет использоваться, если основная недоступна.
+         */
         private String fallbackModel;
+        /**
+         * Карта, сопоставляющая абстрактные возможности с конкретными именами моделей.
+         */
         private Map<ModelCapability, String> models;
     }
 }
