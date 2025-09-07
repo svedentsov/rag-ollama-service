@@ -265,6 +265,18 @@ app:
     queue-capacity: 100
     thread-name-prefix: "app-async-"
 
+  llm-executor: # Конфигурация для выделенного пула потоков LLM
+    core-pool-size: 8 # Больше потоков, т.к. операции долгие
+    max-pool-size: 32
+    queue-capacity: 200
+    thread-name-prefix: "llm-async-"
+
+  db-executor: # Конфигурация для выделенного пула потоков БД
+    core-pool-size: 2 # Меньше потоков, т.к. операции быстрые
+    max-pool-size: 8
+    queue-capacity: 50
+    thread-name-prefix: "db-async-"
+
   vector-store: # Настройки для векторного хранилища (pgvector)
     # Параметры HNSW-индекса для тюнинга производительности и точности.
     # Изменять с осторожностью, требуется профилирование.

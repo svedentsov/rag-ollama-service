@@ -21,12 +21,13 @@ public class LlmUsageTracker {
 
     /**
      * Асинхронно сохраняет запись об использовании LLM.
-     * Выполняется в отдельном потоке, чтобы не замедлять ответ пользователю.
+     * Выполняется в выделенном пуле потоков для баз данных, чтобы не конкурировать
+     * с долгими вызовами LLM.
      *
      * @param modelName Имя использованной модели.
      * @param response  Объект ответа от LLM, содержащий метаданные об использовании.
      */
-    @Async("applicationTaskExecutor")
+    @Async("databaseTaskExecutor")
     @Transactional
     public void trackUsage(String modelName, LlmResponse response) {
         Usage usage = response.usage();

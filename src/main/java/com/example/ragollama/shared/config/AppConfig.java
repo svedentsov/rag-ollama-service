@@ -28,10 +28,6 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Основной конфигурационный класс приложения.
- * <p>В этой версии конфигурация пула потоков дополнена {@link TaskDecorator}
- * для автоматического проброса контекста логирования (MDC) в асинхронные задачи,
- * что обеспечивает сквозную трассировку по `requestId`. Также WebClient настраивается
- * с кастомным ObjectMapper.
  */
 @Configuration
 @RequiredArgsConstructor
@@ -51,8 +47,7 @@ public class AppConfig {
 
     /**
      * Создает и настраивает основной, переиспользуемый строитель для {@link WebClient}.
-     *
-     * <p>Эта конфигурация является центральной точкой для всех HTTP-взаимодействий. Она
+     * <p> Эта конфигурация является центральной точкой для всех HTTP-взаимодействий. Она
      * устанавливает таймауты, пулы соединений и использует кастомный {@link ObjectMapper},
      * что обеспечивает консистентность и надежность всех внешних вызовов.
      *
@@ -77,21 +72,49 @@ public class AppConfig {
     }
 
     /**
-     * Создает единый пул потоков для всех асинхронных задач с поддержкой MDC.
-     * <p>Базовый {@link ThreadPoolTaskExecutor} оборачивается в декоратор, который
-     * гарантирует, что контекст логирования {@code MDC} будет автоматически передан
-     * из вызывающего потока в поток, выполняющий задачу.
+     * Создает основной пул потоков для общих фоновых задач.
      *
-     * @return Сконфигурированный и безопасный для логирования {@link AsyncTaskExecutor}.
+     * @return Сконфигурированный {@link AsyncTaskExecutor}.
      */
     @Bean
+    @Primary
     public AsyncTaskExecutor applicationTaskExecutor() {
-        final var executorProps = appProperties.taskExecutor();
+        return createExecutor(appProperties.taskExecutor(), "app-async-");
+    }
+
+    /**
+     * Создает выделенный пул потоков для долгих I/O-операций с LLM.
+     *
+     * @return Изолированный {@link AsyncTaskExecutor} для LLM.
+     */
+    @Bean
+    public AsyncTaskExecutor llmTaskExecutor() {
+        return createExecutor(appProperties.llmExecutor(), "llm-async-");
+    }
+
+    /**
+     * Создает выделенный пул потоков для быстрых I/O-операций с базой данных.
+     *
+     * @return Изолированный {@link AsyncTaskExecutor} для БД.
+     */
+    @Bean
+    public AsyncTaskExecutor databaseTaskExecutor() {
+        return createExecutor(appProperties.dbExecutor(), "db-async-");
+    }
+
+    /**
+     * Вспомогательный метод для создания и конфигурации {@link ThreadPoolTaskExecutor}.
+     *
+     * @param props  Конфигурация пула.
+     * @param prefix Префикс для имен потоков.
+     * @return Готовый к использованию {@link AsyncTaskExecutor}.
+     */
+    private AsyncTaskExecutor createExecutor(AppProperties.TaskExecutor props, String prefix) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(executorProps.corePoolSize());
-        executor.setMaxPoolSize(executorProps.maxPoolSize());
-        executor.setQueueCapacity(executorProps.queueCapacity());
-        executor.setThreadNamePrefix(executorProps.threadNamePrefix());
+        executor.setCorePoolSize(props.corePoolSize());
+        executor.setMaxPoolSize(props.maxPoolSize());
+        executor.setQueueCapacity(props.queueCapacity());
+        executor.setThreadNamePrefix(prefix);
         executor.setTaskDecorator(new MdcTaskDecorator());
         executor.initialize();
         return executor;
