@@ -41,7 +41,7 @@ public class AccessibilityReportParser {
         try {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
             AccessibilityReport summaryReport = objectMapper.readValue(cleanedJson, AccessibilityReport.class);
-            // Объединяем обогащенные данные от LLM с исходными "сырыми" данными
+            log.debug("JSON-ответ от LLM успешно распарсен и объединен с {} исходными нарушениями.", rawViolations.size());
             return new AccessibilityReport(summaryReport.summary(), summaryReport.topRecommendations(), rawViolations);
         } catch (JsonProcessingException e) {
             log.error("Не удалось распарсить JSON-ответ от a11y LLM: {}", jsonResponse, e);

@@ -59,7 +59,7 @@ public class LlmAccessibilityAnalyzer {
         try {
             String violationsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(violations);
             String promptString = promptService.render("accessibilityAudit", Map.of("violationsJson", violationsJson));
-
+            log.debug("Отправка запроса к LLM для анализа {} нарушений доступности.", violations.size());
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                     .thenApply(llmResponse -> reportParser.parse(llmResponse, violations));
         } catch (JsonProcessingException e) {

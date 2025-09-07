@@ -4,6 +4,7 @@ import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.accessibility.api.dto.AccessibilityAuditResponse;
 import com.example.ragollama.agent.accessibility.domain.AccessibilityAuditorAgent;
 import com.example.ragollama.agent.accessibility.model.AccessibilityReport;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
@@ -24,6 +25,7 @@ import java.util.Optional;
  * (например, для логирования) в конец конвейера.
  */
 @Component
+@Slf4j
 public class AccessibilityMapper {
 
     /**
@@ -44,6 +46,7 @@ public class AccessibilityMapper {
      *                               на нарушение контракта или ошибку в конвейере.
      */
     public AccessibilityAuditResponse toResponseDto(List<AgentResult> agentResults) {
+        log.debug("Маппинг {} результатов конвейера в AccessibilityAuditResponse DTO.", agentResults != null ? agentResults.size() : 0);
         return Optional.ofNullable(agentResults)
                 .orElse(Collections.emptyList())
                 .reversed() // Java 21 feature: creates a reversed-order view of the List
@@ -55,7 +58,13 @@ public class AccessibilityMapper {
                 .filter(AccessibilityReport.class::isInstance)
                 .map(AccessibilityReport.class::cast)
                 .findFirst() // Находим первый попавшийся, идя с конца
-                .map(AccessibilityAuditResponse::new)
-                .orElseThrow(() -> new IllegalStateException("Нарушение контракта: результат конвейера не содержит ожидаемый AccessibilityReport."));
+                .map(report -> {
+                    log.info("AccessibilityReport успешно найден в результатах конвейера для маппинга.");
+                    return new AccessibilityAuditResponse(report);
+                })
+                .orElseThrow(() -> {
+                    log.error("Контракт нарушен: в результатах конвейера не найден AccessibilityReport по ключу '{}'", AccessibilityAuditorAgent.ACCESSIBILITY_REPORT_KEY);
+                    return new IllegalStateException("Нарушение контракта: результат конвейера не содержит ожидаемый AccessibilityReport.");
+                });
     }
 }

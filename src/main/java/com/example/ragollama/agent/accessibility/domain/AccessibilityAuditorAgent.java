@@ -91,7 +91,7 @@ public class AccessibilityAuditorAgent implements ToolAgent {
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String htmlContent = (String) context.payload().get("htmlContent");
-
+        log.info("Запуск аудита доступности для HTML-контента...");
         // Шаг 1: Асинхронный детерминированный поиск нарушений.
         return CompletableFuture.supplyAsync(() -> scannerService.scan(htmlContent), applicationTaskExecutor)
                 .thenComposeAsync(violations -> {
@@ -113,6 +113,7 @@ public class AccessibilityAuditorAgent implements ToolAgent {
      * @return Результат работы агента.
      */
     private AgentResult createSuccessResultWithReport(AccessibilityReport report) {
+        log.info("Аудит доступности успешно завершен. Резюме: {}", report.summary());
         return new AgentResult(
                 getName(),
                 AgentResult.Status.SUCCESS,
