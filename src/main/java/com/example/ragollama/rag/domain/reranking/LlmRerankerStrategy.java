@@ -23,10 +23,10 @@ import java.util.stream.Collectors;
 
 /**
  * Стратегия переранжирования, использующая LLM для оценки релевантности.
- * <p>Принимает список документов-кандидатов и использует языковую модель
+ * <p> Принимает список документов-кандидатов и использует языковую модель
  * для их оценки и сортировки в порядке убывания релевантности
  * относительно исходного запроса.
- * <p>Активируется свойством {@code app.reranking.strategies.llm.enabled=true}.
+ * <p> Активируется свойством {@code app.reranking.strategies.llm.enabled=true}.
  */
 @Slf4j
 @Component
@@ -44,6 +44,10 @@ public class LlmRerankerStrategy implements RerankingStrategy {
 
     /**
      * {@inheritDoc}
+     *
+     * @param documents     Список документов для обработки.
+     * @param originalQuery Оригинальный запрос пользователя.
+     * @return Список документов с обновленными метаданными.
      */
     @Override
     public List<Document> apply(List<Document> documents, String originalQuery) {

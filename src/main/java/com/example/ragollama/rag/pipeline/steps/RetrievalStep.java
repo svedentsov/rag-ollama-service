@@ -11,9 +11,14 @@ import reactor.core.publisher.Mono;
 
 /**
  * Шаг RAG-конвейера, отвечающий за извлечение (Retrieval) документов.
+ * <p> Этот шаг инкапсулирует логику гибридного поиска, комбинируя семантический
+ * и полнотекстовый поиск для достижения оптимального баланса точности и полноты.
+ * Он делегирует выполнение конкретной стратегии {@link HybridRetrievalStrategy}.
+ *
+ * @see HybridRetrievalStrategy
  */
 @Component
-@Order(20) // Выполняется после обработки запроса
+@Order(20) // Выполняется после обработки запроса (10)
 @RequiredArgsConstructor
 @Slf4j
 public class RetrievalStep implements RagPipelineStep {
@@ -22,6 +27,9 @@ public class RetrievalStep implements RagPipelineStep {
 
     /**
      * {@inheritDoc}
+     *
+     * @param context Текущий контекст выполнения, содержащий обработанные запросы.
+     * @return {@link Mono} с обновленным контекстом, обогащенным списком извлеченных документов.
      */
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
