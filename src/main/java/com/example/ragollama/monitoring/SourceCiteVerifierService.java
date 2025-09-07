@@ -52,7 +52,7 @@ public class SourceCiteVerifierService {
                         doc.getMetadata().get("source"), doc.getText()))
                 .collect(Collectors.joining("\n\n"));
 
-        String promptString = promptService.render("sourceCiteVerifier", Map.of(
+        String promptString = promptService.render("sourceCiteVerifierPrompt", Map.of(
                 "context", contextAsString,
                 "answer", generatedAnswer
         ));

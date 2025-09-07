@@ -55,7 +55,7 @@ public class SecurityLogAnalyzerAgent implements ToolAgent {
             return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Логи для анализа не предоставлены.", Map.of("logAnalysisFindings", List.of())));
         }
 
-        String promptString = promptService.render("securityLogAnalyzer", Map.of("application_logs", logs));
+        String promptString = promptService.render("securityLogAnalyzerPrompt", Map.of("application_logs", logs));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(this::parseLlmResponse)

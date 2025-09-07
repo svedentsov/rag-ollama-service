@@ -78,7 +78,7 @@ public class BugReportSummarizerAgent implements ToolAgent {
         String rawReportText = (String) context.payload().get("rawReportText");
         log.info("BugReportSummarizerAgent: запуск анализа для сырого отчета.");
 
-        String promptString = promptService.render("bugReportSummarizer", Map.of("rawReport", rawReportText));
+        String promptString = promptService.render("bugReportSummarizerPrompt", Map.of("rawReport", rawReportText));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(this::parseLlmResponse)

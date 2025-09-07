@@ -68,7 +68,7 @@ public class ReleaseNotesWriterAgent implements ToolAgent {
 
             // Шаг 2: Формируем промпт и вызываем LLM
             String commitLog = String.join("\n", commitMessages);
-            String promptString = promptService.render("releaseNotesWriter", Map.of("commitMessages", commitLog));
+            String promptString = promptService.render("releaseNotesWriterPrompt", Map.of("commitMessages", commitLog));
 
             return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
                     .map(releaseNotes -> new AgentResult(

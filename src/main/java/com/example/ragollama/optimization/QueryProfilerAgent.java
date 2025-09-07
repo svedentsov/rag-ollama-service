@@ -22,8 +22,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * AI-агент, который выполняет быстрый семантический анализ (профилирование)
  * пользовательского запроса для определения оптимальной RAG-стратегии.
- * <p>
- * Он действует как "входной классификатор", который предоставляет метаданные
+ * <p>Он действует как "входной классификатор", который предоставляет метаданные
  * о запросе для вышестоящего оркестратора.
  */
 @Slf4j
@@ -61,11 +60,13 @@ public class QueryProfilerAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
+     *
+     * @param context
      */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String query = (String) context.payload().get("query");
-        String promptString = promptService.render("queryProfiler", Map.of("query", query));
+        String promptString = promptService.render("queryProfilerPrompt", Map.of("query", query));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.FAST)
                 .thenApply(this::parseLlmResponse)

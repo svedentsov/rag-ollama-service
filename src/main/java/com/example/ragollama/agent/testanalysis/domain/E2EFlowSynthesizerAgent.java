@@ -75,7 +75,7 @@ public class E2EFlowSynthesizerAgent implements ToolAgent {
                             .map(Document::getText)
                             .collect(Collectors.joining("\n---\n"));
 
-                    String promptString = promptService.render("e2eFlowSynthesizer", Map.of(
+                    String promptString = promptService.render("e2eFlowSynthesizerPrompt", Map.of(
                             "user_story", userStory,
                             "context", contextAsString.isBlank() ? "Контекст не найден." : contextAsString
                     ));

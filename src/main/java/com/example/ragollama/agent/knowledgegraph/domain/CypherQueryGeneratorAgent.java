@@ -60,7 +60,7 @@ public class CypherQueryGeneratorAgent implements ToolAgent {
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String question = (String) context.payload().get("question");
 
-        String promptString = promptService.render("cypherQueryGenerator", Map.of(
+        String promptString = promptService.render("cypherQueryGeneratorPrompt", Map.of(
                 "graph_schema", GRAPH_SCHEMA,
                 "question", question
         ));

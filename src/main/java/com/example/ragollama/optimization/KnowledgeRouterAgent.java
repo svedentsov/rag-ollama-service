@@ -75,7 +75,7 @@ public class KnowledgeRouterAgent implements ToolAgent {
                 .map(d -> String.format("- %s: %s", d.name(), d.description()))
                 .collect(Collectors.joining("\n"));
 
-        String promptString = promptService.render("knowledgeRouter", Map.of(
+        String promptString = promptService.render("knowledgeRouterPrompt", Map.of(
                 "query", query,
                 "domains", domainsForPrompt
         ));

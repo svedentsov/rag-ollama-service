@@ -72,7 +72,7 @@ public class TestVerifierAgent implements ToolAgent {
         String testCode = (String) context.payload().get("testCode");
         log.info("TestVerifierAgent: запуск анализа для предоставленного кода теста.");
 
-        String promptString = promptService.render("testVerifier", Map.of("testCode", testCode));
+        String promptString = promptService.render("testVerifierPrompt", Map.of("testCode", testCode));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(this::parseLlmResponse)

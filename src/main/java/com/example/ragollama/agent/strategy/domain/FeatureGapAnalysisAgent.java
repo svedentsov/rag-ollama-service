@@ -74,7 +74,7 @@ public class FeatureGapAnalysisAgent implements ToolAgent {
         // Шаг 2: Когда оба списка фичей готовы, передаем их на финальный анализ
         return Mono.zip(ourFeaturesMono, competitorFeaturesMono)
                 .flatMap(tuple -> {
-                    String promptString = promptService.render("featureGapAnalysis", Map.of(
+                    String promptString = promptService.render("featureGapAnalysisPrompt", Map.of(
                             "our_features_json", tuple.getT1(),
                             "competitor_features_json", tuple.getT2()
                     ));
@@ -110,7 +110,7 @@ public class FeatureGapAnalysisAgent implements ToolAgent {
      * @return {@link Mono} со строкой, содержащей JSON-массив фичей.
      */
     private Mono<String> extractFeaturesFromText(String text) {
-        String promptString = promptService.render("featureExtraction", Map.of("context", text));
+        String promptString = promptService.render("featureExtractionPrompt", Map.of("context", text));
         return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED));
     }
 

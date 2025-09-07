@@ -91,7 +91,7 @@ public class ImpactAnalyzerAgent implements ToolAgent {
             return Mono.just(List.of());
         }
 
-        String promptString = promptService.render("impactAnalysis", Map.of("code", code, "filePath", filePath));
+        String promptString = promptService.render("impactAnalysisPrompt", Map.of("code", code, "filePath", filePath));
         return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
                 .map(this::parseLlmResponse);
     }

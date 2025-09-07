@@ -75,7 +75,7 @@ public class PromptRefinementAgent implements ToolAgent {
 
         try {
             String analysisJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(analysis);
-            String promptString = promptService.render("promptRefinement", Map.of(
+            String promptString = promptService.render("promptRefinementPrompt", Map.of(
                     "analysis_json", analysisJson,
                     "prompt_name", targetPromptName,
                     "original_prompt", originalPrompt

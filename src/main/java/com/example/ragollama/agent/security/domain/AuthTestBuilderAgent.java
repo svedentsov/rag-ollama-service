@@ -80,7 +80,7 @@ public class AuthTestBuilderAgent implements ToolAgent {
         String testClassName = generateTestClassName(endpoint);
         String fileName = testClassName + ".java";
 
-        String promptString = promptService.render("authTestBuilder", Map.of(
+        String promptString = promptService.render("authTestBuilderPrompt", Map.of(
                 "testClassName", testClassName,
                 "endpointPath", endpoint.path(),
                 "httpMethod", endpoint.method().name(),

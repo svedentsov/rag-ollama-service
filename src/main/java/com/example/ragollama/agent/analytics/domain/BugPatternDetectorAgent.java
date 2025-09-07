@@ -106,7 +106,7 @@ public class BugPatternDetectorAgent implements ToolAgent {
             String clusterJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(
                     cluster.stream().map(doc -> Map.of("id", doc.getMetadata().get("documentId"), "content", doc.getText())).toList()
             );
-            String promptString = promptService.render("bugPatternDetector", Map.of("bug_cluster_json", clusterJson));
+            String promptString = promptService.render("bugPatternDetectorPrompt", Map.of("bug_cluster_json", clusterJson));
 
             return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
                     .map(this::parseLlmResponse);

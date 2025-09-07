@@ -79,7 +79,7 @@ public class CodeQualityImpactEstimatorAgent implements ToolAgent {
                     }
                     try {
                         String profilesJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(profiles);
-                        String promptString = promptService.render("codeQualityImpact", Map.of("riskDataJson", profilesJson));
+                        String promptString = promptService.render("codeQualityImpactPrompt", Map.of("riskDataJson", profilesJson));
                         return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
                                 .map(this::parseLlmResponse)
                                 .map(report -> new AgentResult(

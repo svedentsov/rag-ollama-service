@@ -61,7 +61,7 @@ public class CanaryDecisionOrchestratorAgent implements ToolAgent {
 
         try {
             String reportJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(report);
-            String promptString = promptService.render("canaryDecisionMaker", Map.of(
+            String promptString = promptService.render("canaryDecisionMakerPrompt", Map.of(
                     "canary_report_json", reportJson,
                     "decision_policy", policy
             ));

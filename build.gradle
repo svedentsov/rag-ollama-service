@@ -38,11 +38,13 @@ ext {
     lombokMapstructBindingVersion = '0.2.0'
     javaxJaxbApiVersion = '2.3.1'
     glassfishJaxbRuntimeVersion = '2.3.3'
+    djlVersion = '0.27.0'
 }
 
 repositories {
     mavenCentral()
     maven { url 'https://repo.spring.io/milestone' }
+    maven { url 'https://djl-ai.s3.amazonaws.com/mlrepo/repo/' }
 }
 
 dependencyManagement {
@@ -50,6 +52,7 @@ dependencyManagement {
         mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
         mavenBom "org.testcontainers:testcontainers-bom:${testcontainersVersion}"
         mavenBom "io.github.resilience4j:resilience4j-bom:${resilience4jVersion}"
+        mavenBom "ai.djl:bom:${djlVersion}"
     }
 }
 
@@ -59,11 +62,11 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    // implementation 'org.springframework.boot:spring-boot-starter-security' // УДАЛЕНО
     implementation 'org.springframework.boot:spring-boot-starter-aop'
     implementation 'org.springframework.boot:spring-boot-starter-amqp'
     implementation 'org.springframework.boot:spring-boot-starter-freemarker'
     implementation 'org.springframework.boot:spring-boot-starter-data-neo4j'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
     // --- HTTP Client for WebClient ---
     implementation 'io.projectreactor.netty:reactor-netty-http'
@@ -72,6 +75,10 @@ dependencies {
     implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
     implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
     implementation "com.knuddels:jtokkit:${jtokkitVersion}"
+
+    // --- Локальные ML модели для Reranking (Cross-Encoder) ---
+    implementation "ai.djl.pytorch:pytorch-engine:0.29.0"
+    implementation "ai.djl.huggingface:tokenizers:${djlVersion}"
 
     // --- Database & Persistence ---
     runtimeOnly "org.postgresql:postgresql:${postgresqlVersion}"

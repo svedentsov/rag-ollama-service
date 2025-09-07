@@ -65,7 +65,7 @@ public class ExplainerAgent implements ToolAgent {
 
         try {
             String contextAsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(technicalContext);
-            String promptString = promptService.render("explainerAgent", Map.of(
+            String promptString = promptService.render("explainerAgentPrompt", Map.of(
                     "userQuestion", userQuestion,
                     "technicalContextJson", contextAsJson
             ));

@@ -114,7 +114,7 @@ public class PerformanceBottleneckFinderAgent implements ToolAgent {
         // Для каждого найденного анти-паттерна, просим LLM дать оценку
         return Flux.fromIterable(antiPatterns)
                 .flatMap(pattern -> {
-                    String promptString = promptService.render("performanceBottleneck", Map.of(
+                    String promptString = promptService.render("performanceBottleneckPrompt", Map.of(
                             "filePath", filePath,
                             "antiPatternType", pattern.getType(),
                             "codeSnippet", pattern.getCodeSnippet()

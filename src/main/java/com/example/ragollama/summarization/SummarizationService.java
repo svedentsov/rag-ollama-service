@@ -41,7 +41,7 @@ public class SummarizationService {
         log.info("Запущена задача саммаризации...");
         String style = Objects.requireNonNullElse(options, new SummaryOptions(null)).style();
 
-        String promptString = promptService.render("summarization", Map.of(
+        String promptString = promptService.render("summarizationPrompt", Map.of(
                 "text", text,
                 "style", style
         ));

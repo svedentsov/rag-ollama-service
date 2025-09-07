@@ -54,7 +54,7 @@ public class TestMentorAgent implements ToolAgent {
         String requirements = (String) context.payload().get("requirementsText");
         String testCode = (String) context.payload().get("testCode");
 
-        String promptString = promptService.render("testMentorBot", Map.of(
+        String promptString = promptService.render("testMentorBotPrompt", Map.of(
                 "requirements", requirements,
                 "test_code", testCode
         ));

@@ -52,7 +52,7 @@ public class HierarchicalChecklistBuilderAgent implements ToolAgent {
         String goal = (String) context.payload().get("goal");
         String analysisJson = (String) context.payload().get("analysis_results_json");
 
-        String promptString = promptService.render("hierarchicalChecklistBuilder", Map.of(
+        String promptString = promptService.render("hierarchicalChecklistBuilderPrompt", Map.of(
                 "goal", goal,
                 "analysis_results_json", analysisJson
         ));

@@ -77,7 +77,7 @@ public class FeedbackToTestAgent implements ToolAgent {
                         .orElseThrow(() -> new ProcessingException("Контекст для feedbackId " + feedbackId + " не найден.")))
                 .thenCompose(feedbackContext -> {
                     // Шаг 2: Передать контекст в LLM для определения "истины".
-                    String promptString = promptService.render("feedbackToTest", Map.of(
+                    String promptString = promptService.render("feedbackToTestPrompt", Map.of(
                             "user_query", feedbackContext.originalQuery(),
                             "bad_ai_answer", feedbackContext.badAnswer(),
                             "user_comment", feedbackContext.userComment(),

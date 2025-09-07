@@ -51,7 +51,7 @@ public class TestDesignerAgent implements ToolAgent {
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String requirements = (String) context.payload().get("requirementsText");
-        String promptString = promptService.render("testDesigner", Map.of("requirements", requirements));
+        String promptString = promptService.render("testDesignerPrompt", Map.of("requirements", requirements));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(this::parseLlmResponse)

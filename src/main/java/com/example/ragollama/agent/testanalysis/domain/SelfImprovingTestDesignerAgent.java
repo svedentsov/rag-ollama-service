@@ -83,7 +83,7 @@ public class SelfImprovingTestDesignerAgent implements ToolAgent {
                 .map(Document::getText)
                 .collect(Collectors.joining("\n\n---\n\n"));
 
-        String promptString = promptService.render("selfImprovingTest", Map.of(
+        String promptString = promptService.render("selfImprovingTestPrompt", Map.of(
                 "classCode", classCode,
                 "methodName", methodName,
                 "examples", examplesAsString.isBlank() ? "Примеры не найдены." : examplesAsString

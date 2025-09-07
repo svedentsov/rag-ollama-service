@@ -104,7 +104,7 @@ public class AutonomousMaintenanceAgent implements QaAgent {
 
             try {
                 String reportsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(healthCheckResults);
-                String promptString = promptService.render("autonomousTriage", Map.of("reportsJson", reportsJson));
+                String promptString = promptService.render("autonomousTriagePrompt", Map.of("reportsJson", reportsJson));
 
                 return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                         .thenCompose(llmResponse -> {

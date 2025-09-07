@@ -49,7 +49,7 @@ public class ChartGeneratorAgent implements ToolAgent {
 
         try {
             String dataJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(summarizedData);
-            String promptString = promptService.render("chartGenerator", Map.of(
+            String promptString = promptService.render("chartGeneratorPrompt", Map.of(
                     "chart_type", chartType,
                     "data_json", dataJson
             ));

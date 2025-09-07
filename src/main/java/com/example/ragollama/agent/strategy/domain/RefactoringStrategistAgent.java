@@ -66,7 +66,7 @@ public class RefactoringStrategistAgent implements ToolAgent {
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         try {
             String reportsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(context.payload());
-            String promptString = promptService.render("refactoringStrategist", Map.of("health_reports_json", reportsJson));
+            String promptString = promptService.render("refactoringStrategistPrompt", Map.of("health_reports_json", reportsJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                     .thenApply(this::parseLlmResponse)

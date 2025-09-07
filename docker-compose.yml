@@ -6,7 +6,6 @@ services:
 
   # Сервис Spring Boot приложения (Бэкенд)
   rag-app:
-    # Собираем образ из Dockerfile в корне проекта
     build:
       context: .
       dockerfile: Dockerfile
@@ -19,8 +18,9 @@ services:
       - SPRING_AI_OLLAMA_BASE_URL=http://ollama:11434
       - SPRING_RABBITMQ_HOST=rabbitmq
       - APP_INTEGRATIONS_NEO4J_URI=bolt://neo4j:7687
+      - SPRING_DATA_REDIS_HOST=redis
     depends_on:
-      # Запускаем приложение только после того, как базы данных и Ollama будут "здоровы"
+      # Запускаем приложение только после того, как все зависимости будут "здоровы"
       postgres:
         condition: service_healthy
       ollama:
@@ -28,6 +28,8 @@ services:
       rabbitmq:
         condition: service_healthy
       neo4j:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
     networks:
@@ -116,6 +118,25 @@ services:
     networks:
       - rag-net
 
+  # ===================================================================
+  # Redis для распределенного кэширования
+  # ===================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rag-net
+
 # Определение именованных томов
 volumes:
   postgres-data:
@@ -125,6 +146,8 @@ volumes:
   rabbitmq-data:
     driver: local
   neo4j-data:
+    driver: local
+  redis-data:
     driver: local
 
 # Определение сетей

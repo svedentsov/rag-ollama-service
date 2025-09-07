@@ -67,7 +67,7 @@ public class DifferentiallyPrivateDataAgent implements ToolAgent {
                 .thenCompose(profiles -> {
                     try {
                         String privateProfileJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(profiles.getValue());
-                        String promptString = promptService.render("dpSyntheticDataGenerator", Map.of(
+                        String promptString = promptService.render("dpSyntheticDataGeneratorPrompt", Map.of(
                                 "private_profile_json", privateProfileJson,
                                 "record_count", count
                         ));

@@ -83,7 +83,7 @@ public class CanaryAnalyzerAgent implements ToolAgent {
         // Шаг 2: Вызов LLM для интерпретации и принятия решения
         try {
             String statsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(statisticalResults);
-            String promptString = promptService.render("canaryAnalysis", Map.of("statistical_results_json", statsJson));
+            String promptString = promptService.render("canaryAnalysisPrompt", Map.of("statistical_results_json", statsJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                     .thenApply(llmResponse -> parseAndCombine(llmResponse, statisticalResults))

@@ -68,7 +68,7 @@ public class FederatedInsightsAgent implements QaAgent {
                     }
                     try {
                         String summariesJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(healthSummaries);
-                        String promptString = promptService.render("federatedInsights", Map.of("healthDataJson", summariesJson));
+                        String promptString = promptService.render("federatedInsightsPrompt", Map.of("healthDataJson", summariesJson));
 
                         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                                 .thenApply(summary -> {

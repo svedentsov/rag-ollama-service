@@ -67,7 +67,7 @@ public class TestSmellRefactorerAgent implements ToolAgent {
         String testCode = (String) context.payload().get("testCode");
         log.info("TestSmellRefactorerAgent: запуск анализа и рефакторинга кода...");
 
-        String promptString = promptService.render("testSmellRefactorer", Map.of("testCode", testCode));
+        String promptString = promptService.render("testSmellRefactorerPrompt", Map.of("testCode", testCode));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(this::parseLlmResponse)

@@ -74,7 +74,7 @@ public class TestDebtAnalyzerAgent implements ToolAgent {
                     // Шаг 3: Используем LLM для генерации резюме
                     try {
                         String debtJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(allItems);
-                        String promptString = promptService.render("testDebtSummary", Map.of("debtItemsJson", debtJson));
+                        String promptString = promptService.render("testDebtSummaryPrompt", Map.of("debtItemsJson", debtJson));
                         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                                 .thenApply(summary -> {
                                     TestDebtReport report = new TestDebtReport(summary, allItems);

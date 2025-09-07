@@ -55,7 +55,7 @@ public class FuzzingTestGeneratorAgent implements ToolAgent {
         try {
             String rbacJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(rbacRules);
             String personasJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(personas);
-            String promptString = promptService.render("fuzzingTestGenerator", Map.of(
+            String promptString = promptService.render("fuzzingTestGeneratorPrompt", Map.of(
                     "rbac_rules_json", rbacJson,
                     "personas_json", personasJson
             ));

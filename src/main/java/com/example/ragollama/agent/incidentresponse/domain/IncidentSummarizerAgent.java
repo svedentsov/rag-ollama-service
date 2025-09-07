@@ -65,7 +65,7 @@ public class IncidentSummarizerAgent implements ToolAgent {
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         try {
             String contextJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(context.payload());
-            String promptString = promptService.render("incidentSummarizer", Map.of("incident_context_json", contextJson));
+            String promptString = promptService.render("incidentSummarizerPrompt", Map.of("incident_context_json", contextJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                     .thenApply(this::parseLlmResponse)

@@ -21,8 +21,7 @@ import java.util.Map;
 
 /**
  * AI-агент, отвечающий за планирование.
- * <p>
- * Преобразует задачу на естественном языке в структурированный,
+ * <p>Преобразует задачу на естественном языке в структурированный,
  * пошаговый план выполнения, используя доступные инструменты (других агентов).
  * Является stateless-компонентом, который выполняет чистую функцию
  * трансформации "запрос -> план".
@@ -53,7 +52,7 @@ public class PlanningAgentService {
             return Mono.error(new ProcessingException("Ошибка подготовки контекста для планировщика.", e));
         }
 
-        String promptString = promptService.render("planningAgent", Map.of(
+        String promptString = promptService.render("planningAgentPromptPrompt", Map.of(
                 "task", taskDescription,
                 "tools", availableToolsJson,
                 "context", contextAsJson

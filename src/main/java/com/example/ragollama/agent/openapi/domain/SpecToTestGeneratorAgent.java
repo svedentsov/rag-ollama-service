@@ -63,7 +63,7 @@ public class SpecToTestGeneratorAgent implements ToolAgent {
             ));
         }
 
-        String promptString = promptService.render("specToTest", Map.of("endpointDetails", endpointDetails.get()));
+        String promptString = promptService.render("specToTestPrompt", Map.of("endpointDetails", endpointDetails.get()));
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(generatedCode -> new AgentResult(
                         getName(),

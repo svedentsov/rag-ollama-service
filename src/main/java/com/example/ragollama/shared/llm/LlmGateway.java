@@ -7,9 +7,10 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 /**
- * Определяет контракт для низкоуровневого шлюза к языковой модели.
- * <p>Эта версия возвращает полный объект {@link ChatResponse} от Spring AI,
- * чтобы вышестоящие слои могли извлечь метаданные об использовании.
+ * Определяет низкоуровневый контракт для прямого взаимодействия с LLM.
+ * <p>Этот интерфейс является абстракцией, скрывающей конкретную реализацию
+ * (например, Spring AI ChatClient), и возвращает полный объект {@link ChatResponse}
+ * для доступа к метаданным (например, usage).
  */
 public interface LlmGateway {
 
@@ -17,7 +18,7 @@ public interface LlmGateway {
      * Выполняет не-потоковый вызов к LLM.
      *
      * @param prompt  Промпт для отправки.
-     * @param options Опции, специфичные для модели (например, имя модели, температура).
+     * @param options Опции, специфичные для модели (имя модели, температура и т.д.).
      * @return {@link Mono}, который по завершении будет содержать полный ответ от Spring AI.
      */
     Mono<ChatResponse> call(Prompt prompt, OllamaOptions options);

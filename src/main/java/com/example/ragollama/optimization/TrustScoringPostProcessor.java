@@ -62,7 +62,7 @@ public class TrustScoringPostProcessor implements RagPostProcessor {
                         doc.getMetadata().get("source"), doc.getText()))
                 .collect(Collectors.joining("\n\n"));
 
-        String promptString = promptService.render("trustScorer", Map.of(
+        String promptString = promptService.render("trustScorerPrompt", Map.of(
                 "context", contextAsString,
                 "question", context.originalQuery(),
                 "answer", context.response().answer()

@@ -13,8 +13,8 @@ import java.util.Map;
 
 /**
  * Сервис, реализующий логику "Router Agent".
- * <p>
- * Его единственная задача — быстро классифицировать запрос пользователя,
+ * *
+ * <p>Его единственная задача — быстро классифицировать запрос пользователя,
  * определив его намерение (intent). Для этого используется легковесная LLM
  * и специализированный промпт, что обеспечивает минимальную задержку.
  * Результат работы этого сервиса используется {@link com.example.ragollama.orchestration.OrchestrationService}
@@ -35,7 +35,7 @@ public class RouterAgentService {
      * @return {@link Mono}, который по завершении будет содержать определенный {@link QueryIntent}.
      */
     public Mono<QueryIntent> route(String query) {
-        String promptString = promptService.render("routerAgent", Map.of("query", query));
+        String promptString = promptService.render("routerAgentPrompt", Map.of("query", query));
         Prompt prompt = new Prompt(promptString);
 
         return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FAST))

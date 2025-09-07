@@ -53,7 +53,7 @@ public class ReleaseDecisionAgent implements ToolAgent {
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         try {
             String reportsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(context.payload());
-            String promptString = promptService.render("releaseDecision", Map.of("reports_json", reportsJson));
+            String promptString = promptService.render("releaseDecisionPrompt", Map.of("reports_json", reportsJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                     .thenApply(this::parseLlmResponse)

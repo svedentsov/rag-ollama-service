@@ -56,7 +56,7 @@ public class EngineeringVelocityGovernorAgent implements ToolAgent {
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         try {
             String metricsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(context.payload());
-            String promptString = promptService.render("engineeringVelocityGovernor", Map.of("metrics_json", metricsJson));
+            String promptString = promptService.render("engineeringVelocityGovernorPrompt", Map.of("metrics_json", metricsJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                     .thenApply(this::parseLlmResponse)

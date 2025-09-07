@@ -65,7 +65,7 @@ public class ScaComplianceAgent implements ToolAgent {
         // Шаг 2: Вызов LLM для экспертной оценки на основе политики
         try {
             String dependenciesJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(dependencies);
-            String promptString = promptService.render("scaComplianceAgent", Map.of(
+            String promptString = promptService.render("scaComplianceAgentPrompt", Map.of(
                     "LICENSE_POLICY", licensePolicy,
                     "DEPENDENCY_REPORT_JSON", dependenciesJson
             ));

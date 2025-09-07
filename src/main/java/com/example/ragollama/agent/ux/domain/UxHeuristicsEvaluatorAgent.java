@@ -51,7 +51,7 @@ public class UxHeuristicsEvaluatorAgent implements ToolAgent {
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String htmlContent = (String) context.payload().get("htmlContent");
 
-        String promptString = promptService.render("uxHeuristicsEvaluator", Map.of("html_content", htmlContent));
+        String promptString = promptService.render("uxHeuristicsEvaluatorPrompt", Map.of("html_content", htmlContent));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(this::parseLlmResponse)

@@ -28,7 +28,6 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Основной конфигурационный класс приложения.
- *
  * <p>В этой версии конфигурация пула потоков дополнена {@link TaskDecorator}
  * для автоматического проброса контекста логирования (MDC) в асинхронные задачи,
  * что обеспечивает сквозную трассировку по `requestId`. Также WebClient настраивается
@@ -79,7 +78,6 @@ public class AppConfig {
 
     /**
      * Создает единый пул потоков для всех асинхронных задач с поддержкой MDC.
-     *
      * <p>Базовый {@link ThreadPoolTaskExecutor} оборачивается в декоратор, который
      * гарантирует, что контекст логирования {@code MDC} будет автоматически передан
      * из вызывающего потока в поток, выполняющий задачу.
@@ -96,7 +94,6 @@ public class AppConfig {
         executor.setThreadNamePrefix(executorProps.threadNamePrefix());
         executor.setTaskDecorator(new MdcTaskDecorator());
         executor.initialize();
-        // УДАЛЕНО: Обертка DelegatingSecurityContextAsyncTaskExecutor больше не нужна.
         return executor;
     }
 

@@ -63,7 +63,7 @@ public class RagOptimizerAgent implements ToolAgent {
                     // Шаг 2: Передать данные в LLM для анализа и генерации рекомендаций.
                     try {
                         String snapshotJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(snapshot);
-                        String promptString = promptService.render("ragOptimizer", Map.of("performance_snapshot_json", snapshotJson));
+                        String promptString = promptService.render("ragOptimizerPrompt", Map.of("performance_snapshot_json", snapshotJson));
 
                         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                                 .thenApply(this::parseLlmResponse)

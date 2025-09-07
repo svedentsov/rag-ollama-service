@@ -74,7 +74,7 @@ public class ArchConsistencyMapperAgent implements ToolAgent {
                     }
                     try {
                         String codeJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(filesContentMap);
-                        String promptString = promptService.render("archConsistencyMapper", Map.of(
+                        String promptString = promptService.render("archConsistencyMapperPrompt", Map.of(
                                 "architecture_principles", principles,
                                 "changed_code_json", codeJson
                         ));

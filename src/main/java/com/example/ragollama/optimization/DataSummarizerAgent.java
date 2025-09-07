@@ -50,7 +50,7 @@ public class DataSummarizerAgent implements ToolAgent {
 
         try {
             String dataJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(data);
-            String promptString = promptService.render("dataSummarizer", Map.of(
+            String promptString = promptService.render("dataSummarizerPrompt", Map.of(
                     "data_json", dataJson,
                     "instruction", instruction
             ));

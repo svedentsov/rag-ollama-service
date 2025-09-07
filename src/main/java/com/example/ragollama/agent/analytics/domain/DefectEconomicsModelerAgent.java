@@ -94,7 +94,7 @@ public class DefectEconomicsModelerAgent implements ToolAgent {
                     );
                     try {
                         String dossierJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(dossier);
-                        String promptString = promptService.render("defectEconomics", Map.of("dossierJson", dossierJson));
+                        String promptString = promptService.render("defectEconomicsPrompt", Map.of("dossierJson", dossierJson));
 
                         return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED));
                     } catch (JsonProcessingException e) {

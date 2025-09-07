@@ -69,7 +69,7 @@ public class ResourceAllocatorAgent implements ToolAgent {
 
         try {
             String metricsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(metrics);
-            String promptString = promptService.render("resourceAllocator", Map.of(
+            String promptString = promptService.render("resourceAllocatorPrompt", Map.of(
                     "metrics_json", metricsJson,
                     "current_config_yaml", currentConfig
             ));

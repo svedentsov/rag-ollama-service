@@ -55,7 +55,7 @@ public class TestCaseGeneratorAgent implements ToolAgent {
         String requirementsText = (String) context.payload().get("requirementsText");
         log.info("TestCaseGeneratorAgent: запуск генерации для требований.");
 
-        String promptString = promptService.render("testCaseGeneration", Map.of("requirements", requirementsText));
+        String promptString = promptService.render("testCaseGenerationPrompt", Map.of("requirements", requirementsText));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(this::parseLlmResponse)

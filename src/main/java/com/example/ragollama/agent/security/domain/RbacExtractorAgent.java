@@ -112,7 +112,7 @@ public class RbacExtractorAgent implements ToolAgent {
             return Mono.just(Collections.emptyList());
         }
 
-        String promptString = promptService.render("rbacExtractor", Map.of("code", code, "filePath", filePath));
+        String promptString = promptService.render("rbacExtractorPrompt", Map.of("code", code, "filePath", filePath));
         return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
                 .map(this::parseLlmResponse);
     }

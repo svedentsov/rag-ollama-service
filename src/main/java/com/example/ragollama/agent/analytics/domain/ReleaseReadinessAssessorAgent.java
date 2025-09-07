@@ -63,7 +63,7 @@ public class ReleaseReadinessAssessorAgent implements ToolAgent {
                     "stabilityReport", context.payload().get("flakinessReport")
             );
             String reportsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(reports);
-            String promptString = promptService.render("releaseReadiness", Map.of("reportsJson", reportsJson));
+            String promptString = promptService.render("releaseReadinessPrompt", Map.of("reportsJson", reportsJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                     .thenApply(this::parseLlmResponse)

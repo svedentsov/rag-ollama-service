@@ -75,7 +75,7 @@ public class PrioritizationAgent implements ToolAgent {
                     // Шаг 2: После получения данных, передаем их в LLM для анализа.
                     try {
                         String reportJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(healthReport);
-                        String promptString = promptService.render("prioritizationAgent", Map.of(
+                        String promptString = promptService.render("prioritizationAgentPrompt", Map.of(
                                 "sprint_goal", goal,
                                 "health_report_json", reportJson
                         ));

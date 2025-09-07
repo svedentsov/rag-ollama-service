@@ -53,7 +53,7 @@ public class PrReviewAggregatorAgent implements ToolAgent {
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         try {
             String analysisJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(context.payload());
-            String promptString = promptService.render("prReviewAggregator", Map.of("analysis_reports_json", analysisJson));
+            String promptString = promptService.render("prReviewAggregatorPrompt", Map.of("analysis_reports_json", analysisJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                     .thenApply(this::parseLlmResponse)

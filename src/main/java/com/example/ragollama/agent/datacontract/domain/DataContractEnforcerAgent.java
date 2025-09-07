@@ -64,7 +64,7 @@ public class DataContractEnforcerAgent implements ToolAgent {
         return Mono.zip(oldContentMono, newContentMono)
                 .flatMap(contents -> {
                     // Шаг 2: Передаем обе версии в LLM для сравнения
-                    String promptString = promptService.render("dataContractEnforcer", Map.of(
+                    String promptString = promptService.render("dataContractEnforcerPrompt", Map.of(
                             "old_dto_code", contents.getT1(),
                             "new_dto_code", contents.getT2()
                     ));

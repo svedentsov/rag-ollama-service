@@ -35,7 +35,7 @@ public class QueryTransformationAgent implements QueryEnhancementAgent {
     public Mono<List<String>> enhance(String originalQuery) {
         log.debug("QueryTransformationAgent: начало извлечения сущностей из запроса: '{}'", originalQuery);
 
-        String promptString = promptService.render("queryTransformation", Map.of("query", originalQuery));
+        String promptString = promptService.render("queryTransformationPrompt", Map.of("query", originalQuery));
 
         return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.FAST))
                 .map(llmResponse -> {

@@ -30,7 +30,7 @@ public class MultiQueryGeneratorAgent implements QueryEnhancementAgent {
 
     @Override
     public Mono<List<String>> enhance(String originalQuery) {
-        String promptString = promptService.render("multiQuery", Map.of("query", originalQuery));
+        String promptString = promptService.render("multiQueryPrompt", Map.of("query", originalQuery));
         Prompt prompt = new Prompt(promptString);
 
         return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FAST))

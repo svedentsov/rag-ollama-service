@@ -75,7 +75,7 @@ public class ContractTestGeneratorAgent implements ToolAgent {
             return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.FAILURE, endpointDetails, Map.of()));
         }
         // Шаг 2: Формируем промпт для LLM
-        String promptString = promptService.render("contractTestGenerator", Map.of("endpoint_details", endpointDetails));
+        String promptString = promptService.render("contractTestGeneratorPrompt", Map.of("endpoint_details", endpointDetails));
         // Шаг 3: Вызываем LLM для генерации кода
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(generatedCode -> {

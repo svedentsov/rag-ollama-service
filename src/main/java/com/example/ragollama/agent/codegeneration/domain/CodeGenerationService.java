@@ -36,7 +36,7 @@ public class CodeGenerationService {
      */
     public Mono<CodeGenerationResponse> generateCode(CodeGenerationRequest request) {
         log.info("CodeGenerationAgent: получен запрос на генерацию кода.");
-        String promptString = promptService.render("codeGeneration", Map.of(
+        String promptString = promptService.render("codeGenerationPrompt", Map.of(
                 "instruction", request.instruction(),
                 "context", request.context()
         ));

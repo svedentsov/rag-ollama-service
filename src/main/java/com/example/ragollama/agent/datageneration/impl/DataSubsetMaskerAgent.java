@@ -100,7 +100,7 @@ public class DataSubsetMaskerAgent implements ToolAgent {
      * Вызывает LLM для генерации SQL-запроса на основе схемы и цели.
      */
     private CompletableFuture<String> generateSql(String schema, String goal, int limit) {
-        String promptString = promptService.render("dataSubsetSqlGenerator", Map.of(
+        String promptString = promptService.render("dataSubsetSqlGeneratorPrompt", Map.of(
                 "table_schema", schema,
                 "goal", goal,
                 "limit", limit * 5 // Запрашиваем с запасом, чтобы потом обрезать

@@ -64,7 +64,7 @@ public class MlDriftGuardAgent implements ToolAgent {
                     // Шаг 2: Вызов LLM для интерпретации
                     try {
                         String statsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(statisticalResults);
-                        String promptString = promptService.render("mlDriftGuard", Map.of("statistical_report_json", statsJson));
+                        String promptString = promptService.render("mlDriftGuardPrompt", Map.of("statistical_report_json", statsJson));
 
                         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                                 .thenApply(this::parseLlmResponse)

@@ -57,7 +57,7 @@ public class AdversarialTesterAgent implements ToolAgent {
 
         try {
             String initialTestJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(initialTest);
-            String promptString = promptService.render("adversarialTester", Map.of(
+            String promptString = promptService.render("adversarialTesterPrompt", Map.of(
                     "requirements", requirements,
                     "initial_test_json", initialTestJson
             ));

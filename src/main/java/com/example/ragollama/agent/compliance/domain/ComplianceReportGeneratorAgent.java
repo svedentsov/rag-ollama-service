@@ -72,7 +72,7 @@ public class ComplianceReportGeneratorAgent implements ToolAgent {
             contextForPrompt.remove("jacocoReportContent"); // Если он там был
 
             String evidenceJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(contextForPrompt);
-            String promptString = promptService.render("complianceReportGenerator", Map.of("evidence_json", evidenceJson));
+            String promptString = promptService.render("complianceReportGeneratorPrompt", Map.of("evidence_json", evidenceJson));
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                     .thenApply(markdownReport -> new AgentResult(
                             getName(),

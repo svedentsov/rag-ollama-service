@@ -49,7 +49,7 @@ public class WorkflowPlannerAgent {
             return Mono.error(new ProcessingException("Ошибка подготовки контекста для Workflow-планировщика.", e));
         }
 
-        String promptString = promptService.render("workflowPlanner", Map.of(
+        String promptString = promptService.render("workflowPlannerPrompt", Map.of(
                 "goal", goal,
                 "tools", availableToolsJson,
                 "context", contextAsJson

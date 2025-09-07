@@ -69,7 +69,7 @@ public class StrategicInitiativePlannerAgent implements ToolAgent {
 
         try {
             String reportJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(federatedReport);
-            String promptString = promptService.render("strategicInitiativePlanner", Map.of("federated_report_json", reportJson));
+            String promptString = promptService.render("strategicInitiativePlannerPrompt", Map.of("federated_report_json", reportJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                     .thenApply(this::parseLlmResponse)

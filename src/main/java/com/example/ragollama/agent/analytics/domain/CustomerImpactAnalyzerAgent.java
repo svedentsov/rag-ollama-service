@@ -63,7 +63,7 @@ public class CustomerImpactAnalyzerAgent implements ToolAgent {
         // Получаем diff и коммиты, затем передаем в LLM
         return gitApiClient.getDiff(oldRef, newRef)
                 .flatMap(diff -> {
-                    String promptString = promptService.render("customerImpactAnalyzer", Map.of(
+                    String promptString = promptService.render("customerImpactAnalyzerPrompt", Map.of(
                             "codeDiff", diff.isBlank() ? "Изменений в коде не найдено." : diff
                     ));
                     return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED));

@@ -66,7 +66,7 @@ public class BugReproScriptGeneratorAgent implements ToolAgent {
         BugReportSummary summary = (BugReportSummary) context.payload().get("bugReportSummary");
         log.info("BugReproScriptGeneratorAgent: запуск генерации скрипта для '{}'", summary.title());
 
-        String promptString = promptService.render("bugReproScriptGenerator", Map.of("summary", summary));
+        String promptString = promptService.render("bugReproScriptGeneratorPrompt", Map.of("summary", summary));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(generatedCode -> new AgentResult(

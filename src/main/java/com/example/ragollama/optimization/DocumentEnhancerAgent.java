@@ -68,7 +68,7 @@ public class DocumentEnhancerAgent implements ToolAgent {
         if (fullText.isBlank()) {
             return Mono.just("SKIPPED (empty content)");
         }
-        String promptString = promptService.render("documentEnhancer", Map.of("document_text", fullText));
+        String promptString = promptService.render("documentEnhancerPrompt", Map.of("document_text", fullText));
 
         return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
                 .map(this::parseLlmResponse)

@@ -58,15 +58,13 @@ public class ExperimentAnalysisAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     * <p>
-     * Выполняет безопасное извлечение данных из контекста, проверяя их тип,
+     * <p>Выполняет безопасное извлечение данных из контекста, проверяя их тип,
      * а затем передает их в LLM для финального анализа и вынесения вердикта.
      */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         Object resultsObject = context.payload().get("experimentResults");
 
-        // Безопасное приведение типа для устранения unchecked cast warning
         if (!(resultsObject instanceof Map)) {
             String errorMessage = "Ошибка контракта: ExperimentAnalysisAgent ожидал Map в 'experimentResults', но получил " +
                     (resultsObject == null ? "null" : resultsObject.getClass().getName());
@@ -79,7 +77,7 @@ public class ExperimentAnalysisAgent implements ToolAgent {
 
         try {
             String resultsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(results);
-            String promptString = promptService.render("experimentAnalyzer", Map.of("results_json", resultsJson));
+            String promptString = promptService.render("experimentAnalyzerPrompt", Map.of("results_json", resultsJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                     .thenApply(this::parseLlmResponse)

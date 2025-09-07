@@ -1,8 +1,9 @@
-package com.example.ragollama.agent.analytics.domain;
+package com.example.ragollama.agent.testanalysis.domain;
 
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.ToolAgent;
+import com.example.ragollama.agent.analytics.domain.AnalyticsService.DailyTestMetrics;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
@@ -28,7 +29,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TestMetricsAnalyzerAgent implements ToolAgent {
 
-    private final AnalyticsService analyticsService;
+    private final com.example.ragollama.agent.analytics.domain.AnalyticsService analyticsService;
     private final LlmClient llmClient;
     private final PromptService promptService;
 
@@ -62,7 +63,7 @@ public class TestMetricsAnalyzerAgent implements ToolAgent {
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         Integer days = (Integer) context.payload().get("days");
-        List<AnalyticsService.DailyTestMetrics> metrics = analyticsService.getDailyTestMetrics(days);
+        List<DailyTestMetrics> metrics = analyticsService.getDailyTestMetrics(days);
 
         if (metrics.isEmpty()) {
             return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Нет данных для анализа за указанный период.", Map.of()));
@@ -74,7 +75,7 @@ public class TestMetricsAnalyzerAgent implements ToolAgent {
                         m.date(), m.totalFailures(), m.totalTests(), m.passRate()))
                 .collect(Collectors.joining("\n"));
 
-        String promptString = promptService.render("testTrendAnalyzer", Map.of("days", days, "metricsData", dataForLlm));
+        String promptString = promptService.render("testTrendAnalyzerPrompt", Map.of("days", days, "metricsData", dataForLlm));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(analysis -> new AgentResult(

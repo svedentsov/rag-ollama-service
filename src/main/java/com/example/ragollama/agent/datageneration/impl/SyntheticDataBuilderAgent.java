@@ -56,7 +56,7 @@ public class SyntheticDataBuilderAgent implements ToolAgent {
 
         log.info("SyntheticDataBuilderAgent: запуск генерации {} мок-объектов.", count);
 
-        String promptString = promptService.render("syntheticDataBuilder", Map.of(
+        String promptString = promptService.render("syntheticDataBuilderPrompt", Map.of(
                 "classDefinition", classDefinition,
                 "count", count
         ));

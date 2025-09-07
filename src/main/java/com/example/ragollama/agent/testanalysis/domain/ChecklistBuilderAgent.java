@@ -59,7 +59,7 @@ public class ChecklistBuilderAgent implements ToolAgent {
             contextForPrompt.remove("buildFileContent");
 
             String analysisJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(contextForPrompt);
-            String promptString = promptService.render("checklistBuilder", Map.of(
+            String promptString = promptService.render("checklistBuilderPrompt", Map.of(
                     "goal", goal,
                     "analysis_results_json", analysisJson
             ));

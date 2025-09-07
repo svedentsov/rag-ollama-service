@@ -99,7 +99,7 @@ public class TestCaseDeduplicationService {
      * @return {@link Mono} с результатом {@link DeduplicationResult}, если это дубликат, или пустой Mono.
      */
     private Mono<DeduplicationResult> verifyIsDuplicate(String sourceContent, Document candidate) {
-        String promptString = promptService.render("testCaseDeduplication", Map.of(
+        String promptString = promptService.render("testCaseDeduplicationPrompt", Map.of(
                 "test_case_A", sourceContent,
                 "test_case_B", candidate.getText()
         ));

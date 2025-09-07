@@ -51,7 +51,7 @@ public class BugAnalysisService {
                 .flatMap(candidateDocs -> {
                     // Шаг 2: Сформировать специализированный промпт
                     String contextBugs = formatCandidatesForPrompt(candidateDocs);
-                    String promptString = promptService.render("bugAnalysis", Map.of(
+                    String promptString = promptService.render("bugAnalysisPrompt", Map.of(
                             "draft_report", draftDescription,
                             "context_bugs", contextBugs
                     ));

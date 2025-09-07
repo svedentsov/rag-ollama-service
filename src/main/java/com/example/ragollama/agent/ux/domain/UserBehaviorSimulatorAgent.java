@@ -75,7 +75,7 @@ public class UserBehaviorSimulatorAgent implements ToolAgent {
         }
 
         String dom = playwright.getDom();
-        String promptString = promptService.render("userBehaviorSimulator", Map.of(
+        String promptString = promptService.render("userBehaviorSimulatorPrompt", Map.of(
                 "goal", goal, "history", history, "current_dom", dom
         ));
 

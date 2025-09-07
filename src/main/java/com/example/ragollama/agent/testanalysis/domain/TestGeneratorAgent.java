@@ -74,7 +74,7 @@ public class TestGeneratorAgent implements ToolAgent {
     }
 
     private Mono<GeneratedTestFile> generateTestForMethod(String fullClassCode, String methodName) {
-        String promptString = promptService.render("testGenerator", Map.of(
+        String promptString = promptService.render("testGeneratorPrompt", Map.of(
                 "classCode", fullClassCode,
                 "methodName", methodName
         ));

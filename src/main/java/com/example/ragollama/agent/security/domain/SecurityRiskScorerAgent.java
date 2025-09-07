@@ -77,7 +77,7 @@ public class SecurityRiskScorerAgent implements ToolAgent {
                         String filesJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(filesContentMap);
                         String rbacJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(rbacRules);
 
-                        String promptString = promptService.render("securityRiskScorer", Map.of(
+                        String promptString = promptService.render("securityRiskScorerPrompt", Map.of(
                                 "changedCode", filesJson,
                                 "rbacRules", rbacJson
                         ));

@@ -158,7 +158,7 @@ public class QaCopilotService {
 
         try {
             String resultsAsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(results);
-            String promptString = promptService.render("copilotResultSummarizer", Map.of(
+            String promptString = promptService.render("copilotResultSummarizerPrompt", Map.of(
                     "userQuery", userQuery,
                     "resultsJson", resultsAsJson
             ));

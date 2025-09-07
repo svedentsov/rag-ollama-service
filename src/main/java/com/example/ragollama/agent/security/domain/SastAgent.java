@@ -99,7 +99,7 @@ public class SastAgent implements ToolAgent {
         if (content == null || content.isBlank()) {
             return Mono.just(Collections.emptyList());
         }
-        String promptString = promptService.render("sastAgent", Map.of("filePath", filePath, "code", content));
+        String promptString = promptService.render("sastAgentPrompt", Map.of("filePath", filePath, "code", content));
         return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
                 .map(this::parseLlmResponse);
     }

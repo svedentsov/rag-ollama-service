@@ -44,7 +44,7 @@ public class HistorySummarizerAdvisor implements RagAdvisor {
                 .map(m -> m.getMessageType().getValue().toUpperCase() + ": " + m.getText())
                 .collect(Collectors.joining("\n"));
 
-        String promptString = promptService.render("historySummarizer", Map.of("chat_history", formattedHistory));
+        String promptString = promptService.render("historySummarizerPrompt", Map.of("chat_history", formattedHistory));
 
         return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.FAST))
                 .map(summary -> {

@@ -76,7 +76,7 @@ public class RegressionPredictorAgent implements ToolAgent {
             return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации данных для LLM", e));
         }
 
-        String promptString = promptService.render("regressionPredictor", Map.of("riskDataJson", dataForLlm));
+        String promptString = promptService.render("regressionPredictorPrompt", Map.of("riskDataJson", dataForLlm));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(this::parseLlmResponse)

@@ -78,7 +78,7 @@ public class ChecklistGeneratorAgent implements ToolAgent {
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String featureDescription = (String) context.payload().get(FEATURE_DESCRIPTION_KEY);
-        String promptString = promptService.render("checklistGenerator", Map.of("feature_description", featureDescription));
+        String promptString = promptService.render("checklistGeneratorPrompt", Map.of("feature_description", featureDescription));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(llmResponse -> {

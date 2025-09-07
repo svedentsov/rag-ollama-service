@@ -90,7 +90,7 @@ public class CrossValidatorAgent implements ToolAgent {
 
         try {
             String evidenceJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(allEvidence);
-            String promptString = promptService.render("crossValidator", Map.of(
+            String promptString = promptService.render("crossValidatorPrompt", Map.of(
                     "claim", claim,
                     "all_evidence_json", evidenceJson
             ));

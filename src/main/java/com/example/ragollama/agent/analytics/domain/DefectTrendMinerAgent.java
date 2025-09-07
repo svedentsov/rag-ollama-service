@@ -130,7 +130,7 @@ public class DefectTrendMinerAgent implements ToolAgent {
                 .map(defect -> String.format("ID: %s\nТекст: %s\n", defect.sourceName(), defect.content()))
                 .collect(Collectors.joining("---\n"));
 
-        String promptString = promptService.render("defectTrendAnalyzer", Map.of("defectsText", defectsText));
+        String promptString = promptService.render("defectTrendAnalyzerPrompt", Map.of("defectsText", defectsText));
 
         return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
                 .map(summaryJson -> {

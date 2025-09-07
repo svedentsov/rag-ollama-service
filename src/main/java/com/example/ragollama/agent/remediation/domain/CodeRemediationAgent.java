@@ -60,7 +60,7 @@ public class CodeRemediationAgent implements ToolAgent {
 
         return gitApiClient.getFileContent(filePath, ref)
                 .flatMap(fullCode -> {
-                    String promptString = promptService.render("codeRemediation", Map.of(
+                    String promptString = promptService.render("codeRemediationPrompt", Map.of(
                             "fullCode", fullCode,
                             "problemDescription", problemDescription,
                             "problemSnippet", codeSnippet != null ? codeSnippet : "N/A"

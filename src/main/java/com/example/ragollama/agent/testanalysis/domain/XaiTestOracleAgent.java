@@ -63,7 +63,7 @@ public class XaiTestOracleAgent implements ToolAgent {
 
         try {
             String testsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(generatedTests);
-            String promptString = promptService.render("xaiTestOracle", Map.of(
+            String promptString = promptService.render("xaiTestOraclePrompt", Map.of(
                     "requirements", requirements,
                     "generated_tests_json", testsJson
             ));

@@ -62,7 +62,7 @@ public class DataGeneratorAgent implements ToolAgent {
                     // Шаг 2: Передаем профиль в LLM для генерации данных
                     try {
                         String profileJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(sourceProfile);
-                        String promptString = promptService.render("dataGenerator", Map.of(
+                        String promptString = promptService.render("dataGeneratorPrompt", Map.of(
                                 "data_profile_json", profileJson,
                                 "record_count", count
                         ));

@@ -42,7 +42,7 @@ public class GroundingService {
             return;
         }
 
-        String promptString = promptService.render("grounding", Map.of("context", context, "answer", answer));
+        String promptString = promptService.render("groundingPrompt", Map.of("context", context, "answer", answer));
         CompletableFuture<String> verificationFuture = llmClient.callChat(new Prompt(promptString), ModelCapability.FAST);
 
         verificationFuture.thenAccept(response -> {

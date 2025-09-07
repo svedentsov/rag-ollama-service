@@ -79,7 +79,7 @@ public class RootCauseAnalyzerAgent implements ToolAgent {
                 .map(TestResult::failureDetails)
                 .orElse("Стек-трейс не найден.");
 
-        String promptString = promptService.render("rootCauseAnalysis", Map.of(
+        String promptString = promptService.render("rootCauseAnalysisPrompt", Map.of(
                 "failedTest", testToAnalyze,
                 "stackTrace", stackTrace,
                 "codeDiff", diff.isBlank() ? "Изменений в коде не найдено." : diff,

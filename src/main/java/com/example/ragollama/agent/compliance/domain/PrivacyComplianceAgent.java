@@ -72,7 +72,7 @@ public class PrivacyComplianceAgent implements ToolAgent {
                     }
                     try {
                         String codeJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(filesContentMap);
-                        String promptString = promptService.render("privacyComplianceChecker", Map.of(
+                        String promptString = promptService.render("privacyComplianceCheckerPrompt", Map.of(
                                 "privacy_policy", policy,
                                 "changed_code_json", codeJson
                         ));

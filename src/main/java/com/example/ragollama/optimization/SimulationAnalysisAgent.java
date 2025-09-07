@@ -46,7 +46,7 @@ public class SimulationAnalysisAgent implements ToolAgent {
         String goal = (String) context.payload().get("goal");
         try {
             String resultsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(context.payload());
-            String promptString = promptService.render("simulationAnalyzer", Map.of(
+            String promptString = promptService.render("simulationAnalyzerPrompt", Map.of(
                     "goal", goal,
                     "simulation_results_json", resultsJson
             ));

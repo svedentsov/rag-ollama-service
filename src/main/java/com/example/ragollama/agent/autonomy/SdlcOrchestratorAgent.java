@@ -64,7 +64,7 @@ public class SdlcOrchestratorAgent {
     public Mono<List<AgentResult>> execute(String highLevelGoal, AgentContext initialContext) {
         String capabilities = pipelineRegistry.getCapabilitiesCatalog();
 
-        String promptString = promptService.render("sdlcStrategy", Map.of(
+        String promptString = promptService.render("sdlcStrategyPrompt", Map.of(
                 "goal", highLevelGoal,
                 "pipelines", capabilities,
                 "context", initialContext.payload()

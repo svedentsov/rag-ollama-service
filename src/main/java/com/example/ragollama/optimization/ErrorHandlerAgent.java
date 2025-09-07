@@ -49,7 +49,7 @@ public class ErrorHandlerAgent implements ToolAgent {
 
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
-        String promptString = promptService.render("errorHandler", context.payload());
+        String promptString = promptService.render("errorHandlerPrompt", context.payload());
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(this::parseLlmResponse)
