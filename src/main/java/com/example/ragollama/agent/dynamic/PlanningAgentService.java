@@ -52,7 +52,7 @@ public class PlanningAgentService {
             return Mono.error(new ProcessingException("Ошибка подготовки контекста для планировщика.", e));
         }
 
-        String promptString = promptService.render("planningAgentPromptPrompt", Map.of(
+        String promptString = promptService.render("planningAgentPrompt", Map.of(
                 "task", taskDescription,
                 "tools", availableToolsJson,
                 "context", contextAsJson

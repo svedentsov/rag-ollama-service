@@ -1,6 +1,6 @@
 package com.example.ragollama.ingestion;
 
-import com.example.ragollama.ingestion.splitter.RecursiveTextSplitterStrategy;
+import com.example.ragollama.ingestion.splitter.DocumentSplitterStrategy;
 import com.example.ragollama.ingestion.splitter.SplitterConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,9 +13,14 @@ import java.util.stream.Collectors;
 
 /**
  * Сервис-оркестратор для интеллектуального разбиения текста на чанки.
- *
- * <p>Эта версия реализует паттерн "Стратегия" и обогащает каждый
- * созданный чанк уникальным, трассируемым идентификатором в формате
+ * <p>
+ * Эта версия реализует паттерн "Стратегия". Он содержит список всех
+ * доступных реализаций {@link DocumentSplitterStrategy}, отсортированных
+ * по приоритету. Для каждого документа он находит первую подходящую
+ * стратегию и делегирует ей задачу разделения.
+ * <p>
+ * Сервис также отвечает за централизованное обогащение каждого
+ * созданного чанка уникальным, трассируемым идентификатором в формате
  * {@code {original_document_id}:{chunk_index}}.
  */
 @Service
@@ -24,13 +29,9 @@ import java.util.stream.Collectors;
 public class TextSplitterService {
 
     private final IngestionProperties ingestionProperties;
-    private final RecursiveTextSplitterStrategy recursiveStrategy;
+    private final List<DocumentSplitterStrategy> strategies;
 
-    private static final List<String> DEFAULT_DELIMITERS = List.of(
-            "\n\n", // Параграфы
-            "\n",   // Новые строки
-            "(?<=[.!?])\\s+" // Предложения
-    );
+    private static final List<String> DEFAULT_DELIMITERS = List.of("\n\n", "\n", "(?<=[.!?])\\s+");
 
     /**
      * Разбивает один документ на список чанков, используя конфигурацию по умолчанию.
@@ -48,25 +49,32 @@ public class TextSplitterService {
     }
 
     /**
-     * Разбивает один документ на список чанков, используя кастомную конфигурацию.
+     * Разбивает один документ на список чанков, выбирая наиболее подходящую
+     * стратегию и используя кастомную конфигурацию.
      *
      * @param document Документ для обработки.
      * @param config   Кастомные параметры чанкинга.
      * @return Список документов-чанков, каждый с уникальным ID.
      */
     public List<Document> split(Document document, SplitterConfig config) {
-        log.debug("Запуск разделения документа '{}' со стратегией '{}'",
-                document.getMetadata().get("source"), recursiveStrategy.getClass().getSimpleName());
+        // Находим первую стратегию, которая поддерживает данный тип документа.
+        // Spring гарантирует, что список `strategies` отсортирован по @Order.
+        DocumentSplitterStrategy strategy = strategies.stream()
+                .filter(s -> s.supports(document))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Не найдена подходящая стратегия для документа. " +
+                        "Необходимо иметь как минимум одну fallback-стратегию."));
 
-        List<String> stringChunks = recursiveStrategy.split(document.getText(), config);
+        log.debug("Выбрана стратегия '{}' для документа '{}'",
+                strategy.getClass().getSimpleName(), document.getMetadata().get("source"));
+
+        List<Document> chunks = strategy.split(document, config);
         String originalDocId = (String) document.getMetadata().get("documentId");
         AtomicInteger chunkCounter = new AtomicInteger(0);
 
-        return stringChunks.stream()
-                .map(chunkText -> {
-                    // Создаем новый документ-чанк, наследуя метаданные
-                    Document chunkDoc = new Document(chunkText, document.getMetadata());
-                    // Генерируем и добавляем уникальный, трассируемый ID для чанка
+        // Централизованно присваиваем ID каждому чанку.
+        return chunks.stream()
+                .map(chunkDoc -> {
                     String chunkId = String.format("%s:%d", originalDocId, chunkCounter.getAndIncrement());
                     chunkDoc.getMetadata().put("chunkId", chunkId);
                     return chunkDoc;

@@ -2,6 +2,9 @@ package com.example.ragollama.ingestion.splitter;
 
 import com.example.ragollama.shared.tokenization.TokenizationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.ai.document.Document;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -10,28 +13,52 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Реализация {@link SplitterStrategy}, использующая рекурсивный подход
+ * Реализация {@link DocumentSplitterStrategy}, использующая рекурсивный подход
  * к разделению текста.
  * <p>
  * Стратегия последовательно применяет разделители из {@link SplitterConfig}
  * (от крупных к мелким), пытаясь создать чанки, которые максимально близки
  * к целевому размеру, не разрывая при этом семантически связанные части текста.
+ * <p>
+ * Эта стратегия имеет самый низкий приоритет и выступает в роли
+ * **fallback-механизма** для всех типов документов, для которых не нашлось
+ * более специфичной стратегии (например, для простого текста).
  */
 @Component
+@Order(Ordered.LOWEST_PRECEDENCE)
 @RequiredArgsConstructor
-public class RecursiveTextSplitterStrategy implements SplitterStrategy {
+public class RecursiveTextSplitterStrategy implements DocumentSplitterStrategy {
 
     private final TokenizationService tokenizationService;
 
     /**
      * {@inheritDoc}
+     *
+     * @param document Документ для проверки.
+     * @return Всегда {@code true}, так как это fallback-стратегия.
      */
     @Override
-    public List<String> split(String text, SplitterConfig config) {
-        if (text == null || text.isBlank()) {
+    public boolean supports(Document document) {
+        return true;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * @param document Исходный документ для разделения.
+     * @param config   Параметры, управляющие процессом разделения.
+     * @return Список документов-чанков.
+     */
+    @Override
+    public List<Document> split(Document document, SplitterConfig config) {
+        if (document.getText() == null || document.getText().isBlank()) {
             return Collections.emptyList();
         }
-        return splitRecursively(List.of(text), config.delimiters(), config);
+        List<String> textChunks = splitRecursively(List.of(document.getText()), config.delimiters(), config);
+
+        return textChunks.stream()
+                .map(chunkText -> new Document(chunkText, document.getMetadata()))
+                .toList();
     }
 
     /**
@@ -55,11 +82,8 @@ public class RecursiveTextSplitterStrategy implements SplitterStrategy {
                 finalChunks.add(text);
             } else {
                 if (delimiters.isEmpty()) {
-                    // Достигли последнего уровня рекурсии, но текст все еще слишком большой.
-                    // Принудительно делим его на части.
                     finalChunks.addAll(forceSplit(text, chunkSize));
                 } else {
-                    // Рекурсивный шаг: делим по следующему разделителю.
                     String nextDelimiter = delimiters.getFirst();
                     List<String> subTexts = Arrays.asList(text.split(nextDelimiter));
                     List<String> remainingDelimiters = delimiters.subList(1, delimiters.size());
@@ -89,7 +113,6 @@ public class RecursiveTextSplitterStrategy implements SplitterStrategy {
 
             if (currentTokens + fragmentTokens > config.chunkSize() && !currentChunk.isEmpty()) {
                 merged.add(currentChunk.toString().trim());
-                // Начинаем новый чанк с пересечением
                 sentenceBuffer = getOverlap(sentenceBuffer, config);
                 currentChunk = new StringBuilder(String.join(" ", sentenceBuffer));
             }
@@ -103,20 +126,12 @@ public class RecursiveTextSplitterStrategy implements SplitterStrategy {
         return merged;
     }
 
-    /**
-     * Оптимально получает пересечение из буфера предложений.
-     *
-     * @param buffer Буфер с фрагментами текста последнего чанка.
-     * @param config Конфигурация.
-     * @return Список фрагментов для пересечения.
-     */
     private List<String> getOverlap(List<String> buffer, SplitterConfig config) {
         if (buffer.isEmpty() || config.chunkOverlap() <= 0) {
             return new ArrayList<>();
         }
         int currentOverlapTokens = 0;
         int startIndex = -1;
-        // Идем с конца, чтобы найти начальный индекс для subList
         for (int i = buffer.size() - 1; i >= 0; i--) {
             String sentence = buffer.get(i);
             currentOverlapTokens += tokenizationService.countTokens(sentence);
@@ -125,17 +140,9 @@ public class RecursiveTextSplitterStrategy implements SplitterStrategy {
             }
             startIndex = i;
         }
-        if (startIndex == -1) {
-            return new ArrayList<>();
-        }
-        // subList работает очень эффективно (O(1))
-        return new ArrayList<>(buffer.subList(startIndex, buffer.size()));
+        return (startIndex == -1) ? new ArrayList<>() : new ArrayList<>(buffer.subList(startIndex, buffer.size()));
     }
 
-
-    /**
-     * Принудительно делит текст, если он превышает размер чанка даже после всех разделителей.
-     */
     private List<String> forceSplit(String text, int chunkSize) {
         List<String> chunks = new ArrayList<>();
         String remainingText = text;
