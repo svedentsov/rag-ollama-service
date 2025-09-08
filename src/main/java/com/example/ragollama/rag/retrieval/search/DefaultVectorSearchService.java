@@ -20,11 +20,6 @@ import java.util.List;
 /**
  * Базовая реализация {@link VectorSearchService}, отвечающая исключительно
  * за прямое взаимодействие с {@link VectorStore}.
- * <p>
- * Этот класс свободен от аннотаций кэширования, что делает его легко
- * тестируемым в изоляции и в интеграционных тестах с Testcontainers.
- * Он выполняет блокирующие вызовы к `VectorStore` в выделенном пуле потоков,
- * обеспечивая асинхронность на уровне сервиса.
  */
 @Slf4j
 @Service
@@ -35,9 +30,6 @@ public class DefaultVectorSearchService implements VectorSearchService {
     private final MetricService metricService;
     private final AsyncTaskExecutor applicationTaskExecutor;
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public Mono<List<Document>> search(List<String> queries, int topK, double similarityThreshold, Filter.Expression filter) {
         return Flux.fromIterable(queries)
@@ -52,20 +44,10 @@ public class DefaultVectorSearchService implements VectorSearchService {
                 .doOnError(e -> log.error("Ошибка во время параллельного векторного поиска.", e));
     }
 
-    /**
-     * Выполняет один поиск и оборачивает его в метрики и обработку ошибок.
-     *
-     * @param query     Текст запроса.
-     * @param topK      Количество документов.
-     * @param threshold Порог схожести.
-     * @param filter    Фильтр.
-     * @return Список найденных документов.
-     * @throws RetrievalException если произошла ошибка доступа к данным.
-     */
     private List<Document> performSingleSearch(String query, int topK, double threshold, Filter.Expression filter) {
         try {
             SearchRequest request = SearchRequest.builder()
-                    .query(query)
+                    .query("query: " + query)
                     .topK(topK)
                     .similarityThreshold(threshold)
                     .filterExpression(filter)

@@ -3,6 +3,7 @@ package com.example.ragollama.agent.git.domain;
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.ToolAgent;
+import com.example.ragollama.agent.Toolbox;
 import com.example.ragollama.agent.git.tools.GitApiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,7 @@ import java.util.concurrent.CompletableFuture;
  */
 @Slf4j
 @Component
+@Toolbox(name = "GitAnalysisTools", description = "Инструменты для анализа Git-репозиториев: поиск измененных файлов, коммитов, diff'ов.")
 @RequiredArgsConstructor
 public class GitInspectorAgent implements ToolAgent {
 

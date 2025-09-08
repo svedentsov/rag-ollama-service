@@ -7,21 +7,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 /**
  * Сервис-оркестратор для интеллектуального разбиения текста на чанки.
- * <p>
- * Эта версия реализует паттерн "Стратегия". Он содержит список всех
- * доступных реализаций {@link DocumentSplitterStrategy}, отсортированных
- * по приоритету. Для каждого документа он находит первую подходящую
- * стратегию и делегирует ей задачу разделения.
- * <p>
- * Сервис также отвечает за централизованное обогащение каждого
- * созданного чанка уникальным, трассируемым идентификатором в формате
- * {@code {original_document_id}:{chunk_index}}.
+ * Реализует стратегию "Small-to-Big" для улучшения качества контекста.
  */
 @Service
 @Slf4j
@@ -33,52 +27,56 @@ public class TextSplitterService {
 
     private static final List<String> DEFAULT_DELIMITERS = List.of("\n\n", "\n", "(?<=[.!?])\\s+");
 
-    /**
-     * Разбивает один документ на список чанков, используя конфигурацию по умолчанию.
-     *
-     * @param document Документ для обработки.
-     * @return Список документов-чанков, каждый с уникальным ID.
-     */
     public List<Document> split(Document document) {
-        SplitterConfig defaultConfig = new SplitterConfig(
-                ingestionProperties.chunking().defaultChunkSize(),
-                ingestionProperties.chunking().chunkOverlap(),
+        log.info("Применение стратегии Small-to-Big для документа: {}", document.getMetadata().get("source"));
+
+        // 1. Создаем родительские чанки
+        SplitterConfig parentConfig = new SplitterConfig(
+                ingestionProperties.chunking().defaultChunkSize() * 4,
+                ingestionProperties.chunking().chunkOverlap() * 2,
                 DEFAULT_DELIMITERS
         );
-        return split(document, defaultConfig);
-    }
+        List<Document> parentChunks = getStrategyFor(document).split(document, parentConfig);
 
-    /**
-     * Разбивает один документ на список чанков, выбирая наиболее подходящую
-     * стратегию и используя кастомную конфигурацию.
-     *
-     * @param document Документ для обработки.
-     * @param config   Кастомные параметры чанкинга.
-     * @return Список документов-чанков, каждый с уникальным ID.
-     */
-    public List<Document> split(Document document, SplitterConfig config) {
-        // Находим первую стратегию, которая поддерживает данный тип документа.
-        // Spring гарантирует, что список `strategies` отсортирован по @Order.
-        DocumentSplitterStrategy strategy = strategies.stream()
-                .filter(s -> s.supports(document))
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Не найдена подходящая стратегия для документа. " +
-                        "Необходимо иметь как минимум одну fallback-стратегию."));
-
-        log.debug("Выбрана стратегия '{}' для документа '{}'",
-                strategy.getClass().getSimpleName(), document.getMetadata().get("source"));
-
-        List<Document> chunks = strategy.split(document, config);
-        String originalDocId = (String) document.getMetadata().get("documentId");
+        List<Document> finalChildChunks = new ArrayList<>();
+        String originalDocumentId = (String) document.getMetadata().get("documentId");
         AtomicInteger chunkCounter = new AtomicInteger(0);
 
-        // Централизованно присваиваем ID каждому чанку.
-        return chunks.stream()
-                .map(chunkDoc -> {
-                    String chunkId = String.format("%s:%d", originalDocId, chunkCounter.getAndIncrement());
-                    chunkDoc.getMetadata().put("chunkId", chunkId);
-                    return chunkDoc;
-                })
-                .collect(Collectors.toList());
+        // 2. Для каждого родительского чанка создаем дочерние
+        for (Document parentChunk : parentChunks) {
+            SplitterConfig childConfig = new SplitterConfig(
+                    ingestionProperties.chunking().defaultChunkSize(),
+                    ingestionProperties.chunking().chunkOverlap(),
+                    DEFAULT_DELIMITERS
+            );
+            List<Document> childChunks = getStrategyFor(parentChunk).split(parentChunk, childConfig);
+
+            // 3. Обогащаем дочерние чанки метаданными
+            for (Document childChunk : childChunks) {
+                Map<String, Object> newMetadata = new java.util.HashMap<>(childChunk.getMetadata());
+
+                // Наш кастомный, трассируемый ID для цитирования
+                String customChunkId = String.format("%s:%d", originalDocumentId, chunkCounter.getAndIncrement());
+                newMetadata.put("chunkId", customChunkId);
+
+                // Убеждаемся, что documentId исходного документа сохранен в метаданных
+                newMetadata.put("documentId", originalDocumentId);
+
+                // FIX: Генерируем новый, валидный UUID для первичного ключа таблицы vector_store
+                String primaryKey = UUID.randomUUID().toString();
+
+                finalChildChunks.add(new Document(primaryKey, childChunk.getText(), newMetadata));
+            }
+        }
+
+        log.info("Создано {} дочерних чанков для документа '{}'", finalChildChunks.size(), document.getMetadata().get("source"));
+        return finalChildChunks;
+    }
+
+    private DocumentSplitterStrategy getStrategyFor(Document document) {
+        return strategies.stream()
+                .filter(s -> s.supports(document))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Не найдена подходящая стратегия для документа."));
     }
 }

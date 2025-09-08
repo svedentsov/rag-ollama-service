@@ -43,7 +43,6 @@ public class IndexOptimizerService {
             log.warn("Задача оптимизации индекса уже запущена. Пропуск текущего вызова.");
             return;
         }
-
         log.info("Начало задачи оптимизации индекса.");
         try {
             if (properties.getStaleDocumentDetection().isEnabled()) {
@@ -67,17 +66,14 @@ public class IndexOptimizerService {
         log.info("Запуск этапа очистки устаревших документов...");
         OffsetDateTime threshold = OffsetDateTime.now().minusDays(7);
         List<UUID> staleJobIds = documentJobRepository.findCompletedJobsBefore(threshold);
-
         if (staleJobIds.isEmpty()) {
             log.info("Устаревшие документы для удаления не найдены.");
             return;
         }
-
         log.warn("Обнаружено {} устаревших документов для удаления. IDs: {}",
                 staleJobIds.size(), staleJobIds.stream().map(UUID::toString).collect(Collectors.joining(", ")));
-
         for (UUID jobId : staleJobIds) {
-            int deletedChunks = vectorStoreRepository.deleteByDocumentId(jobId);
+            int deletedChunks = vectorStoreRepository.deleteByDocumentId(jobId.toString());
             documentJobRepository.deleteById(jobId);
             log.info("Удалено {} чанков для документа с Job ID: {}", deletedChunks, jobId);
         }

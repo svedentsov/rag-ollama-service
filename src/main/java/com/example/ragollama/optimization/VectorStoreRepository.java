@@ -4,8 +4,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import java.util.UUID;
-
 /**
  * Репозиторий для выполнения низкоуровневых операций с таблицей `vector_store`,
  * которые не покрываются стандартным интерфейсом {@link org.springframework.ai.vectorstore.VectorStore}.
@@ -27,11 +25,11 @@ public class VectorStoreRepository {
      * Использование оператора `->>` позволяет эффективно запрашивать
      * текстовые значения из JSON-поля.
      *
-     * @param documentId UUID задачи (`DocumentJob`), чанки которой нужно удалить.
+     * @param documentId Уникальный идентификатор документа, чанки которого нужно удалить.
      * @return Количество удаленных строк (чанков).
      */
-    public int deleteByDocumentId(UUID documentId) {
+    public int deleteByDocumentId(String documentId) {
         final String sql = "DELETE FROM vector_store WHERE metadata ->> 'documentId' = ?";
-        return jdbcTemplate.update(sql, documentId.toString());
+        return jdbcTemplate.update(sql, documentId);
     }
 }

@@ -45,25 +45,45 @@ public class DocumentEnhancerAgent implements ToolAgent {
 
     @Override
     public boolean canHandle(AgentContext context) {
-        return context.payload().containsKey("candidateIds");
+        return context.payload().containsKey("candidateIds") || context.payload().containsKey("document_text");
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public CompletableFuture<AgentResult> execute(AgentContext context) {
+        // Логика для обогащения одного документа по тексту
+        if (context.payload().containsKey("document_text")) {
+            return enhanceSingleDocument(context);
+        }
+
+        // Существующая логика для курирования по расписанию
         List<UUID> candidateIds = (List<UUID>) context.payload().get("candidateIds");
         if (candidateIds == null || candidateIds.isEmpty()) {
             return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Нет документов для улучшения.", Map.of()));
         }
 
         return Flux.fromIterable(candidateIds)
-                .flatMap(this::enhanceDocument)
+                .flatMap(this::enhanceDocumentInDb)
                 .collectList()
                 .map(results -> new AgentResult(getName(), AgentResult.Status.SUCCESS, "Обработка " + results.size() + " документов завершена.", Map.of("processedDocs", results)))
                 .toFuture();
     }
 
-    private Mono<String> enhanceDocument(UUID docId) {
+    private CompletableFuture<AgentResult> enhanceSingleDocument(AgentContext context) {
+        String fullText = (String) context.payload().get("document_text");
+        String promptString = promptService.render("documentEnhancerPrompt", Map.of("document_text", fullText));
+
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
+                .thenApply(this::parseLlmResponse)
+                .thenApply(metadata -> new AgentResult(
+                        getName(),
+                        AgentResult.Status.SUCCESS,
+                        "Метаданные успешно сгенерированы.",
+                        Map.of("enhancedMetadata", metadata)
+                ));
+    }
+
+    private Mono<String> enhanceDocumentInDb(UUID docId) {
         String fullText = curationRepository.getFullTextByDocumentId(docId);
         if (fullText.isBlank()) {
             return Mono.just("SKIPPED (empty content)");

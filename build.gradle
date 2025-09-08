@@ -15,6 +15,7 @@ ext {
     springAiVersion = '1.0.1'
     mapstructVersion = '1.5.5.Final'
     testcontainersVersion = '1.19.8'
+    jaxbApiVersion = '2.3.1'
     lombokVersion = '1.18.32'
     resilience4jVersion = '2.3.0'
     jgitVersion = '6.9.0.202403050737-r'
@@ -110,6 +111,7 @@ dependencies {
     implementation "org.apache.commons:commons-math3:${commonsMathVersion}"
 
     // --- JAXB APIs for Java 11+ (Unified to Jakarta) ---
+    implementation "javax.xml.bind:jaxb-api:${jaxbApiVersion}"
     implementation "jakarta.xml.bind:jakarta.xml.bind-api:${jakartaXmlBindVersion}"
     runtimeOnly "org.glassfish.jaxb:jaxb-runtime:${glassfishJaxbVersion}"
 

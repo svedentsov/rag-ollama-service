@@ -101,10 +101,15 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info, prometheus, metrics, rageval
+        # Убираем prometheus из списка, так как мы удалили его из docker-compose
+        include: health, info, metrics, rageval
   endpoint:
     health:
       show-details: when_authorized # Показывать детали для health-чеков.
+  tracing:
+    enabled: false # Явно отключаем автоконфигурацию трассировки
+    sampling:
+      probability: 0.0 # На всякий случай устанавливаем вероятность семплирования в 0
   metrics:
     tags:
       application: ${spring.application.name} # Глобальный тег для всех метрик.
