@@ -13,9 +13,8 @@ import reactor.core.scheduler.Schedulers;
 
 /**
  * Стандартная реализация {@link LlmGateway}, использующая Spring AI {@link ChatClient}.
- * <p>Этот компонент отвечает исключительно за прямое, "сырое" взаимодействие с LLM.
- * Он выполняется в выделенном пуле потоков для I/O-операций, чтобы не блокировать
- * основной пул приложения.
+ * Этот компонент отвечает исключительно за прямое, "сырое" взаимодействие с LLM.
+ * Он выполняется в выделенном пуле потоков для I/O-операций.
  */
 @Slf4j
 @Component
@@ -29,7 +28,7 @@ public class DefaultLlmGateway implements LlmGateway {
      */
     @Override
     public Mono<ChatResponse> call(Prompt prompt, OllamaOptions options) {
-        log.debug("Выполнение не-потокового вызова к LLM модели: {}", options.getModel());
+        log.debug("Выполнение не-потокового вызова к LLM модели: {}, опции: {}", options.getModel(), options);
         return Mono.fromCallable(() -> chatClient.prompt(prompt)
                         .options(options)
                         .call()
@@ -42,7 +41,7 @@ public class DefaultLlmGateway implements LlmGateway {
      */
     @Override
     public Flux<ChatResponse> stream(Prompt prompt, OllamaOptions options) {
-        log.debug("Выполнение потокового вызова к LLM модели: {}", options.getModel());
+        log.debug("Выполнение потокового вызова к LLM модели: {}, опции: {}", options.getModel(), options);
         return Flux.defer(() -> chatClient.prompt(prompt)
                         .options(options)
                         .stream()

@@ -1,8 +1,9 @@
 package com.example.ragollama.optimization;
 
 import com.example.ragollama.optimization.model.TrustScoreReport;
-import com.example.ragollama.rag.postprocessing.RagPostProcessor;
-import com.example.ragollama.rag.postprocessing.RagProcessingContext;
+import com.example.ragollama.rag.domain.model.RagAnswer;
+import com.example.ragollama.rag.pipeline.RagFlowContext;
+import com.example.ragollama.rag.pipeline.RagPipelineStep;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
@@ -16,23 +17,21 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
- * Асинхронный постпроцессор, вычисляющий многофакторную Оценку Доверия (Trust Score)
+ * Шаг RAG-конвейера, вычисляющий многофакторную Оценку Доверия (Trust Score)
  * для каждого сгенерированного RAG-ответа.
- * <p>
- * Этот компонент является ядром системы Explainable AI (XAI), комбинируя
- * детерминированный анализ источников с AI-оценкой уверенности.
  */
 @Slf4j
 @Component
-@Order(40) // Выполняется одним из последних, чтобы иметь полный контекст
+@Order(60) // Выполняется после извлечения цитат (50)
 @RequiredArgsConstructor
-public class TrustScoringPostProcessor implements RagPostProcessor {
+public class TrustScoringStep implements RagPipelineStep {
 
     private final SourceAnalyzerService sourceAnalyzer;
     private final LlmClient llmClient;
@@ -40,24 +39,23 @@ public class TrustScoringPostProcessor implements RagPostProcessor {
     private final MetricService metricService;
     private final ObjectMapper objectMapper;
 
-    /**
-     * Асинхронно выполняет полный цикл вычисления Trust Score.
-     *
-     * @param context Контекст RAG-взаимодействия.
-     * @return {@link CompletableFuture}, который завершается после вычисления и записи метрики.
-     */
     @Override
-    public CompletableFuture<Void> process(RagProcessingContext context) {
-        if (context.documents().isEmpty()) {
+    public Mono<RagFlowContext> process(RagFlowContext context) {
+        log.info("Шаг [60] Trust Scoring: вычисление оценки доверия...");
+
+        if (context.finalAnswer() == null || context.rerankedDocuments().isEmpty()) {
             metricService.recordTrustScore(0);
-            return CompletableFuture.completedFuture(null);
+            TrustScoreReport emptyReport = new TrustScoreReport(0, 0, 0, 0, "Нет данных для оценки.");
+            RagAnswer answer = context.finalAnswer() != null ? context.finalAnswer() : new RagAnswer("", List.of());
+            return Mono.just(context.withFinalAnswer(new RagAnswer(answer.answer(), answer.sourceCitations(), emptyReport)));
         }
+
         // 1. Детерминированный анализ источников
-        int recencyScore = sourceAnalyzer.analyzeRecency(context.documents());
-        int authorityScore = sourceAnalyzer.analyzeAuthority(context.documents());
+        int recencyScore = sourceAnalyzer.analyzeRecency(context.rerankedDocuments());
+        int authorityScore = sourceAnalyzer.analyzeAuthority(context.rerankedDocuments());
 
         // 2. AI-анализ уверенности
-        String contextAsString = context.documents().stream()
+        String contextAsString = context.rerankedDocuments().stream()
                 .map(doc -> String.format("<doc source=\"%s\">\n%s\n</doc>",
                         doc.getMetadata().get("source"), doc.getText()))
                 .collect(Collectors.joining("\n\n"));
@@ -65,11 +63,12 @@ public class TrustScoringPostProcessor implements RagPostProcessor {
         String promptString = promptService.render("trustScorerPrompt", Map.of(
                 "context", contextAsString,
                 "question", context.originalQuery(),
-                "answer", context.response().answer()
+                "answer", context.finalAnswer().answer()
         ));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.FAST)
-                .thenAccept(llmResponse -> {
+        // Используем надежную модель для получения JSON
+        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.FAST_RELIABLE, true))
+                .map(llmResponse -> {
                     TrustScoreReport partialReport = parseLlmResponse(llmResponse);
                     // 3. Комбинируем все оценки в финальный скор
                     int finalScore = calculateFinalScore(partialReport.confidenceScore(), recencyScore, authorityScore);
@@ -77,34 +76,30 @@ public class TrustScoringPostProcessor implements RagPostProcessor {
                             finalScore, partialReport.confidenceScore(), recencyScore,
                             authorityScore, partialReport.justification()
                     );
+
                     log.info("Оценка доверия для запроса '{}': {}", context.originalQuery(), fullReport);
                     metricService.recordTrustScore(finalScore);
-                }).exceptionally(ex -> {
-                    log.error("Ошибка при вычислении Trust Score", ex);
-                    return null;
+
+                    // 4. Обогащаем финальный ответ
+                    RagAnswer originalAnswer = context.finalAnswer();
+                    RagAnswer answerWithScore = new RagAnswer(originalAnswer.answer(), originalAnswer.sourceCitations(), fullReport);
+
+                    return context.withFinalAnswer(answerWithScore);
+                }).onErrorResume(ex -> {
+                    log.error("Ошибка при вычислении Trust Score. Устанавливается оценка по умолчанию.", ex);
+                    metricService.recordTrustScore(0);
+                    TrustScoreReport errorReport = new TrustScoreReport(0, 0, 0, 0, "Ошибка при вычислении оценки.");
+                    RagAnswer originalAnswer = context.finalAnswer();
+                    RagAnswer answerWithScore = new RagAnswer(originalAnswer.answer(), originalAnswer.sourceCitations(), errorReport);
+                    return Mono.just(context.withFinalAnswer(answerWithScore));
                 });
     }
 
-    /**
-     * Вычисляет финальную оценку, используя взвешенную формулу.
-     *
-     * @param confidence Оценка уверенности от AI-критика (0-100).
-     * @param recency    Оценка актуальности источников (0-100).
-     * @param authority  Оценка авторитетности источников (0-100).
-     * @return Композитная оценка доверия (0-100).
-     */
     private int calculateFinalScore(int confidence, int recency, int authority) {
         // Веса можно вынести в конфигурацию для гибкого тюнинга
         return (int) (confidence * 0.6 + recency * 0.2 + authority * 0.2);
     }
 
-    /**
-     * Безопасно парсит JSON-ответ от LLM.
-     *
-     * @param jsonResponse Ответ от LLM.
-     * @return Десериализованный объект {@link TrustScoreReport}.
-     * @throws ProcessingException если парсинг не удался.
-     */
     private TrustScoreReport parseLlmResponse(String jsonResponse) {
         try {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);

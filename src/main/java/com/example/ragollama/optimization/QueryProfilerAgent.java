@@ -68,7 +68,7 @@ public class QueryProfilerAgent implements ToolAgent {
         String query = (String) context.payload().get("query");
         String promptString = promptService.render("queryProfilerPrompt", Map.of("query", query));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.FAST)
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.FAST_RELIABLE)
                 .thenApply(this::parseLlmResponse)
                 .thenApply(profile -> {
                     log.info("Запрос '{}' профилирован как: {}", query, profile);

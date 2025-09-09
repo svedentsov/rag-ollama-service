@@ -21,19 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * AI-агент, отвечающий за планирование.
- * <p>
- * Эта версия реализует двухуровневую стратегию "Agent Squads" / "Toolboxes":
- * <ol>
- *   <li><b>Маршрутизация:</b> Сначала быстрый AI-агент-маршрутизатор выбирает наиболее
- *   подходящую группу инструментов ("Toolbox") для решения задачи.</li>
- *   <li><b>Планирование:</b> Затем основной AI-планировщик строит детальный план,
- *   используя ТОЛЬКО инструменты из выбранной группы.</li>
- * </ol>
- * Этот подход значительно повышает масштабируемость, качество и производительность
- * планирования по мере роста количества доступных инструментов.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -44,20 +31,11 @@ public class PlanningAgentService {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
-    /**
-     * Асинхронно создает план выполнения на основе задачи пользователя и начального контекста.
-     *
-     * @param taskDescription Задача на естественном языке (например, "Проанализируй изменения и найди риски").
-     * @param initialContext  Начальные данные, которые могут помочь в планировании (например, Git-ссылки).
-     * @return {@link Mono}, который по завершении будет содержать список шагов плана {@link PlanStep}.
-     */
     public Mono<List<PlanStep>> createPlan(String taskDescription, Map<String, Object> initialContext) {
-        // === ЭТАП 1: МАРШРУТИЗАЦИЯ ===
         String toolboxesForPrompt = toolboxRegistry.getToolboxDescriptions().entrySet().stream()
                 .map(e -> String.format("- %s: %s", e.getKey(), e.getValue()))
                 .collect(Collectors.joining("\n"));
 
-        // Примечание: Для этого шага нужен новый промпт 'agentRouterPrompt.ftl'
         String routerPrompt = promptService.render("agentRouterPrompt", Map.of(
                 "task", taskDescription,
                 "toolboxes", toolboxesForPrompt
@@ -65,7 +43,7 @@ public class PlanningAgentService {
 
         log.info("Запрос к AI-маршрутизатору для выбора Toolbox для задачи: '{}'", taskDescription);
 
-        return Mono.fromFuture(() -> llmClient.callChat(new Prompt(routerPrompt), ModelCapability.FAST))
+        return Mono.fromFuture(() -> llmClient.callChat(new Prompt(routerPrompt), ModelCapability.FAST_RELIABLE))
                 .flatMap(toolboxName -> {
                     String trimmedToolboxName = toolboxName.trim();
                     log.info("AI-маршрутизатор выбрал Toolbox: '{}'", trimmedToolboxName);
@@ -75,15 +53,10 @@ public class PlanningAgentService {
                         log.error("Маршрутизатор выбрал пустой или несуществующий Toolbox: '{}'.", trimmedToolboxName);
                         return Mono.error(new ProcessingException("Не удалось найти подходящие инструменты для выполнения задачи."));
                     }
-
-                    // === ЭТАП 2: ПЛАНИРОВАНИЕ ===
                     return createPlanWithSelectedTools(taskDescription, initialContext, tools);
                 });
     }
 
-    /**
-     * Внутренний метод для выполнения второго этапа - планирования с ограниченным набором инструментов.
-     */
     private Mono<List<PlanStep>> createPlanWithSelectedTools(String taskDescription, Map<String, Object> initialContext, List<ToolAgent> tools) {
         String availableToolsJson = getToolDescriptionsAsJson(tools);
         String contextAsJson;
@@ -101,18 +74,12 @@ public class PlanningAgentService {
         log.info("Запрос к LLM-планировщику (с {} инструментами) для задачи: '{}'", tools.size(), taskDescription);
         Prompt prompt = new Prompt(new UserMessage(promptString));
 
-        return Mono.fromFuture(() -> llmClient.callChat(prompt, ModelCapability.BALANCED))
+        return Mono.fromFuture(() -> llmClient.callChat(prompt, ModelCapability.BALANCED, true))
                 .map(this::parsePlanFromLlmResponse)
                 .doOnSuccess(plan -> log.info("LLM-планировщик сгенерировал план из {} шагов.", plan.size()))
                 .doOnError(e -> log.error("Ошибка при создании плана для задачи '{}'", taskDescription, e));
     }
 
-    /**
-     * Форматирует описания предоставленных агентов-инструментов в JSON-строку.
-     *
-     * @param agents Список агентов для включения в описание.
-     * @return JSON-строка.
-     */
     private String getToolDescriptionsAsJson(List<ToolAgent> agents) {
         List<Map<String, String>> toolDescriptions = agents.stream()
                 .map(agent -> Map.of(
@@ -128,9 +95,6 @@ public class PlanningAgentService {
         }
     }
 
-    /**
-     * Надежно парсит JSON-ответ от LLM в список шагов плана.
-     */
     private List<PlanStep> parsePlanFromLlmResponse(String jsonResponse) {
         try {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);

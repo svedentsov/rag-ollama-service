@@ -57,7 +57,7 @@ public class SourceCiteVerifierService {
                 "answer", generatedAnswer
         ));
 
-        llmClient.callChat(new Prompt(promptString), ModelCapability.FAST)
+        llmClient.callChat(new Prompt(promptString), ModelCapability.FAST_RELIABLE)
                 .thenAccept(jsonResponse -> {
                     VerificationResult result = parseLlmResponse(jsonResponse);
                     metricService.recordVerificationResult(result.isValid());

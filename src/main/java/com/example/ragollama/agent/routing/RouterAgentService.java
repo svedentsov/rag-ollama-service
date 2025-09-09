@@ -1,8 +1,13 @@
 package com.example.ragollama.agent.routing;
 
+import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
+import com.example.ragollama.shared.util.JsonExtractorUtil;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -13,12 +18,9 @@ import java.util.Map;
 
 /**
  * Сервис, реализующий логику "Router Agent".
- * *
- * <p>Его единственная задача — быстро классифицировать запрос пользователя,
- * определив его намерение (intent). Для этого используется легковесная LLM
- * и специализированный промпт, что обеспечивает минимальную задержку.
- * Результат работы этого сервиса используется {@link com.example.ragollama.orchestration.OrchestrationService}
- * для выбора правильного конвейера обработки.
+ * Его задача — быстро и НАДЕЖНО классифицировать запрос пользователя,
+ * определив его намерение (intent). Для этого используется быстрая, но
+ * надежная LLM и промпт, требующий JSON-ответа.
  */
 @Slf4j
 @Service
@@ -27,6 +29,14 @@ public class RouterAgentService {
 
     private final LlmClient llmClient;
     private final PromptService promptService;
+    private final ObjectMapper objectMapper;
+
+    /**
+     * Внутренний DTO для надежного парсинга JSON-ответа от LLM.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record IntentResponse(QueryIntent intent) {
+    }
 
     /**
      * Асинхронно определяет намерение пользователя на основе его запроса.
@@ -38,37 +48,40 @@ public class RouterAgentService {
         String promptString = promptService.render("routerAgentPrompt", Map.of("query", query));
         Prompt prompt = new Prompt(promptString);
 
-        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FAST))
-                .map(response -> parseIntentFromLlmResponse(response, query))
-                .doOnSuccess(intent -> log.info("Запрос '{}' классифицирован с намерением: {}", query, intent));
+        // Используем FAST_RELIABLE модель, чтобы гарантировать получение чистого JSON
+        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FAST_RELIABLE, true))
+                .map(this::parseIntentFromLlmResponse)
+                .doOnSuccess(intent -> log.info("Запрос '{}' классифицирован с намерением: {}", query, intent))
+                .onErrorResume(e -> {
+                    log.warn("Ошибка при маршрутизации запроса '{}'. Используется fallback.", query, e);
+                    return Mono.just(fallbackToRagIfQuestion(query));
+                });
     }
 
     /**
-     * Безопасно парсит строковый ответ от LLM в {@link QueryIntent} с улучшенной fallback-логикой.
+     * Безопасно парсит JSON-ответ от LLM в {@link QueryIntent}.
      *
-     * @param response      Ответ от LLM.
-     * @param originalQuery Оригинальный запрос пользователя для анализа в fallback-сценарии.
-     * @return Распознанный {@link QueryIntent} или наиболее вероятный fallback.
+     * @param jsonResponse Ответ от LLM.
+     * @return Распознанный {@link QueryIntent}.
+     * @throws ProcessingException если парсинг JSON не удался.
      */
-    private QueryIntent parseIntentFromLlmResponse(String response, String originalQuery) {
-        if (response == null || response.isBlank()) {
-            log.warn("RouterAgent получил пустой ответ от LLM. Используется fallback.");
-            return fallbackToRagIfQuestion(originalQuery);
-        }
-        String cleanedResponse = response.trim().toUpperCase().replaceAll("[^A-Z_]", "");
+    private QueryIntent parseIntentFromLlmResponse(String jsonResponse) {
         try {
-            return QueryIntent.valueOf(cleanedResponse);
-        } catch (IllegalArgumentException e) {
-            log.warn("RouterAgent не смог распознать намерение из ответа LLM: '{}'. Используется fallback.", response);
-            return fallbackToRagIfQuestion(originalQuery);
+            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            if (cleanedJson.isEmpty()) {
+                log.warn("LLM-маршрутизатор вернул пустой JSON. Ответ: {}", jsonResponse);
+                throw new ProcessingException("LLM-маршрутизатор вернул пустой JSON.");
+            }
+            IntentResponse response = objectMapper.readValue(cleanedJson, IntentResponse.class);
+            return response.intent != null ? response.intent : QueryIntent.UNKNOWN;
+        } catch (JsonProcessingException e) {
+            log.error("LLM-маршрутизатор вернул невалидный JSON: {}", jsonResponse, e);
+            throw new ProcessingException("LLM-маршрутизатор вернул невалидный JSON.", e);
         }
     }
 
     /**
      * Fallback-стратегия: если запрос похож на вопрос, считаем его RAG_QUERY.
-     *
-     * @param query Оригинальный запрос.
-     * @return {@link QueryIntent#RAG_QUERY} или {@link QueryIntent#UNKNOWN}.
      */
     private QueryIntent fallbackToRagIfQuestion(String query) {
         String lowerCaseQuery = query.toLowerCase();

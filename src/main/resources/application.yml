@@ -218,9 +218,10 @@ app:
   llm: # Конфигурация LLM Роутера
     fallback-model: "llama3" # Имя модели, которая будет использоваться, если основная модель недоступна.
     models: # Маппинг абстрактных возможностей на конкретные имена моделей в Ollama.
-      FAST: "phi3"         # Быстрая модель для классификации, рутинга и т.д.
-      BALANCED: "llama3"   # Основная модель для RAG и чата
-      VISION: "llava"      # Мультимодальная модель для анализа изображений
+      FASTEST: "phi3" # Для задач, где скорость > точность формата
+      FAST_RELIABLE: "llama3" # Используем llama3 для надежных задач
+      BALANCED: "llama3" # Основная модель для RAG и чата
+      VISION: "llava" # Мультимодальная модель для анализа изображений
 
   prompt:
     rag-template-path: "rag-prompt.ftl"
@@ -333,6 +334,10 @@ app:
       scheduler:
         enabled: true
         cron: "0 0 2 * * ?" # Каждый день в 2 часа ночи
+    guardian:
+      scheduler:
+        enabled: true
+        cron: "0 0 1 * * ?" # Каждый день в 1 час ночи
 
   curation: # Настройки для Knowledge Curator Agent
     scheduler:

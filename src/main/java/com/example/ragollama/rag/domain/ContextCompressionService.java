@@ -57,7 +57,7 @@ public class ContextCompressionService {
                 "document_text", document.getText()
         ));
         Prompt prompt = new Prompt(promptString);
-        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FAST))
+        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FASTEST))
                 .map(compressedText -> new Document(compressedText, document.getMetadata()))
                 .doOnSuccess(doc -> log.trace("Документ {} успешно сжат.", doc.getId()));
     }

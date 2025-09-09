@@ -43,7 +43,7 @@ public class GroundingService {
         }
 
         String promptString = promptService.render("groundingPrompt", Map.of("context", context, "answer", answer));
-        CompletableFuture<String> verificationFuture = llmClient.callChat(new Prompt(promptString), ModelCapability.FAST);
+        CompletableFuture<String> verificationFuture = llmClient.callChat(new Prompt(promptString), ModelCapability.FASTEST);
 
         verificationFuture.thenAccept(response -> {
             boolean isGrounded = response.trim().equalsIgnoreCase("GROUNDED");

@@ -81,7 +81,7 @@ public class KnowledgeRouterAgent implements ToolAgent {
         ));
 
         // Используем быструю модель, так как это простая задача классификации
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.FAST)
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.FAST_RELIABLE)
                 .thenApply(this::parseLlmResponse)
                 .thenApply(selectedDomains -> {
                     log.info("Маршрутизатор выбрал домены {} для запроса: '{}'", selectedDomains.domains(), query);

@@ -1,0 +1,33 @@
+package com.example.ragollama.optimization;
+
+import com.example.ragollama.agent.AgentContext;
+import com.example.ragollama.agent.AgentOrchestratorService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.util.Map;
+
+@Component
+@Slf4j
+@RequiredArgsConstructor
+@ConditionalOnProperty(name = "app.optimization.guardian.scheduler.enabled", havingValue = "true")
+public class KnowledgeGuardianScheduler {
+
+    private final AgentOrchestratorService orchestratorService;
+
+    @Scheduled(cron = "${app.optimization.guardian.scheduler.cron}")
+    public void runScheduledConsistencyCheck() {
+        log.info("Планировщик запускает фоновую задачу аудита консистентности базы знаний...");
+        orchestratorService.invokePipeline("knowledge-guardian-pipeline", new AgentContext(Map.of()))
+                .whenComplete((result, ex) -> {
+                    if (ex != null) {
+                        log.error("Задача аудита консистентности завершилась с ошибкой.", ex);
+                    } else {
+                        log.info("Задача аудита консистентности успешно завершена.");
+                    }
+                });
+    }
+}

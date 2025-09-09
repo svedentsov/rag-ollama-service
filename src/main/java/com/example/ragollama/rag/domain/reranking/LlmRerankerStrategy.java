@@ -71,7 +71,7 @@ public class LlmRerankerStrategy implements RerankingStrategy {
 
         try {
             // Выполняем синхронный блокирующий вызов, так как реранжирование - критический шаг
-            String jsonResponse = llmClient.callChat(new Prompt(promptString), ModelCapability.FAST).join();
+            String jsonResponse = llmClient.callChat(new Prompt(promptString), ModelCapability.FAST_RELIABLE).join();
             List<RankedDocument> rankedResults = parseLlmResponse(jsonResponse);
 
             // Создаем карту для быстрого доступа к документам по ID

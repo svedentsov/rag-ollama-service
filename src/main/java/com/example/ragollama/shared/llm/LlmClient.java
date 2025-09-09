@@ -17,7 +17,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Клиент-оркестратор для взаимодействия с LLM, возвращающий CompletableFuture.
- * Эта версия использует AsyncTaskExecutor для гарантированной передачи SecurityContext.
+ * Инкапсулирует логику маршрутизации, отказоустойчивости, квотирования, трекинга и поддержки JSON-режима.
  */
 @Component
 @RequiredArgsConstructor
@@ -33,14 +33,27 @@ public class LlmClient {
 
     /**
      * Асинхронно вызывает чат-модель, возвращая текстовый ответ.
+     * По умолчанию вызывает модель в стандартном текстовом режиме.
      *
      * @param prompt     Промпт для отправки в модель.
      * @param capability Требуемый уровень возможностей модели.
      * @return {@link CompletableFuture} с текстовым ответом от LLM.
      */
     public CompletableFuture<String> callChat(Prompt prompt, ModelCapability capability) {
+        return callChat(prompt, capability, false); // По умолчанию не JSON
+    }
+
+    /**
+     * Асинхронно вызывает чат-модель с возможностью указания JSON-режима.
+     *
+     * @param prompt     Промпт для отправки в модель.
+     * @param capability Требуемый уровень возможностей модели.
+     * @param isJson     Если true, модель будет инструктирована вернуть валидный JSON.
+     * @return {@link CompletableFuture} с текстовым ответом от LLM.
+     */
+    public CompletableFuture<String> callChat(Prompt prompt, ModelCapability capability, boolean isJson) {
         return CompletableFuture.supplyAsync(() -> {
-            String username = "anonymous_user";
+            String username = "anonymous_user"; // В реальной системе извлекается из SecurityContext
             int promptTokens = tokenizationService.countTokens(prompt.getContents());
             if (quotaService.isQuotaExceeded(username, promptTokens)) {
                 throw new QuotaExceededException("Месячный лимит токенов исчерпан.");
@@ -48,7 +61,7 @@ public class LlmClient {
             return llmRouterService.getModelFor(capability);
         }, applicationTaskExecutor).thenCompose(modelName ->
                 resilientExecutor.execute(() -> {
-                            OllamaOptions options = buildOptions(modelName);
+                            OllamaOptions options = buildOptions(modelName, isJson);
                             return llmGateway.call(prompt, options);
                         }).toFuture()
                         .thenApply(chatResponse -> {
@@ -75,13 +88,19 @@ public class LlmClient {
 
         String modelName = llmRouterService.getModelFor(capability);
         return resilientExecutor.executeStream(() -> {
-            OllamaOptions options = buildOptions(modelName);
-            return llmGateway.stream(prompt, options);
-        }).map(chatResponse -> chatResponse.getResult().getOutput().getText());
+                    OllamaOptions options = buildOptions(modelName, false);
+                    return llmGateway.stream(prompt, options);
+                })
+                .map(chatResponse -> chatResponse.getResult().getOutput().getText());
     }
 
-    private OllamaOptions buildOptions(String modelName) {
-        return OllamaOptions.builder().model(modelName).build();
+    private OllamaOptions buildOptions(String modelName, boolean isJson) {
+        OllamaOptions options = new OllamaOptions();
+        options.setModel(modelName);
+        if (isJson) {
+            options.setFormat("json"); // Указываем Ollama вернуть JSON
+        }
+        return options;
     }
 
     private LlmResponse toLlmResponse(ChatResponse chatResponse) {

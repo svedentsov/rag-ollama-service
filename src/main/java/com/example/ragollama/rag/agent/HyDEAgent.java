@@ -19,7 +19,7 @@ import java.util.Map;
  */
 @Slf4j
 @Component
-@Order(5) // Выполняется самым первым, до других трансформаций
+@Order(5)
 @RequiredArgsConstructor
 public class HyDEAgent implements QueryEnhancementAgent {
 
@@ -30,11 +30,9 @@ public class HyDEAgent implements QueryEnhancementAgent {
     public Mono<List<String>> enhance(String originalQuery) {
         String promptString = promptService.render("hydePrompt", Map.of("query", originalQuery));
         Prompt prompt = new Prompt(promptString);
-
-        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FAST))
+        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FASTEST))
                 .map(hypotheticalDocument -> {
                     log.info("HyDE: сгенерирован гипотетический документ для запроса '{}'", originalQuery);
-                    // Возвращаем список из одного элемента - самого гипотетического документа.
                     return List.of(hypotheticalDocument);
                 });
     }
