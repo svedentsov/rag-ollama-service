@@ -18,7 +18,7 @@ spring:
       # САМЫЙ ВНЕШНИЙ УРОВЕНЬ: Таймаут для асинхронных запросов в контроллерах.
       # Увеличено для предоставления большего запаса времени для LLM.
       # Должен быть больше всех вложенных таймаутов.
-      request-timeout: 580s
+      request-timeout: 590s # Должен быть больше всех вложенных таймаутов
 
   # --- FreeMarker Template Engine Configuration ---
   freemarker:
@@ -199,7 +199,7 @@ resilience4j:
   timelimiter:
     instances:
       ollama:
-        timeout-duration: 280s
+        timeout-duration: 590s
         cancel-running-future: true
       database:
         timeout-duration: 10s
@@ -233,6 +233,9 @@ app:
         boost-factor: 0.1
       llm:
         enabled: true # Включаем мощный LLM-реранкер
+      diversity:
+        enabled: true
+        lambda: 0.5
 
   rate-limiting:
     enabled: true
@@ -310,10 +313,11 @@ app:
         fts:
           top-k: 10
 
-  evaluation: # Настройки для автоматической оценки качества
-    # F1-Score - гармоническое среднее между точностью (precision) и полнотой (recall).
-    # Это ключевая метрика качества поиска. Если она упадет ниже этого значения,
-    # в логах появится ошибка.
+  expansion:
+    graph:
+      enabled: true
+
+  evaluation:
     f1-score-threshold: 0.85
     scheduler:
       enabled: true

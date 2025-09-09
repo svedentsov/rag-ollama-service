@@ -95,7 +95,6 @@ public class RagEvaluationService {
                     double precision = (tp + fp) > 0 ? (double) tp / (tp + fp) : 0.0;
                     double recall = (tp + fn) > 0 ? (double) tp / (tp + fn) : 0.0;
 
-                    // НОВАЯ ЛОГИКА РАСЧЕТА
                     double reciprocalRank = calculateReciprocalRank(retrievedIds, expectedIds);
                     double dcg = calculateDcg(retrievedIds, expectedIds, 5);
                     double idcg = calculateIdealDcg(expectedIds.size(), 5);

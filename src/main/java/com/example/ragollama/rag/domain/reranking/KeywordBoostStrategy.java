@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
-@Order(10) // Будет применена одной из первых
+@Order(10)
 @ConditionalOnProperty(name = "app.reranking.strategies.keyword-boost.enabled", havingValue = "true")
 @RequiredArgsConstructor
 public class KeywordBoostStrategy implements RerankingStrategy {

@@ -18,21 +18,15 @@ public record RerankingProperties(
         boolean enabled,
         @NotNull Strategies strategies
 ) {
-    /**
-     * Контейнер для настроек всех доступных стратегий.
-     *
-     * @param keywordBoost Настройки для стратегии повышения ранга по ключевым словам.
-     */
-    public record Strategies(@NotNull KeywordBoost keywordBoost) {
+    public record Strategies(
+            @NotNull KeywordBoost keywordBoost,
+            @NotNull Diversity diversity
+    ) {
     }
 
-    /**
-     * Настройки для {@link KeywordBoostStrategy}.
-     *
-     * @param enabled     Включает или выключает эту стратегию.
-     * @param boostFactor Коэффициент, на который умножается количество совпавших
-     *                    ключевых слов для получения "буста" к оценке релевантности.
-     */
     public record KeywordBoost(boolean enabled, double boostFactor) {
+    }
+
+    public record Diversity(boolean enabled, double lambda) {
     }
 }

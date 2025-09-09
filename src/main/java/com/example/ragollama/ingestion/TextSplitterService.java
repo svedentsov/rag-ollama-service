@@ -7,15 +7,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Сервис-оркестратор для интеллектуального разбиения текста на чанки.
- * Реализует стратегию "Small-to-Big" для улучшения качества контекста.
+ * Реализует стратегию "Parent Document Retriever" (или Small-to-Big).
  */
 @Service
 @Slf4j
@@ -25,50 +22,44 @@ public class TextSplitterService {
     private final IngestionProperties ingestionProperties;
     private final List<DocumentSplitterStrategy> strategies;
 
-    private static final List<String> DEFAULT_DELIMITERS = List.of("\n\n", "\n", "(?<=[.!?])\\s+");
+    private static final List<String> PARENT_DELIMITERS = List.of("\n\n", "\n");
+    private static final List<String> CHILD_DELIMITERS = List.of("(?<=[.!?])\\s+");
 
     public List<Document> split(Document document) {
-        log.info("Применение стратегии Small-to-Big для документа: {}", document.getMetadata().get("source"));
-
-        // 1. Создаем родительские чанки
+        log.info("Применение Parent Document стратегии для документа: {}", document.getMetadata().get("source"));
+        // 1. Создаем большие родительские чанки
         SplitterConfig parentConfig = new SplitterConfig(
-                ingestionProperties.chunking().defaultChunkSize() * 4,
+                ingestionProperties.chunking().defaultChunkSize() * 4, // Размер родителя в 4 раза больше
                 ingestionProperties.chunking().chunkOverlap() * 2,
-                DEFAULT_DELIMITERS
+                PARENT_DELIMITERS
         );
         List<Document> parentChunks = getStrategyFor(document).split(document, parentConfig);
-
         List<Document> finalChildChunks = new ArrayList<>();
         String originalDocumentId = (String) document.getMetadata().get("documentId");
-        AtomicInteger chunkCounter = new AtomicInteger(0);
+        AtomicInteger parentChunkCounter = new AtomicInteger(0);
+        AtomicInteger childChunkCounter = new AtomicInteger(0);
 
         // 2. Для каждого родительского чанка создаем дочерние
         for (Document parentChunk : parentChunks) {
+            String parentChunkId = String.format("%s:p%d", originalDocumentId, parentChunkCounter.getAndIncrement());
             SplitterConfig childConfig = new SplitterConfig(
                     ingestionProperties.chunking().defaultChunkSize(),
                     ingestionProperties.chunking().chunkOverlap(),
-                    DEFAULT_DELIMITERS
+                    CHILD_DELIMITERS
             );
             List<Document> childChunks = getStrategyFor(parentChunk).split(parentChunk, childConfig);
-
-            // 3. Обогащаем дочерние чанки метаданными
+            // 3. Обогащаем дочерние чанки и добавляем их в финальный список для индексации
             for (Document childChunk : childChunks) {
-                Map<String, Object> newMetadata = new java.util.HashMap<>(childChunk.getMetadata());
-
-                // Наш кастомный, трассируемый ID для цитирования
-                String customChunkId = String.format("%s:%d", originalDocumentId, chunkCounter.getAndIncrement());
-                newMetadata.put("chunkId", customChunkId);
-
-                // Убеждаемся, что documentId исходного документа сохранен в метаданных
+                Map<String, Object> newMetadata = new HashMap<>(childChunk.getMetadata());
+                String childChunkId = String.format("%s:c%d", parentChunkId, childChunkCounter.getAndIncrement());
+                newMetadata.put("chunkId", childChunkId);
                 newMetadata.put("documentId", originalDocumentId);
-
-                // FIX: Генерируем новый, валидный UUID для первичного ключа таблицы vector_store
+                newMetadata.put("parentChunkId", parentChunkId);
+                newMetadata.put("parentChunkText", parentChunk.getText()); // Сохраняем текст родителя
                 String primaryKey = UUID.randomUUID().toString();
-
                 finalChildChunks.add(new Document(primaryKey, childChunk.getText(), newMetadata));
             }
         }
-
         log.info("Создано {} дочерних чанков для документа '{}'", finalChildChunks.size(), document.getMetadata().get("source"));
         return finalChildChunks;
     }

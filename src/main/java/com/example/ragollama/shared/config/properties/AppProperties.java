@@ -24,6 +24,7 @@ import java.time.Duration;
  * @param llmExecutor  Настройки для выделенного пула задач LLM.
  * @param dbExecutor   Настройки для выделенного пула задач БД.
  * @param vectorStore  Настройки для векторного хранилища.
+ * @param expansion    Настройки для стратегий расширения контекста.
  */
 @Validated
 @ConfigurationProperties(prefix = "app")
@@ -36,9 +37,10 @@ public record AppProperties(
         @NotNull IngestionProperties ingestion,
         @NotNull HttpClient httpClient,
         @NotNull TaskExecutor taskExecutor,
-        @NotNull TaskExecutor llmExecutor, // Добавлено
-        @NotNull TaskExecutor dbExecutor,  // Добавлено
-        @NotNull VectorStoreProperties vectorStore
+        @NotNull TaskExecutor llmExecutor,
+        @NotNull TaskExecutor dbExecutor,
+        @NotNull VectorStoreProperties vectorStore,
+        @NotNull Expansion expansion
 ) {
     /**
      * Настройки, связанные с шаблонами промптов.
@@ -129,6 +131,17 @@ public record AppProperties(
                 @Min(8) @Max(1024) int efConstruction,
                 @Min(4) @Max(1024) int efSearch
         ) {
+        }
+    }
+
+    /**
+     * Конфигурация для стратегий расширения контекста.
+     *
+     * @param graph Настройки для расширения через Граф Знаний.
+     */
+    @Validated
+    public record Expansion(@NotNull Graph graph) {
+        public record Graph(boolean enabled) {
         }
     }
 }
