@@ -12,13 +12,20 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
 
 /**
  * Реализует адаптивную гибридную стратегию извлечения документов, включая графовый поиск.
+ * <p>
+ * Эта версия была улучшена для явной обработки "пробелов в знаниях" и корректной
+ * работы с синхронным, кэшируемым {@link VectorSearchService}. Вызов
+ * блокирующей операции поиска оборачивается в {@link Mono#fromCallable} и
+ * выполняется в выделенном пуле потоков.
  */
 @Slf4j
 @Service
@@ -31,7 +38,19 @@ public class HybridRetrievalStrategy {
     private final MetricService metricService;
     private final KnowledgeGapService knowledgeGapService;
     private final GraphSearchService graphSearchService;
+    private final AsyncTaskExecutor applicationTaskExecutor;
 
+    /**
+     * Асинхронно выполняет гибридный поиск, объединяя результаты из векторного,
+     * полнотекстового и графового поисков.
+     *
+     * @param processedQueries    Объект с обработанными запросами (основной и расширенные).
+     * @param originalQuery       Оригинальный, немодифицированный запрос пользователя.
+     * @param topK                Количество документов для извлечения.
+     * @param similarityThreshold Порог схожести для векторного поиска.
+     * @param businessFilter      Опциональный бизнес-фильтр для метаданных.
+     * @return {@link Mono} со списком уникальных, отсортированных документов.
+     */
     public Mono<List<Document>> retrieve(
             ProcessedQueries processedQueries,
             String originalQuery,
@@ -43,28 +62,39 @@ public class HybridRetrievalStrategy {
             knowledgeGapService.recordGap(originalQuery);
             return Mono.just(List.of());
         }
-        // Запускаем все поиски параллельно
-        Mono<List<Document>> vectorSearchMono = vectorSearchService.search(processedQueries.expansionQueries(), topK, similarityThreshold, businessFilter);
+        Mono<List<Document>> vectorSearchMono = Mono.fromCallable(() ->
+                vectorSearchService.search(processedQueries.expansionQueries(), topK, similarityThreshold, businessFilter)
+        ).subscribeOn(Schedulers.fromExecutor(applicationTaskExecutor));
         Mono<List<Document>> ftsSearchMono = ftsSearchService.search(originalQuery);
-        // Добавляем вызов графового поиска, если запрос релевантен
         Mono<List<Document>> graphSearchMono = isGraphQuery(originalQuery)
                 ? graphSearchService.search(originalQuery)
                 : Mono.just(List.of());
+
         return Mono.zip(vectorSearchMono, ftsSearchMono, graphSearchMono)
                 .map(tuple -> {
                     List<Document> vectorResults = tuple.getT1();
                     List<Document> ftsResults = tuple.getT2();
                     List<Document> graphResults = tuple.getT3();
+
                     metricService.recordRetrievedDocumentsCount(vectorResults.size() + ftsResults.size() + graphResults.size());
+
                     if (!graphResults.isEmpty()) {
                         log.info("Получено {} результатов из Графа Знаний для запроса: '{}'", graphResults.size(), originalQuery);
                     }
-                    // Объединяем результаты всех трех источников
-                    return fusionService.reciprocalRankFusion(List.of(vectorResults, ftsResults, graphResults));
+                    List<Document> fusedDocs = fusionService.reciprocalRankFusion(List.of(vectorResults, ftsResults, graphResults));
+                    if (fusedDocs.isEmpty()) {
+                        knowledgeGapService.recordGap(originalQuery);
+                    }
+                    return fusedDocs;
                 });
     }
 
-    // Простая эвристика для определения, является ли запрос графовым
+    /**
+     * Простая эвристика для определения, является ли запрос графовым.
+     *
+     * @param query Запрос пользователя.
+     * @return {@code true}, если запрос содержит ключевые слова для графового поиска.
+     */
     private boolean isGraphQuery(String query) {
         String lowerQuery = query.toLowerCase();
         return lowerQuery.contains("связан") || lowerQuery.contains("какие тесты") || lowerQuery.contains("какие требования");

@@ -249,7 +249,7 @@ app:
     encoding-model: "o200k_base"
 
   context:
-    max-tokens: 4096
+    max-tokens: 8000
 
   chat:
     history:
@@ -312,7 +312,7 @@ app:
         expansion-min-docs-threshold: 3
         vector-search:
           top-k: 5
-          similarity-threshold: 0.8
+          similarity-threshold: 0.72
         fts:
           top-k: 10
 

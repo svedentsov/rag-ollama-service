@@ -4,15 +4,17 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
  * Сущность JPA, представляющая одно сообщение в истории чата.
+ * <p>
  * Каждая запись в таблице {@code chat_messages} соответствует одному
  * сообщению от пользователя или ассистента в рамках определенной сессии.
  */
 @Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -55,9 +57,10 @@ public class ChatMessage {
     private String content;
 
     /**
-     * Временная метка создания сообщения. Неизменяема после создания.
+     * Временная метка создания сообщения с информацией о часовом поясе.
+     * Неизменяема после создания.
      */
     @NotNull
     @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 }

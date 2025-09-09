@@ -80,9 +80,9 @@ public class AccessibilityAuditorAgent implements ToolAgent {
      * <p>Конвейер состоит из следующих шагов:
      * <ol>
      *     <li>Асинхронное сканирование HTML на предмет нарушений в управляемом пуле потоков.</li>
-     *     <li>Если нарушения найдены, они передаются в {@link LlmAccessibilityAnalyzer} для анализа.</li>
-     *     <li>Если нарушений нет, формируется пустой отчет.</li>
-     *     <li>Результат (отчет) преобразуется в стандартизированный {@link AgentResult}.</li>
+     *     <li>Если нарушения найдены, они передаются в {@link LlmAccessibilityAnalyzer} для анализа,
+     *     после чего результат преобразуется в {@link AgentResult}.</li>
+     *     <li>Если нарушений нет, немедленно формируется финальный {@link AgentResult} без вызова LLM.</li>
      * </ol>
      *
      * @param context Контекст, содержащий HTML-код страницы в поле `htmlContent`.
@@ -97,13 +97,13 @@ public class AccessibilityAuditorAgent implements ToolAgent {
                 .thenComposeAsync(violations -> {
                     if (violations.isEmpty()) {
                         log.info("Нарушений доступности не найдено для предоставленного HTML.");
-                        return CompletableFuture.completedFuture(createEmptyReport());
+                        return CompletableFuture.completedFuture(createEmptySuccessResult());
                     }
-                    // Шаг 2: Если нарушения есть, запускаем LLM для анализа.
+                    // Шаг 2: Если нарушения есть, запускаем LLM для анализа и затем создаем результат.
                     log.info("Найдено {} нарушений доступности. Запуск LLM-анализатора.", violations.size());
-                    return llmAnalyzer.analyze(violations);
-                }, applicationTaskExecutor)
-                .thenApply(this::createSuccessResultWithReport);
+                    return llmAnalyzer.analyze(violations)
+                            .thenApply(this::createSuccessResultWithReport);
+                }, applicationTaskExecutor);
     }
 
     /**
@@ -123,12 +123,18 @@ public class AccessibilityAuditorAgent implements ToolAgent {
     }
 
     /**
-     * Создает объект {@link AccessibilityReport} для случая, когда нарушения не найдены.
+     * Создает финальный объект {@link AgentResult} для случая, когда нарушения не найдены.
      *
-     * @return Пустой отчет.
+     * @return Успешный результат работы агента с пустым отчетом.
      */
-    private AccessibilityReport createEmptyReport() {
+    private AgentResult createEmptySuccessResult() {
         String summary = "Аудит завершен. Нарушений доступности не найдено.";
-        return new AccessibilityReport(summary, Collections.emptyList(), Collections.emptyList());
+        AccessibilityReport emptyReport = new AccessibilityReport(summary, Collections.emptyList(), Collections.emptyList());
+        return new AgentResult(
+                getName(),
+                AgentResult.Status.SUCCESS,
+                summary,
+                Map.of(ACCESSIBILITY_REPORT_KEY, emptyReport)
+        );
     }
 }

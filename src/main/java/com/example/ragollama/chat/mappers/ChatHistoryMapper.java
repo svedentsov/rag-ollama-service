@@ -7,7 +7,7 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -55,7 +55,9 @@ public class ChatHistoryMapper {
      * из "сырых" данных.
      * <p>
      * Этот метод инкапсулирует логику создания доменного объекта,
-     * освобождая от этой ответственности сервисный слой.
+     * освобождая от этой ответственности сервисный слой. Он использует
+     * {@link OffsetDateTime#now()} для обеспечения корректности
+     * временных меток с учетом часовых поясов.
      *
      * @param sessionId ID сессии чата.
      * @param role      Роль отправителя сообщения.
@@ -67,7 +69,7 @@ public class ChatHistoryMapper {
                 .sessionId(sessionId)
                 .role(role)
                 .content(content)
-                .createdAt(LocalDateTime.now())
+                .createdAt(OffsetDateTime.now()) // ИСПРАВЛЕНИЕ: Используем OffsetDateTime
                 .build();
     }
 

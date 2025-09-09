@@ -23,10 +23,12 @@ import java.util.stream.Collectors;
 
 /**
  * Стратегия переранжирования, использующая LLM для оценки релевантности.
- * <p> Принимает список документов-кандидатов и использует языковую модель
+ * <p>
+ * Принимает список документов-кандидатов и использует языковую модель
  * для их оценки и сортировки в порядке убывания релевантности
  * относительно исходного запроса.
- * <p> Активируется свойством {@code app.reranking.strategies.llm.enabled=true}.
+ * <p>
+ * Активируется свойством {@code app.reranking.strategies.llm.enabled=true}.
  */
 @Slf4j
 @Component
@@ -39,6 +41,13 @@ public class LlmRerankerStrategy implements RerankingStrategy {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * DTO для внутреннего использования при парсинге ответа от LLM-реранкера.
+     *
+     * @param chunkId          Идентификатор чанка.
+     * @param relevanceScore   Оценка релевантности (1-10), присвоенная LLM.
+     * @param justification    Обоснование оценки.
+     */
     private record RankedDocument(String chunkId, int relevanceScore, String justification) {
     }
 
@@ -64,7 +73,7 @@ public class LlmRerankerStrategy implements RerankingStrategy {
                         doc.getText()))
                 .collect(Collectors.joining("\n\n"));
 
-        String promptString = promptService.render("llmReranker", Map.of(
+        String promptString = promptService.render("llmRerankerPrompt", Map.of(
                 "query", originalQuery,
                 "documents", contextForLlm
         ));
@@ -97,6 +106,13 @@ public class LlmRerankerStrategy implements RerankingStrategy {
         }
     }
 
+    /**
+     * Безопасно парсит JSON-ответ от LLM.
+     *
+     * @param jsonResponse Ответ от LLM.
+     * @return Список объектов {@link RankedDocument}.
+     * @throws ProcessingException если парсинг не удался.
+     */
     private List<RankedDocument> parseLlmResponse(String jsonResponse) {
         try {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);

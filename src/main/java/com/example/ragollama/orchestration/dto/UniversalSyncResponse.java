@@ -11,11 +11,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * DTO для полного, синхронного (не-потокового) ответа от оркестратора.
  * <p>
- * Добавлен новый фабричный метод для ответов от сервиса саммаризации.
+ * Этот DTO теперь включает новый фабричный метод `from(List<UniversalResponse>, ...)`
+ * для корректной сборки финального ответа из потоковых частей.
  */
 @Schema(description = "Универсальный DTO для полного (не-потокового) ответа")
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -61,5 +63,44 @@ public record UniversalSyncResponse(
      */
     public static UniversalSyncResponse from(String summary, QueryIntent intent) {
         return new UniversalSyncResponse(summary, null, null, null, null, intent, null);
+    }
+
+    /**
+     * Фабричный метод для агрегации частей потокового ответа в единый синхронный ответ.
+     *
+     * @param parts  Список частей ответа, полученных из потока.
+     * @param intent Намерение, которое было обработано.
+     * @return Собранный {@link UniversalSyncResponse}.
+     */
+    public static UniversalSyncResponse from(List<UniversalResponse> parts, QueryIntent intent) {
+        String answer = parts.stream()
+                .filter(p -> p instanceof UniversalResponse.Content)
+                .map(p -> ((UniversalResponse.Content) p).text())
+                .collect(Collectors.joining());
+
+        List<SourceCitation> sources = parts.stream()
+                .filter(p -> p instanceof UniversalResponse.Sources)
+                .flatMap(p -> ((UniversalResponse.Sources) p).sources().stream())
+                .toList();
+
+        UniversalResponse.Code code = parts.stream()
+                .filter(p -> p instanceof UniversalResponse.Code)
+                .map(p -> (UniversalResponse.Code) p)
+                .findFirst().orElse(null);
+
+        BugAnalysisResponse bugAnalysis = parts.stream()
+                .filter(p -> p instanceof UniversalResponse.BugAnalysis)
+                .map(p -> ((UniversalResponse.BugAnalysis) p).analysis())
+                .findFirst().orElse(null);
+
+        return new UniversalSyncResponse(
+                answer.isEmpty() ? null : answer,
+                (code != null) ? code.generatedCode() : null,
+                (code != null) ? code.language() : null,
+                sources.isEmpty() ? null : sources,
+                null, // Session ID is not available from stream parts
+                intent,
+                bugAnalysis
+        );
     }
 }

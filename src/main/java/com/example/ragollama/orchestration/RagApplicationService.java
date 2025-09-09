@@ -16,7 +16,10 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Сервис прикладного уровня (Application Service), оркестрирующий бизнес-логику RAG.
- * Эта версия интегрирована с PromptGuardService для обеспечения безопасности на входе.
+ * <p>
+ * Эта версия была отрефакторена для использования централизованного {@link DialogManager},
+ * что устраняет дублирование кода и соответствует принципам Clean Architecture.
+ * Сервис также интегрирован с {@link PromptGuardService} для обеспечения безопасности на входе.
  */
 @Service
 @Slf4j
@@ -29,7 +32,15 @@ public class RagApplicationService {
 
     /**
      * Асинхронно обрабатывает RAG-запрос, возвращая полный ответ.
-     * Сначала выполняет проверку на Prompt Injection.
+     * <p>
+     * Конвейер выполнения:
+     * <ol>
+     *     <li>Проверка запроса на безопасность с помощью {@link PromptGuardService}.</li>
+     *     <li>Вызов {@link DialogManager#startTurn} для получения контекста диалога.</li>
+     *     <li>Запуск основного RAG-конвейера через {@link RagPipelineOrchestrator}.</li>
+     *     <li>Вызов {@link DialogManager#endTurn} для асинхронного сохранения ответа.</li>
+     *     <li>Формирование и возврат финального DTO {@link RagQueryResponse}.</li>
+     * </ol>
      *
      * @param request DTO с запросом от пользователя.
      * @return {@link CompletableFuture} с финальным {@link RagQueryResponse}.
