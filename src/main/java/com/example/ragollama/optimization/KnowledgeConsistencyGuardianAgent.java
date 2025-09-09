@@ -51,23 +51,18 @@ public class KnowledgeConsistencyGuardianAgent implements ToolAgent {
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         // 1. Выбираем случайный документ как отправную точку
-        // ИСПРАВЛЕНИЕ: Используем .query() вместо .withQuery()
         List<Document> randomDocList = vectorStore.similaritySearch(SearchRequest.builder().query("*").topK(1).build());
         if (randomDocList.isEmpty()) {
             return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "База знаний пуста, проверка невозможна.", Map.of()));
         }
         Document docA = randomDocList.get(0);
-
         // 2. Находим его ближайшего семантического соседа
-        // ИСПРАВЛЕНИЕ: Используем .query() вместо .withQuery()
         SearchRequest searchRequest = SearchRequest.builder().query(docA.getText()).topK(2).build();
         List<Document> neighbors = vectorStore.similaritySearch(searchRequest);
         Document docB = neighbors.stream().filter(d -> !d.getId().equals(docA.getId())).findFirst().orElse(null);
-
         if (docB == null) {
             return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Не найдены соседи для документа, проверка пропущена.", Map.of()));
         }
-
         // 3. Отправляем пару на проверку в LLM
         log.info("Проверка на противоречия между документами: {} и {}", docA.getMetadata().get("source"), docB.getMetadata().get("source"));
         String promptString = promptService.render("consistencyGuardianPrompt", Map.of(
@@ -76,7 +71,6 @@ public class KnowledgeConsistencyGuardianAgent implements ToolAgent {
                 "docB_id", docB.getMetadata().get("chunkId"),
                 "docB_text", docB.getText()
         ));
-
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .thenApply(this::parseLlmResponse)
                 .thenApply(result -> {

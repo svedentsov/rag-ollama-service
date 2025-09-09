@@ -75,11 +75,11 @@ public class DiversityRerankingStrategy implements RerankingStrategy {
     }
 
     /**
-     * ИСПРАВЛЕНИЕ: Извлекаем эмбеддинги из метаданных документа.
+     * Извлекаем эмбеддинги из метаданных документа.
      */
     @SuppressWarnings("unchecked")
     private double cosineSimilarity(Document doc1, Document doc2) {
-        // ИСПРАВЛЕНИЕ: Получаем эмбеддинг из метаданных
+        // Получаем эмбеддинг из метаданных
         List<Double> v1 = (List<Double>) doc1.getMetadata().get("embedding");
         List<Double> v2 = (List<Double>) doc2.getMetadata().get("embedding");
 

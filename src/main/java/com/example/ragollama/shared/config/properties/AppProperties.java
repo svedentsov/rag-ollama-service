@@ -1,6 +1,7 @@
 package com.example.ragollama.shared.config.properties;
 
 import com.example.ragollama.ingestion.IngestionProperties;
+import com.example.ragollama.rag.retrieval.RetrievalProperties;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -12,19 +13,6 @@ import java.time.Duration;
 
 /**
  * Главный класс для всех кастомных настроек приложения, загружаемых из application.yml с префиксом "app".
- *
- * @param prompt       Настройки, связанные с шаблонами промптов.
- * @param reranking    Настройки для опционального сервиса переранжирования.
- * @param tokenization Настройки токенизатора.
- * @param context      Настройки сборки контекста для RAG.
- * @param chat         Настройки для функционала чата.
- * @param ingestion    Настройки для процесса фоновой индексации документов, включая чанкинг.
- * @param httpClient   Настройки для HTTP-клиентов.
- * @param taskExecutor Настройки для основного пула асинхронных задач.
- * @param llmExecutor  Настройки для выделенного пула задач LLM.
- * @param dbExecutor   Настройки для выделенного пула задач БД.
- * @param vectorStore  Настройки для векторного хранилища.
- * @param expansion    Настройки для стратегий расширения контекста.
  */
 @Validated
 @ConfigurationProperties(prefix = "app")
@@ -40,7 +28,8 @@ public record AppProperties(
         @NotNull TaskExecutor llmExecutor,
         @NotNull TaskExecutor dbExecutor,
         @NotNull VectorStoreProperties vectorStore,
-        @NotNull Expansion expansion
+        @NotNull Expansion expansion,
+        @NotNull Rag rag
 ) {
     /**
      * Настройки, связанные с шаблонами промптов.
@@ -70,20 +59,12 @@ public record AppProperties(
      * Настройки для функционала чата.
      */
     public record Chat(@NotNull History history) {
-        /**
-         * Настройки истории чата.
-         */
         public record History(@Min(1) @Max(50) int maxMessages) {
         }
     }
 
     /**
      * Настройки для HTTP-клиентов, таких как WebClient.
-     * Позволяет централизованно управлять таймаутами для внешних вызовов.
-     *
-     * @param connectTimeout   Таймаут на установку соединения.
-     * @param responseTimeout  Общий таймаут на получение всего ответа.
-     * @param readWriteTimeout Таймаут на чтение/запись данных в рамках установленного соединения.
      */
     @Validated
     public record HttpClient(
@@ -95,12 +76,6 @@ public record AppProperties(
 
     /**
      * Настройки для пула асинхронных задач приложения.
-     * Позволяет гибко настраивать параллелизм и производительность.
-     *
-     * @param corePoolSize     Базовое количество потоков в пуле.
-     * @param maxPoolSize      Максимальное количество потоков, до которого пул может расшириться.
-     * @param queueCapacity    Размер очереди для задач, ожидающих выполнения.
-     * @param threadNamePrefix Префикс для имен потоков, полезно для отладки и профилирования.
      */
     @Validated
     public record TaskExecutor(
@@ -113,18 +88,9 @@ public record AppProperties(
 
     /**
      * Настройки, специфичные для векторного хранилища.
-     *
-     * @param index Параметры для тюнинга HNSW-индекса в pgvector.
      */
     @Validated
     public record VectorStoreProperties(@NotNull Index index) {
-        /**
-         * Параметры для HNSW-индекса, влияющие на баланс скорости и точности поиска.
-         *
-         * @param m              Количество соседей на каждом слое графа. Увеличение улучшает точность, но замедляет индексацию.
-         * @param efConstruction Глубина поиска при построении индекса. Увеличение улучшает качество индекса, но сильно замедляет индексацию.
-         * @param efSearch       Глубина поиска во время запроса. Ключевой параметр для тюнинга: увеличение повышает точность (recall), но увеличивает задержку.
-         */
         @Validated
         public record Index(
                 @Min(4) @Max(128) int m,
@@ -136,12 +102,35 @@ public record AppProperties(
 
     /**
      * Конфигурация для стратегий расширения контекста.
-     *
-     * @param graph Настройки для расширения через Граф Знаний.
      */
     @Validated
     public record Expansion(@NotNull Graph graph) {
         public record Graph(boolean enabled) {
         }
+    }
+
+    /**
+     * Общие настройки для всего RAG-конвейера.
+     */
+    @Validated
+    public record Rag(
+            @NotBlank String noContextStrategy,
+            @NotBlank String arrangementStrategy,
+            @NotNull Summarizer summarizer,
+            @NotNull RetrievalProperties retrieval,
+            @NotNull Validation validation
+    ) {
+    }
+
+    /**
+     * Настройки для суммаризации (в данный момент не используются).
+     */
+    public record Summarizer(boolean enabled) {
+    }
+
+    /**
+     * Настройки для шага валидации ответа.
+     */
+    public record Validation(boolean enabled) {
     }
 }

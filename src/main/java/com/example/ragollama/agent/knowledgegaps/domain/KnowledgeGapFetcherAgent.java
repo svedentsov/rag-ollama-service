@@ -3,7 +3,7 @@ package com.example.ragollama.agent.knowledgegaps.domain;
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.ToolAgent;
-import com.example.ragollama.monitoring.KnowledgeGapRepository;
+import com.example.ragollama.monitoring.domain.KnowledgeGapRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -43,7 +43,7 @@ public class KnowledgeGapFetcherAgent implements ToolAgent {
      */
     @Override
     public boolean canHandle(AgentContext context) {
-        return true; // Не требует специфических входных данных, кроме периода, который может быть по умолчанию.
+        return true;
     }
 
     /**
@@ -53,7 +53,6 @@ public class KnowledgeGapFetcherAgent implements ToolAgent {
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         return CompletableFuture.supplyAsync(() -> {
             log.info("Извлечение данных о пробелах в знаниях...");
-            // В реальной системе здесь была бы фильтрация по analysisPeriodDays
             List<String> gapQueries = knowledgeGapRepository.findAll().stream()
                     .map(com.example.ragollama.monitoring.model.KnowledgeGap::getQueryText)
                     .toList();

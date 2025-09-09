@@ -1,4 +1,4 @@
-package com.example.ragollama.monitoring;
+package com.example.ragollama.monitoring.domain;
 
 import com.example.ragollama.monitoring.model.KnowledgeGap;
 import org.springframework.data.jpa.repository.JpaRepository;

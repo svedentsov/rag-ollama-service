@@ -1,0 +1,56 @@
+package com.example.ragollama.rag.pipeline.steps;
+
+import com.example.ragollama.rag.pipeline.RagFlowContext;
+import com.example.ragollama.rag.pipeline.RagPipelineStep;
+import com.example.ragollama.shared.llm.LlmClient;
+import com.example.ragollama.shared.llm.ModelCapability;
+import com.example.ragollama.shared.prompts.PromptService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.document.Document;
+import org.springframework.core.annotation.Order;
+import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * Шаг RAG-конвейера, отвечающий за интеллектуальное сжатие контекста
+ * перед передачей его в LLM-генератор.
+ */
+@Slf4j
+@Component
+@Order(35)
+@RequiredArgsConstructor
+public class ContextualCompressionStep implements RagPipelineStep {
+
+    private final LlmClient llmClient;
+    private final PromptService promptService;
+
+    @Override
+    public Mono<RagFlowContext> process(RagFlowContext context) {
+        List<Document> documents = context.rerankedDocuments();
+        if (documents.isEmpty()) {
+            log.info("Шаг [35] Context Compression: пропущен, нет документов для сжатия.");
+            return Mono.just(context.withCompressedContext(""));
+        }
+        log.info("Шаг [35] Context Compression: запуск сжатия {} документов...", documents.size());
+        String documentsForPrompt = documents.stream()
+                .map(doc -> String.format("<doc source=\"%s\">\n%s\n</doc>",
+                        doc.getMetadata().get("chunkId"), doc.getText()))
+                .collect(Collectors.joining("\n\n"));
+        String promptString = promptService.render("contextualCompressorPrompt", Map.of(
+                "question", context.originalQuery(),
+                "documents", documentsForPrompt
+        ));
+        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+                .map(compressedContext -> {
+                    log.info("Контекст успешно сжат. Исходный размер: ~{} символов, сжатый: {} символов.",
+                            documentsForPrompt.length(), compressedContext.length());
+                    return context.withCompressedContext(compressedContext);
+                });
+    }
+}

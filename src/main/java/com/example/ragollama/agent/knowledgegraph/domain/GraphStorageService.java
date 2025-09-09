@@ -15,10 +15,9 @@ import java.util.Map;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor // ИСПРАВЛЕНИЕ: Используем стандартный конструктор Lombok
+@RequiredArgsConstructor
 public class GraphStorageService {
 
-    // ИСПРАВЛЕНИЕ: Драйвер теперь внедряется Spring из нашего Neo4jConfig
     private final Driver driver;
 
     /**

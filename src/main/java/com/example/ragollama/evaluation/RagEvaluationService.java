@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Сервис для выполнения оффлайн-оценки качества RAG-системы по "золотому датасету".
+ * В этой версии добавлено ограничение параллелизма для снижения нагрузки.
  */
 @Slf4j
 @Service
@@ -59,7 +60,7 @@ public class RagEvaluationService {
                                         failures.add(record.queryId());
                                     })
                                     .onErrorResume(e -> Mono.empty()),
-                            concurrency)
+                            concurrency) // Ограничиваем параллелизм
                     .then(Mono.fromCallable(() -> calculateFinalResults(dataset.size(), details, failures)));
 
         } catch (IOException e) {

@@ -18,7 +18,7 @@ spring:
       # САМЫЙ ВНЕШНИЙ УРОВЕНЬ: Таймаут для асинхронных запросов в контроллерах.
       # Увеличено для предоставления большего запаса времени для LLM.
       # Должен быть больше всех вложенных таймаутов.
-      request-timeout: 590s # Должен быть больше всех вложенных таймаутов
+      request-timeout: 20m
 
   # --- FreeMarker Template Engine Configuration ---
   freemarker:
@@ -199,7 +199,7 @@ resilience4j:
   timelimiter:
     instances:
       ollama:
-        timeout-duration: 590s
+        timeout-duration: 15m
         cancel-running-future: true
       database:
         timeout-duration: 10s
@@ -262,8 +262,8 @@ app:
 
   http-client:
     connect-timeout: 10s # Таймаут на установку TCP-соединения
-    response-timeout: 580s # Общий таймаут на получение ответа
-    read-write-timeout: 580s # Таймаут на чтение/запись данных
+    response-timeout: 15m # Общий таймаут на получение ответа
+    read-write-timeout: 15m # Таймаут на чтение/запись данных
 
   task-executor: # Настройки основного пула потоков для @Async задач.
     core-pool-size: 4
@@ -305,6 +305,8 @@ app:
     arrangement-strategy: sandwich
     summarizer:
       enabled: false
+    validation:
+      enabled: true # Включаем AI-Критика
     retrieval:
       hybrid:
         expansion-min-docs-threshold: 3

@@ -1,5 +1,6 @@
 package com.example.ragollama.monitoring;
 
+import com.example.ragollama.monitoring.domain.KnowledgeGapRepository;
 import com.example.ragollama.monitoring.model.KnowledgeGap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,14 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class KnowledgeGapService {
     private final KnowledgeGapRepository repository;
 
-    /**
-     * Асинхронно сохраняет запись о пробеле в знаниях в базу данных.
-     * <p>
-     * Выполняется в отдельном потоке, чтобы не замедлять основной
-     * RAG-конвейер.
-     *
-     * @param query Текст запроса пользователя, который не дал результатов.
-     */
     @Async("applicationTaskExecutor")
     @Transactional
     public void recordGap(String query) {

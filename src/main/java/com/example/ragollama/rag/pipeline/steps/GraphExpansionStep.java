@@ -11,9 +11,8 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 @Component
-@Order(27) // Выполняется между Reranking (25) и ContextExpansion (28)
+@Order(27)
 @Slf4j
-// ИСПРАВЛЕНИЕ: Условие теперь указывает на правильный путь в application.yml
 @ConditionalOnProperty(name = "app.expansion.graph.enabled", havingValue = "true")
 public class GraphExpansionStep implements RagPipelineStep {
 

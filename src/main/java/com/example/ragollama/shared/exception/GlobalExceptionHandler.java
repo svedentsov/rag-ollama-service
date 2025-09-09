@@ -15,11 +15,6 @@ import java.util.stream.Collectors;
 /**
  * Глобальный обработчик исключений, реализующий централизованную и
  * унифицированную логику обработки ошибок для всего приложения.
- *
- * <p>Этот компонент перехватывает исключения, выброшенные из любого контроллера,
- * логирует их, записывает метрики и возвращает клиенту стандартизированный
- * ответ об ошибке в формате {@link ProblemDetail} (RFC 7807), скрывая
- * детали внутренней реализации и stack trace.
  */
 @RestControllerAdvice
 @Slf4j
@@ -29,11 +24,10 @@ public class GlobalExceptionHandler {
     private final MetricService metricService;
 
     /**
-     * Обрабатывает исключения {@link MethodArgumentNotValidException}, которые возникают
-     * при сбое валидации DTO (аннотации {@code @Valid}, {@code @NotBlank}, и т.д.).
+     * Обрабатывает исключения валидации DTO.
      *
-     * @param e Исключение, содержащее информацию об ошибках валидации.
-     * @return {@link ProblemDetail} с кодом 400 (Bad Request) и детальным описанием ошибок.
+     * @param e Исключение.
+     * @return ProblemDetail с кодом 400.
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleMethodArgumentNotValid(MethodArgumentNotValidException e) {
@@ -50,11 +44,10 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Обрабатывает кастомное исключение {@link PromptInjectionException}, выбрасываемое
-     * при обнаружении потенциальной атаки "Prompt Injection".
+     * Обрабатывает кастомное исключение PromptInjectionException.
      *
-     * @param e Исключение {@link PromptInjectionException}.
-     * @return {@link ProblemDetail} с кодом 422 (Unprocessable Entity), информирующий клиента о причине блокировки.
+     * @param e Исключение.
+     * @return ProblemDetail с кодом 422 (Unprocessable Entity).
      */
     @ExceptionHandler(PromptInjectionException.class)
     public ProblemDetail handlePromptInjectionException(PromptInjectionException e) {
@@ -67,11 +60,10 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Обрабатывает исключение {@link QuotaExceededException}, возникающее при
-     * превышении пользователем лимита на использование LLM.
+     * Обрабатывает исключение при превышении квоты.
      *
-     * @param e Исключение {@link QuotaExceededException}.
-     * @return {@link ProblemDetail} с кодом 429 (Too Many Requests).
+     * @param e Исключение.
+     * @return ProblemDetail с кодом 429.
      */
     @ExceptionHandler(QuotaExceededException.class)
     public ProblemDetail handleQuotaExceededException(QuotaExceededException e) {
@@ -84,10 +76,10 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Обрабатывает исключения, возникшие на этапе извлечения документов (Retrieval).
+     * Обрабатывает ошибки на этапе извлечения.
      *
-     * @param e Исключение {@link RetrievalException}.
-     * @return {@link ProblemDetail} с кодом 503 (Service Unavailable).
+     * @param e Исключение.
+     * @return ProblemDetail с кодом 503.
      */
     @ExceptionHandler(RetrievalException.class)
     public ProblemDetail handleRetrievalException(RetrievalException e) {
@@ -100,10 +92,10 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Обрабатывает исключения, возникшие на этапе генерации ответа (Generation).
+     * Обрабатывает ошибки на этапе генерации.
      *
-     * @param e Исключение {@link GenerationException}.
-     * @return {@link ProblemDetail} с кодом 503 (Service Unavailable).
+     * @param e Исключение.
+     * @return ProblemDetail с кодом 503.
      */
     @ExceptionHandler(GenerationException.class)
     public ProblemDetail handleGenerationException(GenerationException e) {
@@ -116,12 +108,10 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Обрабатывает исключения, связанные с ошибками в фоновой обработке,
-     * например, при парсинге ответа от LLM.
+     * Обрабатывает ошибки при обработке ответа от LLM.
      *
-     * @param e Исключение {@link ProcessingException}.
-     * @return {@link ProblemDetail} с кодом 502 (Bad Gateway), так как
-     * ошибка произошла при взаимодействии с внешней системой (LLM).
+     * @param e Исключение.
+     * @return ProblemDetail с кодом 502.
      */
     @ExceptionHandler(ProcessingException.class)
     public ProblemDetail handleProcessingException(ProcessingException e) {
@@ -134,10 +124,10 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Обрабатывает все остальные, непредвиденные исключения.
+     * Обрабатывает все остальные непредвиденные исключения.
      *
-     * @param e Любое необработанное исключение.
-     * @return {@link ProblemDetail} с кодом 500 (Internal Server Error).
+     * @param e Исключение.
+     * @return ProblemDetail с кодом 500.
      */
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleGenericException(Exception e) {

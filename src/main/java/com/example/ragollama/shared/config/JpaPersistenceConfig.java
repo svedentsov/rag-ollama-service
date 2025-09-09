@@ -17,9 +17,10 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @EnableJpaRepositories(basePackages = {
         "com.example.ragollama.chat.domain",
         "com.example.ragollama.ingestion.domain",
-        "com.example.ragollama.monitoring",
-        "com.example.ragollama.agent.metrics",
+        "com.example.ragollama.monitoring.domain",
+        "com.example.ragollama.agent.metrics.domain",
         "com.example.ragollama.agent.dynamic",
-        "com.example.ragollama.agent.finops"})
+        "com.example.ragollama.agent.finops.domain",
+        "com.example.ragollama.evaluation.domain"})
 public class JpaPersistenceConfig {
 }
