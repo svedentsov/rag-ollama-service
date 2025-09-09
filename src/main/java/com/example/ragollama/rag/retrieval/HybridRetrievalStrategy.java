@@ -28,10 +28,9 @@ public class HybridRetrievalStrategy {
     private final VectorSearchService vectorSearchService;
     private final FtsSearchService ftsSearchService;
     private final FusionService fusionService;
-    private final RetrievalProperties retrievalProperties;
     private final MetricService metricService;
     private final KnowledgeGapService knowledgeGapService;
-    private final GraphSearchService graphSearchService; // НОВАЯ ЗАВИСИМОСТЬ
+    private final GraphSearchService graphSearchService;
 
     public Mono<List<Document>> retrieve(
             ProcessedQueries processedQueries,
@@ -44,26 +43,23 @@ public class HybridRetrievalStrategy {
             knowledgeGapService.recordGap(originalQuery);
             return Mono.just(List.of());
         }
-
         // Запускаем все поиски параллельно
         Mono<List<Document>> vectorSearchMono = vectorSearchService.search(processedQueries.expansionQueries(), topK, similarityThreshold, businessFilter);
         Mono<List<Document>> ftsSearchMono = ftsSearchService.search(originalQuery);
+        // Добавляем вызов графового поиска, если запрос релевантен
         Mono<List<Document>> graphSearchMono = isGraphQuery(originalQuery)
                 ? graphSearchService.search(originalQuery)
                 : Mono.just(List.of());
-
         return Mono.zip(vectorSearchMono, ftsSearchMono, graphSearchMono)
                 .map(tuple -> {
                     List<Document> vectorResults = tuple.getT1();
                     List<Document> ftsResults = tuple.getT2();
                     List<Document> graphResults = tuple.getT3();
-
                     metricService.recordRetrievedDocumentsCount(vectorResults.size() + ftsResults.size() + graphResults.size());
-
                     if (!graphResults.isEmpty()) {
-                        log.info("Получено {} результатов из графа знаний.", graphResults.size());
+                        log.info("Получено {} результатов из Графа Знаний для запроса: '{}'", graphResults.size(), originalQuery);
                     }
-
+                    // Объединяем результаты всех трех источников
                     return fusionService.reciprocalRankFusion(List.of(vectorResults, ftsResults, graphResults));
                 });
     }

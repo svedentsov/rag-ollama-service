@@ -87,6 +87,7 @@ spring:
         options:
           # Модель для создания векторных представлений (эмбеддингов).
           model: mxbai-embed-large
+          model-version: "1.0.0"
     vectorstore:
       pgvector:
         table-name: vector_store # Имя таблицы для хранения векторов.
@@ -324,6 +325,10 @@ app:
       cron: "0 0 4 * * ?" # Каждый день в 4 часа утра
       stale-document-detection:
         enabled: true
+    embedding-drift:
+      scheduler:
+        enabled: true
+        cron: "0 0 2 * * ?" # Каждый день в 2 часа ночи
 
   curation: # Настройки для Knowledge Curator Agent
     scheduler:
