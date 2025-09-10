@@ -17,7 +17,16 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Клиент-оркестратор для взаимодействия с LLM, возвращающий CompletableFuture.
- * Инкапсулирует логику маршрутизации, отказоустойчивости, квотирования, трекинга и поддержки JSON-режима.
+ * <p> Этот класс является единой точкой входа (фасадом) для всего приложения при
+ * работе с языковыми моделями. Он инкапсулирует и оркестрирует сквозные
+ * бизнес-процессы, такие как:
+ * <ul>
+ *   <li>Проверка квот на использование.</li>
+ *   <li>Интеллектуальный выбор модели через {@link LlmRouterService}.</li>
+ *   <li>Выполнение вызова с применением политик отказоустойчивости через {@link ResilientLlmExecutor}.</li>
+ *   <li>Логирование использования токенов для FinOps-аналитики.</li>
+ * </ul>
+ * Такая архитектура полностью изолирует бизнес-логику от сложностей взаимодействия с LLM.
  */
 @Component
 @RequiredArgsConstructor
@@ -40,7 +49,7 @@ public class LlmClient {
      * @return {@link CompletableFuture} с текстовым ответом от LLM.
      */
     public CompletableFuture<String> callChat(Prompt prompt, ModelCapability capability) {
-        return callChat(prompt, capability, false); // По умолчанию не JSON
+        return callChat(prompt, capability, false);
     }
 
     /**
@@ -53,7 +62,7 @@ public class LlmClient {
      */
     public CompletableFuture<String> callChat(Prompt prompt, ModelCapability capability, boolean isJson) {
         return CompletableFuture.supplyAsync(() -> {
-            String username = "anonymous_user"; // В реальной системе извлекается из SecurityContext
+            String username = "anonymous_user";
             int promptTokens = tokenizationService.countTokens(prompt.getContents());
             if (quotaService.isQuotaExceeded(username, promptTokens)) {
                 throw new QuotaExceededException("Месячный лимит токенов исчерпан.");
@@ -98,7 +107,7 @@ public class LlmClient {
         OllamaOptions options = new OllamaOptions();
         options.setModel(modelName);
         if (isJson) {
-            options.setFormat("json"); // Указываем Ollama вернуть JSON
+            options.setFormat("json");
         }
         return options;
     }

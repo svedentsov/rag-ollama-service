@@ -19,8 +19,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер, предоставляющий API для RAG-взаимодействия.
- * <p>
- * Эталонная реализация контроллера в Clean Architecture. Он является тонким
+ * <p> Эталонная реализация контроллера в Clean Architecture. Он является тонким
  * слоем, который принимает HTTP-запросы, валидирует DTO и делегирует всю
  * работу специализированному {@link RagApplicationService}.
  *
@@ -39,7 +38,7 @@ public class RagController {
      * сгенерированный ответ вместе с источниками.
      *
      * @param request DTO с вопросом пользователя и параметрами поиска.
-     * @return {@link CompletableFuture} с {@link RagQueryResponse}.
+     * @return {@link CompletableFuture} с {@link RagQueryResponse}, содержащим полный ответ.
      */
     @PostMapping("/query")
     @Operation(summary = "Задать вопрос к базе знаний (полный ответ)")
@@ -49,6 +48,8 @@ public class RagController {
 
     /**
      * Принимает запрос и возвращает ответ в виде потока Server-Sent Events (SSE).
+     * <p> Этот эндпоинт реализует сквозную потоковую передачу, позволяя клиенту
+     * получать части ответа по мере их генерации языковой моделью.
      *
      * @param request DTO с вопросом пользователя и параметрами поиска.
      * @return Реактивный поток {@link Flux}, передающий структурированные части ответа.

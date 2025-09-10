@@ -1,12 +1,12 @@
 package com.example.ragollama.optimization.model;
 
+import com.example.ragollama.optimization.QueryProfilerAgent;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
  * DTO, представляющий семантический профиль пользовательского запроса.
- * <p>
- * Генерируется агентом {@link com.example.ragollama.optimization.QueryProfilerAgent}
+ * <p> Генерируется агентом {@link QueryProfilerAgent}
  * для принятия решений о выборе оптимальной RAG-стратегии.
  */
 @Schema(description = "Семантический профиль пользовательского запроса")

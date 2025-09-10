@@ -14,8 +14,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Сервис прикладного уровня (Application Service), оркестрирующий бизнес-логику чата.
- * <p>
- * Эта версия была отрефакторена для следования принципам Clean Architecture и SRP.
+ * <p> Эта версия была отрефакторена для следования принципам Clean Architecture и SRP.
  * Вся логика управления сессиями и историей была делегирована в специализированный
  * сервис {@link DialogManager}. Ответственность этого класса теперь сфокусирована
  * исключительно на оркестрации простого чат-взаимодействия:
@@ -24,8 +23,7 @@ import java.util.concurrent.CompletableFuture;
  *     <li>Вызвать "чистый" доменный сервис {@link ChatService} для генерации ответа.</li>
  *     <li>Завершить диалог, сохранив ответ ассистента.</li>
  * </ol>
- * <p>
- * Этот подход значительно повышает тестируемость и читаемость кода.
+ * <p> Этот подход значительно повышает тестируемость и читаемость кода.
  */
 @Service
 @Slf4j
@@ -37,8 +35,7 @@ public class ChatApplicationService {
 
     /**
      * Асинхронно обрабатывает чат-запрос, возвращая полный ответ.
-     * <p>
-     * Конвейер выполнения:
+     * <p> Конвейер выполнения:
      * <ol>
      *     <li>Вызов {@link DialogManager#startTurn} для получения контекста диалога (ID сессии, история).</li>
      *     <li>Вызов доменного сервиса {@link ChatService} для генерации ответа LLM.</li>
@@ -54,7 +51,7 @@ public class ChatApplicationService {
         return dialogManager.startTurn(request.sessionId(), request.message(), MessageRole.USER)
                 .thenCompose(turnContext ->
                         // Шаг 2: Выполняем основную бизнес-логику (вызов LLM)
-                        chatService.processChatRequestAsync(request.message(), turnContext.history())
+                        chatService.processChatRequestAsync(turnContext.history())
                                 // Шаг 3: Завершаем диалог, сохраняя ответ
                                 .thenCompose(llmAnswer ->
                                         dialogManager.endTurn(turnContext.sessionId(), llmAnswer, MessageRole.ASSISTANT)
@@ -70,11 +67,10 @@ public class ChatApplicationService {
      * @return {@link Flux} с текстовыми частями ответа от LLM.
      */
     public Flux<String> processChatRequestStream(ChatRequest request) {
-        // Используем Mono.fromFuture для интеграции с асинхронным DialogManager
         return Mono.fromFuture(() -> dialogManager.startTurn(request.sessionId(), request.message(), MessageRole.USER))
                 .flatMapMany(turnContext -> {
                     final StringBuilder fullResponseBuilder = new StringBuilder();
-                    return chatService.processChatRequestStream(request.message(), turnContext.history())
+                    return chatService.processChatRequestStream(turnContext.history())
                             .doOnNext(fullResponseBuilder::append)
                             .doOnComplete(() -> {
                                 String fullResponse = fullResponseBuilder.toString();

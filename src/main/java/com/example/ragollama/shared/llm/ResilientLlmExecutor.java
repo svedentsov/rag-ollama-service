@@ -23,6 +23,7 @@ import java.util.function.Supplier;
  * <p> Этот класс реализует паттерн "Декоратор" и отвечает исключительно за
  * применение нефункциональных требований (надежность, наблюдаемость) к
  * асинхронным операциям, представленным в виде {@link Mono} или {@link Flux}.
+ * Он полностью отделен от бизнес-логики вызова LLM.
  */
 @Component
 @RequiredArgsConstructor
@@ -39,7 +40,8 @@ public class ResilientLlmExecutor {
     private TimeLimiter timeLimiter;
 
     /**
-     * Инициализирует компоненты Resilience4j после создания бина.
+     * Инициализирует компоненты Resilience4j после создания бина,
+     * загружая именованные конфигурации из реестров для дальнейшего использования.
      */
     @PostConstruct
     public void init() {

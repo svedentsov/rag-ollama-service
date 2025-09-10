@@ -13,13 +13,14 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * "Чистый" сервис для обработки бизнес-логики чата.
- * <p>
- * Эта версия полностью соответствует Принципу единственной ответственности (SRP).
- * Его единственная задача — принять готовые данные (сообщение и историю)
- * и делегировать вызов LLM специализированному клиенту {@link LlmClient}.
- * Он не знает о сессиях, базе данных или HTTP, что делает его максимально
- * переиспользуемым и легко тестируемым.
+ * "Чистый" доменный сервис для обработки бизнес-логики чата.
+ * <p> Этот сервис является ядром функциональности чата и строго следует
+ * Принципу Единственной Ответственности (SRP). Его единственная задача — принять
+ * готовые данные (полную историю диалога) и делегировать вызов LLM
+ * специализированному клиенту {@link LlmClient}.
+ * <p> Он не знает о сессиях, базе данных или HTTP, что делает его максимально
+ * переиспользуемым, легко тестируемым в изоляции и соответствующим
+ * принципам Clean Architecture.
  */
 @Service
 @Slf4j
@@ -31,11 +32,11 @@ public class ChatService {
     /**
      * Обрабатывает чат-запрос асинхронно, возвращая полный ответ.
      *
-     * @param userMessage Сообщение от пользователя.
-     * @param history     Предоставленная история чата для поддержания контекста.
+     * @param history Предоставленная история чата для поддержания контекста.
+     *                Последнее сообщение в списке - это текущий запрос пользователя.
      * @return {@link CompletableFuture} с финальным ответом от LLM.
      */
-    public CompletableFuture<String> processChatRequestAsync(String userMessage, List<Message> history) {
+    public CompletableFuture<String> processChatRequestAsync(List<Message> history) {
         log.info("Обработка 'чистого' асинхронного запроса в чат.");
         Prompt prompt = new Prompt(history);
         return llmClient.callChat(prompt, ModelCapability.BALANCED);
@@ -44,11 +45,11 @@ public class ChatService {
     /**
      * Обрабатывает чат-запрос в потоковом режиме (Server-Sent Events).
      *
-     * @param userMessage Сообщение от пользователя.
-     * @param history     Предоставленная история чата.
+     * @param history Предоставленная история чата. Последнее сообщение в списке -
+     *                это текущий запрос пользователя.
      * @return Реактивный поток {@link Flux}, передающий части ответа по мере их генерации.
      */
-    public Flux<String> processChatRequestStream(String userMessage, List<Message> history) {
+    public Flux<String> processChatRequestStream(List<Message> history) {
         log.info("Обработка 'чистого' потокового запроса в чат.");
         Prompt prompt = new Prompt(history);
         return llmClient.streamChat(prompt, ModelCapability.BALANCED);

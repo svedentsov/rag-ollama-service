@@ -21,7 +21,8 @@ import java.util.Map;
 
 /**
  * Агент, реализующий цикл самокорректирующегося поиска (Self-Correcting Retrieval).
- * Оценивает найденные документы и, при необходимости, переформулирует запрос для повторного поиска.
+ * <p> Оценивает найденные документы и, при необходимости, переформулирует запрос для повторного поиска,
+ * повышая надежность и качество извлечения информации.
  */
 @Service
 @Slf4j
@@ -38,7 +39,14 @@ public class ReflectiveRetrieverAgent {
     }
 
     /**
-     * Запускает итеративный процесс поиска.
+     * Запускает итеративный процесс поиска с самокоррекцией.
+     *
+     * @param queries       Обработанные запросы для поиска.
+     * @param originalQuery Оригинальный запрос пользователя для контекста.
+     * @param topK          Количество извлекаемых документов.
+     * @param threshold     Порог схожести.
+     * @param filter        Фильтр метаданных.
+     * @return {@link Mono} со списком финальных документов.
      */
     public Mono<List<Document>> retrieve(ProcessedQueries queries, String originalQuery, int topK, double threshold, Filter.Expression filter) {
         return performRetrievalAttempt(queries, originalQuery, topK, threshold, filter, 1);
@@ -56,17 +64,14 @@ public class ReflectiveRetrieverAgent {
         return retrievalStrategy.retrieve(queries, originalQuery, topK, threshold, filter)
                 .flatMap(documents -> {
                     if (documents.isEmpty()) {
-                        return Mono.just(documents); // Если ничего не найдено, нет смысла в оценке
+                        return Mono.just(documents);
                     }
-
-                    // Шаг 2: Оценка найденных документов
                     return judgeRetrieval(originalQuery, documents)
                             .flatMap(judgeResult -> {
                                 if (judgeResult.isSufficient()) {
                                     log.info("Оценка поиска (попытка {}): Документы признаны достаточными.", attempt);
                                     return Mono.just(documents);
                                 } else {
-                                    // Шаг 3: Переформулирование запроса и повторный поиск
                                     log.warn("Оценка поиска (попытка {}): Недостаточно информации. Причина: '{}'. Запуск переформулирования.", attempt, judgeResult.reasoning());
                                     return rewriteQuery(originalQuery, judgeResult.reasoning())
                                             .flatMap(newQuery -> {
@@ -86,8 +91,6 @@ public class ReflectiveRetrieverAgent {
                 "query", query,
                 "documents", documents
         ));
-
-        // Используем надежную модель для получения JSON
         return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.FAST_RELIABLE, true))
                 .map(this::parseJudgeResponse);
     }

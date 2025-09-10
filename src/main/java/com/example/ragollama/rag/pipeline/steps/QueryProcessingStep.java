@@ -1,5 +1,6 @@
 package com.example.ragollama.rag.pipeline.steps;
 
+import com.example.ragollama.optimization.QueryProfilerAgent;
 import com.example.ragollama.rag.agent.QueryProcessingPipeline;
 import com.example.ragollama.rag.pipeline.RagFlowContext;
 import com.example.ragollama.rag.pipeline.RagPipelineStep;
@@ -17,9 +18,10 @@ import reactor.core.publisher.Mono;
  * важно для повышения полноты (Recall) и точности (Precision) поиска.
  *
  * @see QueryProcessingPipeline
+ * @see QueryProfilerAgent
  */
 @Component
-@Order(10) // Самый первый шаг
+@Order(10)
 @Slf4j
 @RequiredArgsConstructor
 public class QueryProcessingStep implements RagPipelineStep {

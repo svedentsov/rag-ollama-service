@@ -9,17 +9,17 @@ import java.util.UUID;
 
 /**
  * Сущность JPA, представляющая одно сообщение в истории чата.
- * <p>
- * Каждая запись в таблице {@code chat_messages} соответствует одному
+ * <p> Каждая запись в таблице {@code chat_messages} соответствует одному
  * сообщению от пользователя или ассистента в рамках определенной сессии.
+ * Эта сущность является ключевым элементом для обеспечения stateful-взаимодействия.
  */
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@ToString(exclude = "content") // Исключаем большое текстовое поле из toString()
-@EqualsAndHashCode(of = "id") // Реализуем equals/hashCode только по ID
+@ToString(exclude = "content")
+@EqualsAndHashCode(of = "id")
 @Entity
 @Table(name = "chat_messages")
 public class ChatMessage {

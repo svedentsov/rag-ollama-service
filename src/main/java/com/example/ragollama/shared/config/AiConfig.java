@@ -21,14 +21,20 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 /**
  * Конфигурационный класс для централизованного создания и настройки бинов, связанных с AI.
+ * <p> Этот класс является единой точкой для сборки всех компонентов, составляющих
+ * наш интеллектуальный и отказоустойчивый LLM-шлюз.
  */
 @Configuration
 public class AiConfig {
 
     /**
      * Переопределяет стандартный бин OllamaApi, чтобы он использовал наш WebClient с правильными таймаутами.
-     * Автоконфигурация Spring AI автоматически обнаружит этот @Primary бин и использует его
-     * при создании OllamaChatModel.
+     * <p> Автоконфигурация Spring AI автоматически обнаружит этот {@code @Primary} бин и использует его
+     * при создании {@link OllamaChatModel}.
+     *
+     * @param webClientBuilder Строитель WebClient'а, настроенный в {@link AppConfig}.
+     * @param ollamaBaseUrl    URL-адрес Ollama из конфигурационного файла.
+     * @return Сконфигурированный экземпляр {@link OllamaApi}.
      */
     @Bean
     @Primary
@@ -41,6 +47,12 @@ public class AiConfig {
                 .build();
     }
 
+    /**
+     * Предоставляет основной бин {@link ChatClient} для всего приложения.
+     *
+     * @param ollamaChatModel Модель чата, автоматически сконфигурированная Spring AI.
+     * @return Готовый к использованию {@link ChatClient}.
+     */
     @Bean
     @Primary
     public ChatClient chatClient(OllamaChatModel ollamaChatModel) {
@@ -48,7 +60,19 @@ public class AiConfig {
     }
 
     /**
-     * Создает и предоставляет наш кастомный фасад LlmClient.
+     * Создает и предоставляет наш кастомный фасад {@link LlmClient}.
+     * <p> Этот метод является примером чистого Dependency Injection, собирая
+     * все необходимые компоненты (шлюз, роутер, исполнитель, сервисы квот и трекинга)
+     * в единый, высокоуровневый клиент.
+     *
+     * @param llmGateway              Низкоуровневый шлюз для прямых вызовов.
+     * @param llmRouterService        Сервис для интеллектуального выбора модели.
+     * @param resilientExecutor       Декоратор для обеспечения отказоустойчивости.
+     * @param quotaService            Сервис для проверки квот.
+     * @param usageTracker            Сервис для логирования использования.
+     * @param tokenizationService     Сервис для работы с токенами.
+     * @param applicationTaskExecutor Пул потоков для выполнения асинхронных операций.
+     * @return Полностью сконфигурированный экземпляр {@link LlmClient}.
      */
     @Bean
     public LlmClient llmClient(

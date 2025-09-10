@@ -92,9 +92,6 @@ public class LlmRouterService {
 
         /**
          * DTO для десериализации объекта одной модели.
-         * <p>Аннотация {@code @JsonIgnoreProperties(ignoreUnknown = true)} делает
-         * парсинг устойчивым к будущим изменениям в Ollama API, позволяя
-         * игнорировать новые, неизвестные нам поля.
          *
          * @param name Имя модели (например, 'llama3:latest').
          */
