@@ -14,42 +14,40 @@ import java.util.Optional;
 
 /**
  * Компонент-маппер, отвечающий за преобразование внутреннего результата
- * работы конвейера {@link AgentResult} в публичный DTO ответа {@link AccessibilityAuditResponse}.
- *
- * <p>Изоляция этой логики в отдельном классе соответствует Принципу единственной
+ * работы конвейера ({@link AgentResult}) в публичный DTO ответа ({@link AccessibilityAuditResponse}).
+ * <p>
+ * Изоляция этой логики в отдельном классе соответствует Принципу единственной
  * ответственности и упрощает тестирование контроллера.
  *
- * <p>Эта версия реализует отказоустойчивый подход: она ищет необходимый
+ * <p>Эта реализация использует отказоустойчивый подход: она ищет необходимый
  * {@link AccessibilityReport} во всех результатах конвейера, а не только
- * в последнем. Это делает маппер нечувствительным к добавлению новых агентов
- * (например, для логирования) в конец конвейера.
+ * в последнем. Поиск ведется с конца списка для оптимизации, так как ожидается,
+ * что релевантный результат будет ближе к концу выполнения. Это делает маппер
+ * нечувствительным к добавлению в конвейер новых агентов (например, для логирования).
  */
 @Component
 @Slf4j
 public class AccessibilityMapper {
 
     /**
-     * Преобразует список результатов работы конвейера в DTO ответа.
+     * Преобразует список результатов работы конвейера в DTO ответа для API.
      *
      * <p>Логика основана на строгом контракте: интересующий нас результат
-     * (`AccessibilityReport`) должен находиться в деталях одного из
-     * выполненных агентов под ключом
-     * {@link AccessibilityAuditorAgent#ACCESSIBILITY_REPORT_KEY}.
+     * ({@link AccessibilityReport}) должен находиться в деталях одного из
+     * выполненных агентов под ключом {@link AccessibilityAuditorAgent#ACCESSIBILITY_REPORT_KEY}.
      *
-     * <p>Поиск ведется с конца списка для оптимизации, так как ожидается,
-     * что релевантный результат будет ближе к концу выполнения конвейера.
-     *
-     * @param agentResults Список результатов, возвращенный конвейером.
+     * @param agentResults Список результатов, возвращенный конвейером. Может быть null.
      * @return DTO ответа {@link AccessibilityAuditResponse} для API.
      * @throws IllegalStateException если ни один из результатов агентов не содержит
      *                               ожидаемый {@link AccessibilityReport}, что указывает
-     *                               на нарушение контракта или ошибку в конвейере.
+     *                               на нарушение контракта или ошибку в конфигурации конвейера.
      */
     public AccessibilityAuditResponse toResponseDto(List<AgentResult> agentResults) {
-        log.debug("Маппинг {} результатов конвейера в AccessibilityAuditResponse DTO.", agentResults != null ? agentResults.size() : 0);
+        log.debug("Маппинг {} результатов конвейера в AccessibilityAuditResponse DTO.",
+                agentResults != null ? agentResults.size() : 0);
         return Optional.ofNullable(agentResults)
                 .orElse(Collections.emptyList())
-                .reversed() // Java 21 feature: creates a reversed-order view of the List
+                .reversed()
                 .stream()
                 .filter(Objects::nonNull)
                 .map(AgentResult::details)
@@ -58,13 +56,11 @@ public class AccessibilityMapper {
                 .filter(AccessibilityReport.class::isInstance)
                 .map(AccessibilityReport.class::cast)
                 .findFirst() // Находим первый попавшийся, идя с конца
-                .map(report -> {
-                    log.info("AccessibilityReport успешно найден в результатах конвейера для маппинга.");
-                    return new AccessibilityAuditResponse(report);
-                })
+                .map(AccessibilityAuditResponse::new)
                 .orElseThrow(() -> {
-                    log.error("Контракт нарушен: в результатах конвейера не найден AccessibilityReport по ключу '{}'", AccessibilityAuditorAgent.ACCESSIBILITY_REPORT_KEY);
-                    return new IllegalStateException("Нарушение контракта: результат конвейера не содержит ожидаемый AccessibilityReport.");
+                    log.error("Нарушение контракта: в результатах конвейера не найден AccessibilityReport по ключу '{}'",
+                            AccessibilityAuditorAgent.ACCESSIBILITY_REPORT_KEY);
+                    return new IllegalStateException("Внутренняя ошибка: результат конвейера не содержит ожидаемый отчет.");
                 });
     }
 }

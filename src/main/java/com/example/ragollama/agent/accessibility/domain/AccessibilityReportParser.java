@@ -13,12 +13,13 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * Компонент, отвечающий за парсинг и валидацию JSON-ответа от LLM
- * в контексте аудита доступности.
- *
- * <p>Этот класс инкапсулирует логику обработки потенциально невалидного
+ * Компонент-парсер, отвечающий за безопасное преобразование JSON-ответа от LLM
+ * в строго типизированный DTO {@link AccessibilityReport}.
+ * <p>
+ * Этот класс инкапсулирует логику обработки потенциально невалидного
  * или "зашумленного" вывода от языковой модели, следуя Принципу
- * единственной ответственности.
+ * единственной ответственности. Он использует {@link JsonExtractorUtil} для
+ * надежного извлечения JSON-блока перед десериализацией.
  */
 @Slf4j
 @Component
@@ -32,8 +33,8 @@ public class AccessibilityReportParser {
      *
      * @param jsonResponse  Сырой строковый JSON-ответ от языковой модели.
      * @param rawViolations Исходный список нарушений от сканера, который будет
-     *                      добавлен в финальный отчет.
-     * @return Полностью собранный {@link AccessibilityReport}.
+     *                      добавлен в финальный отчет для полноты.
+     * @return Полностью собранный и валидный {@link AccessibilityReport}.
      * @throws LlmJsonResponseParseException если LLM вернула невалидный JSON,
      *                                       который не удалось распарсить даже после очистки.
      */
@@ -42,6 +43,7 @@ public class AccessibilityReportParser {
             String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
             AccessibilityReport summaryReport = objectMapper.readValue(cleanedJson, AccessibilityReport.class);
             log.debug("JSON-ответ от LLM успешно распарсен и объединен с {} исходными нарушениями.", rawViolations.size());
+            // Собираем финальный отчет, объединяя резюме от LLM и полный список нарушений от сканера
             return new AccessibilityReport(summaryReport.summary(), summaryReport.topRecommendations(), rawViolations);
         } catch (JsonProcessingException e) {
             log.error("Не удалось распарсить JSON-ответ от a11y LLM: {}", jsonResponse, e);

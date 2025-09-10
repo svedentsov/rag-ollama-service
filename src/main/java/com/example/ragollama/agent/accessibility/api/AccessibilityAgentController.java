@@ -5,9 +5,13 @@ import com.example.ragollama.agent.accessibility.api.dto.AccessibilityAuditReque
 import com.example.ragollama.agent.accessibility.api.dto.AccessibilityAuditResponse;
 import com.example.ragollama.agent.accessibility.mappers.AccessibilityMapper;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,14 +22,17 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Контроллер для AI-агента, выполняющего аудит доступности (a11y).
  * <p>
- * Этот контроллер строго следует принципам Clean Architecture:
+ * Этот контроллер является эталонной реализацией Web-слоя в Clean Architecture.
+ * Его обязанности строго ограничены:
  * <ul>
- *     <li>Он работает исключительно с DTO (Data Transfer Objects) для изоляции
- *         внутренней доменной модели от внешнего мира.</li>
- *     <li>Он делегирует всю бизнес-логику сервисному слою
- *         ({@link AgentOrchestratorService}).</li>
- *     <li>Он не содержит никакой логики, кроме валидации, маппинга и вызова сервиса.</li>
+ *     <li>Прием и валидация входящих DTO (Data Transfer Objects).</li>
+ *     <li>Делегирование всей бизнес-логики сервисному слою ({@link AgentOrchestratorService}).</li>
+ *     <li>Преобразование внутреннего результата в публичный DTO ответа с помощью маппера.</li>
  * </ul>
+ * <p>
+ * Благодаря использованию {@link CompletableFuture}, контроллер работает в полностью
+ * неблокирующем режиме, немедленно освобождая поток запроса и асинхронно
+ * ожидая результат выполнения задачи.
  */
 @RestController
 @RequestMapping("/api/v1/agents/accessibility")
@@ -37,13 +44,25 @@ public class AccessibilityAgentController {
     private final AccessibilityMapper accessibilityMapper;
 
     /**
-     * Принимает HTML-код страницы и запускает конвейер для его анализа на предмет нарушений доступности.
+     * Запускает асинхронный конвейер для анализа HTML-кода на предмет нарушений доступности.
      *
-     * @param request DTO с HTML-кодом.
-     * @return {@link CompletableFuture} с результатом работы агента, преобразованным в DTO ответа.
+     * @param request DTO с HTML-кодом для анализа. Должен быть валидным.
+     * @return {@link CompletableFuture}, который по завершении будет содержать
+     * результат работы конвейера, преобразованный в DTO ответа. Spring MVC
+     * автоматически обработает асинхронный ответ.
      */
     @PostMapping("/audit")
-    @Operation(summary = "Провести аудит доступности (a11y) для HTML-кода")
+    @Operation(
+            summary = "Провести аудит доступности (a11y) для HTML-кода",
+            description = "Принимает HTML-код страницы и асинхронно запускает конвейер для его анализа. " +
+                    "Возвращает отчет с резюме, рекомендациями и списком технических нарушений."
+    )
+    @ApiResponse(
+            responseCode = "200",
+            description = "Аудит успешно завершен",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = AccessibilityAuditResponse.class))
+    )
+    @ApiResponse(responseCode = "400", description = "Некорректный запрос (например, пустой HTML)")
     public CompletableFuture<AccessibilityAuditResponse> auditAccessibility(@Valid @RequestBody AccessibilityAuditRequest request) {
         return orchestratorService.invokePipeline("accessibility-audit-pipeline", request.toAgentContext())
                 .thenApply(accessibilityMapper::toResponseDto);

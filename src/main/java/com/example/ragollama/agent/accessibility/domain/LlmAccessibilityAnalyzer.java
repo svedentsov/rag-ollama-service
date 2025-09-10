@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -20,14 +21,14 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Специализированный сервис, инкапсулирующий логику анализа нарушений
  * доступности (a11y) с помощью языковой модели (LLM).
- *
- * <p>Этот класс является реализацией Принципа Единственной Ответственности (SRP).
+ * <p>
+ * Этот класс является эталонной реализацией Принципа Единственной Ответственности (SRP).
  * Его единственная задача — принять список технических нарушений,
  * взаимодействовать с LLM для их анализа и обогащения, и вернуть
  * структурированный, человекочитаемый отчет.
- *
- * <p>Он полностью отделен от логики оркестрации агента, что упрощает его
- * тестирование и переиспользование.
+ * <p>
+ * Он полностью отделен от логики оркестрации агента, что упрощает его
+ * тестирование в изоляции и переиспользование. Все операции выполняются асинхронно.
  */
 @Service
 @Slf4j
@@ -38,13 +39,14 @@ public class LlmAccessibilityAnalyzer {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
     private final AccessibilityReportParser reportParser;
+    private final AsyncTaskExecutor applicationTaskExecutor;
 
     /**
      * Асинхронно анализирует список технических нарушений доступности с помощью LLM.
      *
-     * <p>Процесс включает в себя:
+     * <p>Процесс включает в себя следующие асинхронные шаги:
      * <ol>
-     *     <li>Сериализацию списка нарушений в JSON.</li>
+     *     <li>Сериализация списка нарушений в JSON в выделенном пуле потоков.</li>
      *     <li>Формирование промпта для LLM с использованием шаблонизатора.</li>
      *     <li>Вызов LLM для анализа JSON и генерации резюме и рекомендаций.</li>
      *     <li>Парсинг ответа LLM и его объединение с исходными данными для формирования финального отчета.</li>
@@ -56,16 +58,20 @@ public class LlmAccessibilityAnalyzer {
      * @throws ProcessingException если происходит критическая ошибка при сериализации данных в JSON.
      */
     public CompletableFuture<AccessibilityReport> analyze(List<AccessibilityViolation> violations) {
-        try {
-            String violationsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(violations);
+        // Асинхронно сериализуем JSON, чтобы не блокировать вызывающий поток
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(violations);
+            } catch (JsonProcessingException e) {
+                log.error("Критическая ошибка: не удалось сериализовать список нарушений a11y в JSON.", e);
+                // Оборачиваем в CompletionException, чтобы пробросить по цепочке
+                throw new ProcessingException("Ошибка сериализации нарушений a11y", e);
+            }
+        }, applicationTaskExecutor).thenComposeAsync(violationsJson -> {
             String promptString = promptService.render("accessibilityAudit", Map.of("violationsJson", violationsJson));
             log.debug("Отправка запроса к LLM для анализа {} нарушений доступности.", violations.size());
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                     .thenApply(llmResponse -> reportParser.parse(llmResponse, violations));
-        } catch (JsonProcessingException e) {
-            log.error("Критическая ошибка: не удалось сериализовать список нарушений a11y в JSON.", e);
-            // Возвращаем failed future, так как без сериализации дальнейшая работа невозможна
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации нарушений a11y", e));
-        }
+        }, applicationTaskExecutor);
     }
 }

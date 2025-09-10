@@ -16,16 +16,18 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который проводит аудит доступности (a11y) веб-страницы.
- *
- * <p>Эта версия является "чистым" оркестратором, который следует принципам Clean Architecture.
- * Он определяет высокоуровневый процесс, делегируя конкретные шаги специализированным компонентам:
+ * <p>
+ * Эталонная реализация агента-оркестратора, следующего принципам Clean Architecture.
+ * Он определяет высокоуровневый бизнес-процесс, делегируя конкретные шаги
+ * специализированным компонентам:
  * <ol>
  *     <li>Детерминированный поиск нарушений с помощью {@link AccessibilityScannerService}.</li>
  *     <li>Интеллектуальный анализ и обогащение найденных нарушений с помощью {@link LlmAccessibilityAnalyzer}.</li>
  * </ol>
  *
- * <p>Такая декомпозиция значительно повышает тестируемость и читаемость кода, изолируя
- * бизнес-логику от деталей реализации взаимодействия с LLM.
+ * <p>Такая декомпозиция значительно повышает тестируемость и читаемость кода,
+ * изолируя бизнес-логику от деталей реализации взаимодействия с LLM.
+ * Все I/O-bound и CPU-bound операции выполняются асинхронно в управляемом пуле потоков.
  */
 @Slf4j
 @Component
@@ -35,7 +37,8 @@ public class AccessibilityAuditorAgent implements ToolAgent {
     /**
      * Публичная константа, определяющая ключ для доступа к отчету о доступности
      * в деталях {@link AgentResult}. Делает контракт между агентом и потребителями
-     * его результата явным и типобезопасным.
+     * его результата (например, {@link com.example.ragollama.agent.accessibility.mappers.AccessibilityMapper})
+     * явным и типобезопасным.
      */
     public static final String ACCESSIBILITY_REPORT_KEY = "accessibilityReport";
 
@@ -76,33 +79,34 @@ public class AccessibilityAuditorAgent implements ToolAgent {
 
     /**
      * Асинхронно выполняет полный конвейер аудита доступности.
-     *
-     * <p>Конвейер состоит из следующих шагов:
+     * <p>
+     * Конвейер состоит из следующих шагов, выполняемых в выделенном пуле потоков:
      * <ol>
-     *     <li>Асинхронное сканирование HTML на предмет нарушений в управляемом пуле потоков.</li>
-     *     <li>Если нарушения найдены, они передаются в {@link LlmAccessibilityAnalyzer} для анализа,
-     *     после чего результат преобразуется в {@link AgentResult}.</li>
-     *     <li>Если нарушений нет, немедленно формируется финальный {@link AgentResult} без вызова LLM.</li>
+     *     <li>Асинхронное сканирование HTML на предмет нарушений.</li>
+     *     <li>Если нарушения найдены, они асинхронно передаются в {@link LlmAccessibilityAnalyzer} для анализа,
+     *         после чего результат преобразуется в {@link AgentResult}.</li>
+     *     <li>Если нарушений нет, немедленно формируется финальный {@link AgentResult} без вызова LLM,
+     *         что экономит ресурсы.</li>
      * </ol>
      *
      * @param context Контекст, содержащий HTML-код страницы в поле `htmlContent`.
      * @return {@link CompletableFuture} с финальным отчетом {@link AgentResult}.
+     * @throws ClassCastException если `htmlContent` в контексте не является строкой.
      */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String htmlContent = (String) context.payload().get("htmlContent");
         log.info("Запуск аудита доступности для HTML-контента...");
-        // Шаг 1: Асинхронный детерминированный поиск нарушений.
+        // Шаг 1: Асинхронный детерминированный поиск нарушений в выделенном пуле.
         return CompletableFuture.supplyAsync(() -> scannerService.scan(htmlContent), applicationTaskExecutor)
                 .thenComposeAsync(violations -> {
                     if (violations.isEmpty()) {
-                        log.info("Нарушений доступности не найдено для предоставленного HTML.");
+                        log.info("Нарушений доступности не найдено. Вызов LLM не требуется.");
                         return CompletableFuture.completedFuture(createEmptySuccessResult());
                     }
-                    // Шаг 2: Если нарушения есть, запускаем LLM для анализа и затем создаем результат.
+                    // Шаг 2: Если нарушения есть, асинхронно запускаем LLM для анализа.
                     log.info("Найдено {} нарушений доступности. Запуск LLM-анализатора.", violations.size());
-                    return llmAnalyzer.analyze(violations)
-                            .thenApply(this::createSuccessResultWithReport);
+                    return llmAnalyzer.analyze(violations).thenApply(this::createSuccessResultWithReport);
                 }, applicationTaskExecutor);
     }
 
@@ -113,7 +117,6 @@ public class AccessibilityAuditorAgent implements ToolAgent {
      * @return Результат работы агента.
      */
     private AgentResult createSuccessResultWithReport(AccessibilityReport report) {
-        log.info("Аудит доступности успешно завершен. Резюме: {}", report.summary());
         return new AgentResult(
                 getName(),
                 AgentResult.Status.SUCCESS,
