@@ -55,7 +55,7 @@ public class GlobalExceptionHandler {
         problemDetail.setTitle("Prompt Injection Detected");
         problemDetail.setProperty("timestamp", Instant.now());
         metricService.incrementApiError(HttpStatus.UNPROCESSABLE_ENTITY.value());
-        log.warn("Попытка Prompt Injection заблокирована: {}", e.getMessage());
+        log.warn("Попытка Prompt Injection заблокирована. Запрос: [{}]. Причина: {}", e.getOffendingQuery(), e.getMessage());
         return problemDetail;
     }
 

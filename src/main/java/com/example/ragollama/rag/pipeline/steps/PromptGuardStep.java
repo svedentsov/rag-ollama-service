@@ -23,16 +23,15 @@ import java.util.Set;
 
 /**
  * Шаг RAG-конвейера, выполняющий роль "стража" на входе.
- *
- * <p>Эта усовершенствованная версия реализует многоуровневую защиту:
+ * <p> Эта усовершенствованная версия реализует многоуровневую защиту:
  * <ol>
+ *     <li><b>Быстрая блокировка:</b> Запросы, содержащие очевидные ключевые слова для атак, блокируются немедленно.</li>
  *     <li><b>Эвристический "Белый Список":</b> Быстрая детерминированная проверка на очевидно
  *         безопасные запросы (например, обычные вопросы) для экономии ресурсов.</li>
  *     <li><b>AI-анализ (Chain-of-Thought):</b> Для запросов, не прошедших быструю проверку,
  *         используется LLM, который сначала должен обосновать свое решение, а затем
  *         вынести вердикт. Это значительно снижает риск ложных срабатываний.</li>
  * </ol>
- *
  * <p>В случае обнаружения угрозы, выполнение конвейера прерывается с ошибкой
  * {@link PromptInjectionException}.
  */
@@ -57,8 +56,13 @@ public class PromptGuardStep implements RagPipelineStep {
      * Множество для быстрой проверки очевидно безопасных вопросительных слов.
      */
     private static final Set<String> WHITELISTED_KEYWORDS = Set.of(
-            "что", "где", "когда", "кто", "как", "почему", "сколько", "какой",
-            "what", "where", "when", "who", "how", "why"
+            "что", "где", "когда", "кто", "как", "почему", "сколько", "какой", "расскажи", "опиши",
+            "what", "where", "when", "who", "how", "why", "tell me", "describe", "explain"
+    );
+
+    private static final Set<String> BLACKLISTED_KEYWORDS = Set.of(
+            "ignore previous", "ignore all", "забудь предыдущие", "игнорируй все", "system prompt",
+            "act as", "ты теперь", "твои инструкции"
     );
 
     /**
@@ -68,12 +72,17 @@ public class PromptGuardStep implements RagPipelineStep {
     public Mono<RagFlowContext> process(RagFlowContext context) {
         log.info("Шаг [01] Prompt Guard: проверка запроса на безопасность...");
         String query = context.originalQuery();
-        // Уровень 1: Быстрая эвристическая проверка
+        // Уровень 1: Быстрая блокировка по "черному списку"
+        if (isBlacklisted(query)) {
+            log.warn("Обнаружен потенциально вредоносный ключ в запросе: '{}'. Запрос заблокирован.", query);
+            return Mono.error(new PromptInjectionException("Обнаружена потенциально вредоносная инструкция.", query));
+        }
+        // Уровень 2: Быстрая эвристическая проверка по "белому списку"
         if (isWhitelisted(query)) {
             log.debug("Запрос '{}' прошел быструю эвристическую проверку (whitelist).", query);
             return Mono.just(context);
         }
-        // Уровень 2: Глубокий анализ с помощью LLM
+        // Уровень 3: Глубокий анализ с помощью LLM
         log.debug("Запрос '{}' отправлен на глубокий AI-анализ безопасности.", query);
         String promptString = promptService.render("promptGuardPrompt", Map.of("query", query));
         Prompt prompt = new Prompt(promptString);
@@ -83,19 +92,19 @@ public class PromptGuardStep implements RagPipelineStep {
                     if (!checkResponse.is_safe()) {
                         log.warn("Обнаружена и заблокирована потенциальная атака Prompt Injection. Запрос: '{}'. Обоснование AI: {}",
                                 query, checkResponse.reasoning());
-                        return Mono.error(new PromptInjectionException("Обнаружена потенциально вредоносная инструкция. Запрос отклонен."));
+                        return Mono.error(new PromptInjectionException("Обнаружена потенциально вредоносная инструкция. Запрос отклонен.", query));
                     }
                     log.debug("AI-анализ безопасности для запроса пройден успешно. Обоснование: {}", checkResponse.reasoning());
                     return Mono.just(context);
                 });
     }
 
-    /**
-     * Проверяет, является ли запрос очевидно безопасным вопросом.
-     *
-     * @param query Запрос пользователя.
-     * @return {@code true}, если запрос безопасен, иначе {@code false}.
-     */
+    private boolean isBlacklisted(String query) {
+        if (query == null) return false;
+        String lowerCaseQuery = query.toLowerCase();
+        return BLACKLISTED_KEYWORDS.stream().anyMatch(lowerCaseQuery::contains);
+    }
+
     private boolean isWhitelisted(String query) {
         if (query == null || query.isBlank()) {
             return true;
@@ -104,8 +113,7 @@ public class PromptGuardStep implements RagPipelineStep {
         if (lowerCaseQuery.endsWith("?")) {
             return true;
         }
-        String firstWord = lowerCaseQuery.split("\\s+")[0];
-        return WHITELISTED_KEYWORDS.contains(firstWord);
+        return WHITELISTED_KEYWORDS.stream().anyMatch(lowerCaseQuery::startsWith);
     }
 
     /**
