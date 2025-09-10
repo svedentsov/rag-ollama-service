@@ -230,10 +230,10 @@ app:
     enabled: true
     strategies:
       keyword-boost:
-        enabled: false # Выключено по умолчанию, так как LLM-реранкер мощнее
+        enabled: true
         boost-factor: 0.1
       llm:
-        enabled: true # Включаем мощный LLM-реранкер
+        enabled: false
       diversity:
         enabled: true
         lambda: 0.5
