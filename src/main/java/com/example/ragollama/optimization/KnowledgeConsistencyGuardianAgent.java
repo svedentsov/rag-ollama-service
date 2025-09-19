@@ -23,6 +23,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * AI-агент ("Хранитель Знаний"), который проактивно ищет семантические
+ * противоречия между документами в базе знаний.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -33,21 +37,33 @@ public class KnowledgeConsistencyGuardianAgent implements ToolAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "knowledge-consistency-guardian";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Проактивно ищет противоречия между похожими документами в базе знаний.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return true; // Запускается без внешнего контекста
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         // 1. Выбираем случайный документ как отправную точку

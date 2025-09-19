@@ -3,6 +3,7 @@ package com.example.ragollama.agent.dynamic;
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.QaAgent;
+import com.example.ragollama.agent.registry.ToolRegistryService;
 import com.example.ragollama.optimization.ErrorHandlerAgent;
 import com.example.ragollama.optimization.model.RemediationPlan;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +19,7 @@ import java.util.*;
 
 /**
  * Stateful-сервис, отвечающий за выполнение, приостановку, возобновление
- * и **самовосстановление** планов, сгенерированных {@link PlanningAgentService}.
+ * и **самовосстановление** планов, сгенерированных `PlanningAgentService`.
  * <p>
  * Эта версия использует рекурсивный подход для выполнения плана, что позволяет
  * элегантно реализовать логику самовосстановления при сбоях.

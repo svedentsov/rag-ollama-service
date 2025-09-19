@@ -13,6 +13,10 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Агент-исполнитель, который создает задачу в Jira на основе
+ * найденного противоречия в базе знаний.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -20,21 +24,33 @@ public class CurationActionAgent implements ToolAgent {
 
     private final JiraTicketCreatorAgent jiraTicketCreatorAgent;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "curation-action-agent";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Создает задачу в Jira на исправление противоречия в базе знаний.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey("contradictionDetails");
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         ContradictionResult contradiction = (ContradictionResult) context.payload().get("contradictionDetails");

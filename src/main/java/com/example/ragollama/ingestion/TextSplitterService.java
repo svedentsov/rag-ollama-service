@@ -7,7 +7,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -25,6 +28,20 @@ public class TextSplitterService {
     private static final List<String> PARENT_DELIMITERS = List.of("\n\n", "\n");
     private static final List<String> CHILD_DELIMITERS = List.of("(?<=[.!?])\\s+");
 
+    /**
+     * Выполняет разделение документа, реализуя стратегию "Parent Document Retriever".
+     * <p>
+     * Процесс состоит из следующих шагов:
+     * <ol>
+     *     <li>Исходный документ разбивается на большие "родительские" чанки.</li>
+     *     <li>Каждый родительский чанк, в свою очередь, разбивается на более мелкие "дочерние" чанки.</li>
+     *     <li>Каждый дочерний чанк обогащается метаданными, содержащими ID и полный текст его родителя.</li>
+     *     <li>Только дочерние чанки отправляются на индексацию.</li>
+     * </ol>
+     *
+     * @param document Исходный документ для разделения.
+     * @return Список дочерних документов, готовых к индексации.
+     */
     public List<Document> split(Document document) {
         log.info("Применение Parent Document стратегии для документа: {}", document.getMetadata().get("source"));
         // 1. Создаем большие родительские чанки
@@ -56,8 +73,8 @@ public class TextSplitterService {
                 newMetadata.put("documentId", originalDocumentId);
                 newMetadata.put("parentChunkId", parentChunkId);
                 newMetadata.put("parentChunkText", parentChunk.getText()); // Сохраняем текст родителя
-                String primaryKey = UUID.randomUUID().toString();
-                finalChildChunks.add(new Document(primaryKey, childChunk.getText(), newMetadata));
+                // Используем уникальный ID чанка как ID документа для VectorStore
+                finalChildChunks.add(new Document(childChunkId, childChunk.getText(), newMetadata));
             }
         }
         log.info("Создано {} дочерних чанков для документа '{}'", finalChildChunks.size(), document.getMetadata().get("source"));

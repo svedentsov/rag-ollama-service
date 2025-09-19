@@ -24,6 +24,15 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ContextExpansionStep implements RagPipelineStep {
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Принимает список отранжированных "дочерних" документов, извлекает из их
+     * метаданных полные "родительские" документы и заменяет ими исходный список.
+     *
+     * @param context Текущий контекст RAG-конвейера.
+     * @return {@link Mono} с обновленным контекстом, содержащим родительские документы.
+     */
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
         log.info("Шаг [28] Context Expansion: замена дочерних чанков на родительские...");
@@ -64,7 +73,6 @@ public class ContextExpansionStep implements RagPipelineStep {
         parentMetadata.remove("parentChunkText");
         // Устанавливаем ID родителя как основной
         parentMetadata.put("chunkId", parentChunkId);
-
-        return new Document(parentText, parentMetadata);
+        return new Document(parentChunkId, parentText, parentMetadata);
     }
 }

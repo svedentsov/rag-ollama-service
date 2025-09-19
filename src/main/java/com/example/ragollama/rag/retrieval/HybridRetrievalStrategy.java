@@ -52,7 +52,7 @@ public class HybridRetrievalStrategy {
      * @return {@link Mono} со списком уникальных, отсортированных документов.
      */
     public Mono<List<Document>> retrieve(
-            ProcessedQueries processedQueries,
+            @Nullable ProcessedQueries processedQueries,
             String originalQuery,
             int topK,
             double similarityThreshold,

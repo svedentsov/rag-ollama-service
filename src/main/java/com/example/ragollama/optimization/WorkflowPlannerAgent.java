@@ -1,6 +1,6 @@
 package com.example.ragollama.optimization;
 
-import com.example.ragollama.agent.dynamic.ToolRegistryService;
+import com.example.ragollama.agent.registry.ToolRegistryService;
 import com.example.ragollama.optimization.model.WorkflowNode;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
@@ -13,7 +13,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -30,7 +29,7 @@ import java.util.Map;
 public class WorkflowPlannerAgent {
 
     private final LlmClient llmClient;
-    private final ObjectProvider<ToolRegistryService> toolRegistryProvider;
+    private final ToolRegistryService toolRegistryService;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
@@ -42,8 +41,7 @@ public class WorkflowPlannerAgent {
      * @return {@link Mono} со списком узлов {@link WorkflowNode}, представляющих граф.
      */
     public Mono<List<WorkflowNode>> createWorkflow(String goal, Map<String, Object> context) {
-        ToolRegistryService toolRegistry = toolRegistryProvider.getObject();
-        String availableToolsJson = toolRegistry.getToolDescriptionsAsJson();
+        String availableToolsJson = toolRegistryService.getToolDescriptionsAsJson();
         String contextAsJson;
         try {
             contextAsJson = objectMapper.writeValueAsString(context);

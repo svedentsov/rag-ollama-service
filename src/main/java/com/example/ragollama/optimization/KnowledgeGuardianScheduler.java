@@ -10,6 +10,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.Map;
 
+/**
+ * Планировщик для периодического запуска агента-хранителя базы знаний.
+ */
 @Component
 @Slf4j
 @RequiredArgsConstructor
@@ -18,6 +21,9 @@ public class KnowledgeGuardianScheduler {
 
     private final AgentOrchestratorService orchestratorService;
 
+    /**
+     * Запускает полный цикл аудита консистентности базы знаний по расписанию.
+     */
     @Scheduled(cron = "${app.optimization.guardian.scheduler.cron}")
     public void runScheduledConsistencyCheck() {
         log.info("Планировщик запускает фоновую задачу аудита консистентности базы знаний...");

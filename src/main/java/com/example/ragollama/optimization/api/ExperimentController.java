@@ -11,9 +11,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Контроллер для AI-агентов, управляющих A/B-тестированием RAG-конфигураций.
+ */
 @RestController
 @RequestMapping("/api/v1/experiments")
 @RequiredArgsConstructor
@@ -22,6 +26,12 @@ public class ExperimentController {
 
     private final AgentOrchestratorService orchestratorService;
 
+    /**
+     * Запускает полный конвейер A/B-тестирования RAG-конфигураций.
+     *
+     * @param request DTO с описанием вариантов для тестирования.
+     * @return {@link CompletableFuture} с финальным отчетом, определяющим лучшую конфигурацию.
+     */
     @PostMapping("/run")
     @Operation(summary = "Запустить эксперимент по оценке RAG-конфигураций")
     public CompletableFuture<List<AgentResult>> runExperiment(@Valid @RequestBody ExperimentRequest request) {

@@ -16,11 +16,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Сервис для централизованного управления и рендеринга шаблонов FreeMarker.
- * *
- * <p>Эта версия динамически сканирует директорию `resources/prompts` при старте
- * приложения, автоматически обнаруживая и кэшируя все доступные шаблоны.
- * Это устраняет необходимость в ручной регистрации каждого промпта и делает
- * систему более гибкой и поддерживаемой.
+ * <p>
+ * Эта версия доработана для поддержки временного переопределения шаблонов
+ * с помощью {@link ThreadLocalPromptOverride}, что является ключевым
+ * механизмом для A/B-тестирования промптов.
  */
 @Slf4j
 @Service
@@ -30,14 +29,6 @@ public class PromptService {
     private final freemarker.template.Configuration freemarkerConfig;
     private final Map<String, Template> templateCache = new ConcurrentHashMap<>();
 
-    /**
-     * Динамически сканирует, загружает и кэширует все шаблоны FreeMarker из
-     * директории `resources/prompts` при старте приложения.
-     *
-     * @throws IllegalStateException если произошла ошибка при сканировании или
-     *                               загрузке шаблонов, что является критической
-     *                               ошибкой для работы приложения.
-     */
     @PostConstruct
     public void init() {
         log.info("Начало динамического сканирования и кэширования шаблонов FreeMarker...");
@@ -62,36 +53,42 @@ public class PromptService {
 
     /**
      * Обрабатывает (рендерит) именованный шаблон с предоставленной моделью данных.
+     * <p>
+     * Перед обращением к кэшу, метод проверяет, нет ли для текущего потока
+     * временного переопределения для данного шаблона.
      *
      * @param templateName Имя шаблона в формате camelCase (например, "ragPrompt").
      * @param model        Карта с данными для подстановки в шаблон.
-     * @return Готовая строка промпта, готовая к передаче в LLM.
-     * @throws IllegalStateException если шаблон с указанным именем не был найден
-     *                               в кэше или произошла ошибка в процессе рендеринга.
+     * @return Готовая строка промпта.
+     * @throws IllegalStateException если шаблон не найден или произошла ошибка рендеринга.
      */
     public String render(String templateName, Map<String, Object> model) {
-        Template template = templateCache.get(templateName);
-        if (template == null) {
-            log.error("Попытка использования незарегистрированного шаблона: '{}'. Доступные шаблоны: {}",
-                    templateName, templateCache.keySet());
-            throw new IllegalStateException("Шаблон с именем '" + templateName + "' не найден в кэше.");
-        }
+        try {
+            // Пытаемся получить временный шаблон из ThreadLocal
+            String overrideContent = ThreadLocalPromptOverride.getOverride(templateName);
+            Template template;
+            if (overrideContent != null) {
+                log.debug("Применение временного шаблона для '{}'", templateName);
+                template = new Template(templateName, overrideContent, freemarkerConfig);
+            } else {
+                template = templateCache.get(templateName);
+                if (template == null) {
+                    log.error("Попытка использования незарегистрированного шаблона: '{}'. Доступные шаблоны: {}",
+                            templateName, templateCache.keySet());
+                    throw new IllegalStateException("Шаблон с именем '" + templateName + "' не найден в кэше.");
+                }
+            }
 
-        try (StringWriter writer = new StringWriter()) {
-            template.process(model, writer);
-            return writer.toString();
+            try (StringWriter writer = new StringWriter()) {
+                template.process(model, writer);
+                return writer.toString();
+            }
         } catch (TemplateException | IOException e) {
             log.error("Ошибка при обработке шаблона FreeMarker '{}'", templateName, e);
             throw new IllegalStateException("Ошибка рендеринга промпта '" + templateName + "'", e);
         }
     }
 
-    /**
-     * Преобразует имя файла в стиле kebab-case в camelCase.
-     *
-     * @param s Имя файла без расширения.
-     * @return Имя в формате camelCase.
-     */
     private String toCamelCase(String s) {
         String[] parts = s.split("-");
         StringBuilder camelCaseString = new StringBuilder(parts[0]);

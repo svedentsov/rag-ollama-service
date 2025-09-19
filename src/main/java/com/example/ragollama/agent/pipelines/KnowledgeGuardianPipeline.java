@@ -9,6 +9,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * Конвейер для проактивного агента "Хранитель Знаний".
+ */
 @Component
 @RequiredArgsConstructor
 public class KnowledgeGuardianPipeline implements AgentPipeline {
@@ -16,11 +19,17 @@ public class KnowledgeGuardianPipeline implements AgentPipeline {
     private final KnowledgeConsistencyGuardianAgent guardianAgent;
     private final CurationActionAgent actionAgent;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "knowledge-guardian-pipeline";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public List<List<QaAgent>> getStages() {
         return List.of(

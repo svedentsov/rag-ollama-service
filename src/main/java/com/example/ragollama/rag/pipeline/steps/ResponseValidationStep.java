@@ -22,6 +22,15 @@ import reactor.core.publisher.Mono;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Шаг RAG-конвейера, выполняющий роль "AI-Критика".
+ * <p>
+ * Этот шаг выполняется после генерации ответа и использует LLM для
+ * валидации сгенерированного текста на предмет галлюцинаций, полноты
+ * и корректности цитирования.
+ * <p>
+ * Активируется свойством {@code app.rag.validation.enabled=true}.
+ */
 @Component
 @Order(70) // Выполняется после Trust Scoring (60)
 @Slf4j
@@ -32,6 +41,9 @@ public class ResponseValidationStep implements RagPipelineStep {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * Конструктор, который также логирует информацию об активации.
+     */
     public ResponseValidationStep(LlmClient llmClient, PromptService promptService, ObjectMapper objectMapper, AppProperties appProperties) {
         this.llmClient = llmClient;
         this.promptService = promptService;
@@ -41,6 +53,9 @@ public class ResponseValidationStep implements RagPipelineStep {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
         if (context.finalAnswer() == null || context.finalAnswer().answer().isBlank() || context.rerankedDocuments().isEmpty()) {

@@ -8,6 +8,7 @@ import com.example.ragollama.shared.prompts.PromptService;
 import com.example.ragollama.shared.util.JsonExtractorUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -48,7 +49,7 @@ public class ReflectiveRetrieverAgent {
      * @param filter        Фильтр метаданных.
      * @return {@link Mono} со списком финальных документов.
      */
-    public Mono<List<Document>> retrieve(ProcessedQueries queries, String originalQuery, int topK, double threshold, Filter.Expression filter) {
+    public Mono<List<Document>> retrieve(@Nullable ProcessedQueries queries, String originalQuery, int topK, double threshold, Filter.Expression filter) {
         return performRetrievalAttempt(queries, originalQuery, topK, threshold, filter, 1);
     }
 

@@ -3,11 +3,10 @@ package com.example.ragollama.optimization;
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.QaAgent;
-import com.example.ragollama.agent.dynamic.ToolRegistryService;
+import com.example.ragollama.agent.registry.ToolRegistryService;
 import com.example.ragollama.optimization.model.WorkflowNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -27,7 +26,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class WorkflowExecutionService {
 
-    private final ObjectProvider<ToolRegistryService> toolRegistryProvider;
+    private final ToolRegistryService toolRegistryService;
 
     /**
      * Выполняет рабочий процесс, описанный в виде графа.
@@ -98,8 +97,7 @@ public class WorkflowExecutionService {
             newContextPayload.putAll(node.arguments());
 
             AgentContext finalContext = new AgentContext(newContextPayload);
-            ToolRegistryService toolRegistry = toolRegistryProvider.getObject();
-            QaAgent agent = toolRegistry.getAgent(node.agentName())
+            QaAgent agent = toolRegistryService.getAgent(node.agentName())
                     .orElseThrow(() -> new IllegalStateException("Агент не найден: " + node.agentName()));
 
             log.info("Запуск узла '{}' (агент: {})", node.id(), node.agentName());
