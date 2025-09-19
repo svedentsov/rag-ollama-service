@@ -1,6 +1,7 @@
 package com.example.ragollama.agent.analytics.domain;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +18,9 @@ import java.util.List;
  * готовые, пред-агрегированные данные для последующей интерпретации с помощью LLM.
  * Использование `JdbcTemplate` для сложных `GROUP BY` запросов часто более
  * производительно и гибко, чем JPQL.
+ * <p>
+ * Все публичные методы кэшируются с помощью Spring Cache для повышения
+ * производительности и снижения нагрузки на базу данных.
  */
 @Service
 @RequiredArgsConstructor
@@ -54,10 +58,14 @@ public class AnalyticsService {
 
     /**
      * Извлекает и агрегирует ежедневные метрики тестовых прогонов за указанный период.
+     * <p>
+     * Результаты этого метода кэшируются. При повторном вызове с тем же
+     * значением `days` данные будут возвращены из кэша без обращения к БД.
      *
      * @param days Количество последних дней для анализа.
      * @return Список {@link DailyTestMetrics}, отсортированный по дате.
      */
+    @Cacheable("analytics_cache")
     public List<DailyTestMetrics> getDailyTestMetrics(int days) {
         OffsetDateTime since = OffsetDateTime.now().minusDays(days);
         String sql = """
@@ -82,10 +90,14 @@ public class AnalyticsService {
 
     /**
      * Находит N самых медленных тестов по среднему времени выполнения за все время.
+     * <p>
+     * Результаты этого метода кэшируются. При повторном вызове с тем же
+     * значением `limit` данные будут возвращены из кэша без обращения к БД.
      *
      * @param limit Количество самых медленных тестов для возврата.
      * @return Список {@link SlowTestInfo}, отсортированный по убыванию среднего времени.
      */
+    @Cacheable("analytics_cache")
     public List<SlowTestInfo> findSlowestTests(int limit) {
         String sql = """
                 SELECT class_name, test_name, AVG(duration_ms) as avg_duration

@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -29,7 +30,7 @@ import java.util.Map;
 public class WorkflowPlannerAgent {
 
     private final LlmClient llmClient;
-    private final ToolRegistryService toolRegistry;
+    private final ObjectProvider<ToolRegistryService> toolRegistryProvider;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
@@ -41,6 +42,7 @@ public class WorkflowPlannerAgent {
      * @return {@link Mono} со списком узлов {@link WorkflowNode}, представляющих граф.
      */
     public Mono<List<WorkflowNode>> createWorkflow(String goal, Map<String, Object> context) {
+        ToolRegistryService toolRegistry = toolRegistryProvider.getObject();
         String availableToolsJson = toolRegistry.getToolDescriptionsAsJson();
         String contextAsJson;
         try {

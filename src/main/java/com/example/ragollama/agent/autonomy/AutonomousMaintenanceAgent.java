@@ -1,12 +1,12 @@
 package com.example.ragollama.agent.autonomy;
 
 import com.example.ragollama.agent.AgentContext;
-import com.example.ragollama.agent.AgentOrchestratorService;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.QaAgent;
 import com.example.ragollama.agent.dynamic.DynamicPipelineExecutionService;
 import com.example.ragollama.agent.dynamic.PlanStep;
 import com.example.ragollama.agent.jira.model.JiraTicketRequest;
+import com.example.ragollama.optimization.ProjectHealthAggregatorService;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AutonomousMaintenanceAgent implements QaAgent {
 
-    private final AgentOrchestratorService orchestratorService;
+    private final ProjectHealthAggregatorService healthAggregatorService;
     private final DynamicPipelineExecutionService executionService;
     private final LlmClient llmClient;
     private final PromptService promptService;
@@ -90,53 +90,46 @@ public class AutonomousMaintenanceAgent implements QaAgent {
     @Override
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         log.info("Запуск автономного агента по обслуживанию...");
+        // Шаг 1: Асинхронно запускаем сбор данных о здоровье проекта.
+        return healthAggregatorService.aggregateHealthReports(context)
+                .thenCompose(healthReport -> {
+                    if (healthReport.isEmpty()) {
+                        String summary = "Анализ завершен. Критичного технического долга не обнаружено.";
+                        log.info(summary);
+                        return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, summary, Map.of()));
+                    }
+                    try {
+                        String reportsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(healthReport);
+                        String promptString = promptService.render("autonomousTriagePrompt", Map.of("reportsJson", reportsJson));
+                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
+                                .thenCompose(llmResponse -> {
+                                    List<JiraTicketRequest> ticketsToCreate = parseLlmResponse(llmResponse);
+                                    if (ticketsToCreate.isEmpty()) {
+                                        return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Анализ завершен. Новых задач по техдолгу не создано.", Map.of()));
+                                    }
+                                    // Шаг 3: Преобразуем ответ LLM в план и запускаем исполнитель.
+                                    List<PlanStep> plan = ticketsToCreate.stream()
+                                            .map(ticket -> new PlanStep("jira-ticket-creator", Map.of(
+                                                    "title", ticket.title(),
+                                                    "description", ticket.description()
+                                            )))
+                                            .collect(Collectors.toList());
 
-        // Шаг 1: Асинхронно запускаем аналитический конвейер.
-        CompletableFuture<List<AgentResult>> testDebtFuture = orchestratorService.invokePipeline("test-debt-report-pipeline", context);
-
-        // Шаг 2: Когда отчеты готовы, передаем их LLM для триажа.
-        return testDebtFuture.thenCompose(healthCheckResults -> {
-            if (healthCheckResults.isEmpty() || healthCheckResults.get(0).details().isEmpty()) {
-                String summary = "Анализ завершен. Критичного технического долга не обнаружено.";
-                log.info(summary);
-                return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, summary, Map.of()));
-            }
-
-            try {
-                String reportsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(healthCheckResults);
-                String promptString = promptService.render("autonomousTriagePrompt", Map.of("reportsJson", reportsJson));
-
-                return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                        .thenCompose(llmResponse -> {
-                            List<JiraTicketRequest> ticketsToCreate = parseLlmResponse(llmResponse);
-                            if (ticketsToCreate.isEmpty()) {
-                                return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Анализ завершен. Новых задач по техдолгу не создано.", Map.of()));
-                            }
-
-                            // Шаг 3: Преобразуем ответ LLM в план и запускаем исполнитель.
-                            List<PlanStep> plan = ticketsToCreate.stream()
-                                    .map(ticket -> new PlanStep("jira-ticket-creator", Map.of(
-                                            "title", ticket.title(),
-                                            "description", ticket.description()
-                                            // В реальной системе здесь были бы и другие поля
-                                    )))
-                                    .collect(Collectors.toList());
-
-                            return executionService.executePlan(plan, new AgentContext(Map.of()), null)
-                                    .map(executionResults -> {
-                                        String summary = "Автономный анализ завершен. Создан план по созданию " + executionResults.size() + " тикетов, ожидающих утверждения.";
-                                        return new AgentResult(
-                                                getName(),
-                                                AgentResult.Status.SUCCESS,
-                                                summary,
-                                                Map.of("createdTicketsPlan", executionResults)
-                                        );
-                                    }).toFuture();
-                        });
-            } catch (JsonProcessingException e) {
-                return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации отчетов для триажа", e));
-            }
-        });
+                                    return executionService.executePlan(plan, new AgentContext(Map.of()), null)
+                                            .map(executionResults -> {
+                                                String summary = "Автономный анализ завершен. Создан план по созданию " + executionResults.size() + " тикетов, ожидающих утверждения.";
+                                                return new AgentResult(
+                                                        getName(),
+                                                        AgentResult.Status.SUCCESS,
+                                                        summary,
+                                                        Map.of("createdTicketsPlan", executionResults)
+                                                );
+                                            }).toFuture();
+                                });
+                    } catch (JsonProcessingException e) {
+                        return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации отчетов для триажа", e));
+                    }
+                });
     }
 
     /**

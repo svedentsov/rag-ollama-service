@@ -58,6 +58,7 @@ spring:
       - token_counts # Кэш для подсчета токенов.
       - ollama_available_models # Кэш для списка доступных моделей
       - copilot_sessions # Кэш для сессий
+      - analytics_cache # Кэш для результатов аналитических запросов
     caffeine:
       # Общие настройки для всех кэшей. Для кэша сессий задаем время жизни.
       spec: "maximumSize=500,expireAfterAccess=30m"
@@ -359,6 +360,11 @@ app:
       per-lost-user: 200.0
     autonomy:
       cron: "0 0 7 * * MON-FRI" # Запуск автономного анализа в 7 утра по будням
+  health-monitor:
+    scheduler:
+      enabled: true
+      # Запускать каждый понедельник в 8 утра
+      cron: "0 0 8 * * MON"
 
   integrations:
     github:
@@ -395,6 +401,7 @@ app:
       base-url: "http://your-jenkins-instance:8080"
       username: "your-ci-user"
       api-token: "YourCiApiTokenOrPassword"
+      rollback-job-name: "deploy-rollback"
     neo4j:
       uri: "bolt://localhost:7687"
       username: "neo4j"
