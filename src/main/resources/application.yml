@@ -24,7 +24,7 @@ spring:
   freemarker:
     # Явно указываем Spring Boot, где искать наши шаблоны.
     # Путь должен начинаться с 'classpath:' и указывать на директорию.
-    template-loader-path: classpath:/prompts/
+    template-loader-path: classpath:/templates/, classpath:/prompts/
     # Опционально: можно указать суффикс, если все файлы имеют одинаковое расширение
     suffix: .ftl
     # Глобальная настройка для форматирования boolean-значений.
@@ -200,7 +200,7 @@ resilience4j:
   timelimiter:
     instances:
       ollama:
-        timeout-duration: 15m
+        timeout-duration: 2m
         cancel-running-future: true
       database:
         timeout-duration: 10s
@@ -217,10 +217,10 @@ resilience4j:
 # ===================================================================
 app:
   llm: # Конфигурация LLM Роутера
-    fallback-model: "llama3" # Имя модели, которая будет использоваться, если основная модель недоступна.
+    fallback-model: "phi3" # Имя модели, которая будет использоваться, если основная модель недоступна.
     models: # Маппинг абстрактных возможностей на конкретные имена моделей в Ollama.
       FASTEST: "phi3" # Для задач, где скорость > точность формата
-      FAST_RELIABLE: "llama3" # Используем llama3 для надежных задач
+      FAST_RELIABLE: "phi3" # Используем llama3 для надежных задач
       BALANCED: "llama3" # Основная модель для RAG и чата
       VISION: "llava" # Мультимодальная модель для анализа изображений
 
@@ -262,9 +262,9 @@ app:
       chunk-overlap: 32
 
   http-client:
-    connect-timeout: 10s # Таймаут на установку TCP-соединения
-    response-timeout: 15m # Общий таймаут на получение ответа
-    read-write-timeout: 15m # Таймаут на чтение/запись данных
+    connect-timeout: 5s # Таймаут на установку TCP-соединения
+    response-timeout: 2m # Общий таймаут на получение ответа
+    read-write-timeout: 2m # Таймаут на чтение/запись данных
 
   task-executor: # Настройки основного пула потоков для @Async задач.
     core-pool-size: 4

@@ -4,8 +4,6 @@ import com.example.ragollama.orchestration.OrchestrationService;
 import com.example.ragollama.orchestration.dto.UniversalRequest;
 import com.example.ragollama.orchestration.dto.UniversalResponse;
 import com.example.ragollama.orchestration.dto.UniversalSyncResponse;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -24,15 +22,14 @@ import java.util.concurrent.CompletableFuture;
  * Универсальный контроллер, являющийся единой точкой входа для всех
  * интерактивных запросов к AI-системе.
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/orchestrator")
 @RequiredArgsConstructor
-@Slf4j
 @Tag(name = "Universal AI Orchestrator", description = "Единый API для взаимодействия с системой (RAG, Chat, Agents)")
 public class UniversalController {
 
     private final OrchestrationService orchestrationService;
-    private final ObjectMapper objectMapper; // Добавляем ObjectMapper для сериализации
 
     /**
      * Обрабатывает любой пользовательский запрос и возвращает полный ответ после его генерации.
@@ -50,34 +47,12 @@ public class UniversalController {
      * Обрабатывает любой пользовательский запрос в потоковом режиме (Server-Sent Events).
      *
      * @param request Унифицированный DTO с запросом от пользователя.
-     * @return Реактивный поток {@link Flux} со строками в формате SSE.
+     * @return Реактивный поток UniversalResponse. Spring автоматически преобразует каждый
+     *         элемент в строку "data: {...}\n\n".
      */
     @PostMapping(value = "/ask-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "Универсальный потоковый эндпоинт (SSE)")
-    public Flux<String> askStream(@Valid @RequestBody UniversalRequest request) {
-        return orchestrationService.processStream(request)
-                .map(this::formatAsSse);
-    }
-
-    /**
-     * Сериализует объект ответа в строку и форматирует ее в соответствии
-     * со спецификацией Server-Sent Events.
-     *
-     * @param response Объект для отправки.
-     * @return Строка в формате "data: {...}\n\n".
-     */
-    private String formatAsSse(UniversalResponse response) {
-        try {
-            String json = objectMapper.writeValueAsString(response);
-            return "data: " + json + "\n\n";
-        } catch (JsonProcessingException e) {
-            log.error("Не удалось сериализовать SSE-событие в JSON", e);
-            try {
-                String errorJson = objectMapper.writeValueAsString(new UniversalResponse.Error("Ошибка сериализации на сервере"));
-                return "data: " + errorJson + "\n\n";
-            } catch (JsonProcessingException ex) {
-                return "data: {\"type\":\"error\",\"message\":\"Критическая ошибка сериализации\"}\n\n";
-            }
-        }
+    public Flux<UniversalResponse> askStream(@Valid @RequestBody UniversalRequest request) {
+        return orchestrationService.processStream(request);
     }
 }

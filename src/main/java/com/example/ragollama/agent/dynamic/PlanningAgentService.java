@@ -8,7 +8,9 @@ import com.example.ragollama.shared.prompts.PromptService;
 import com.example.ragollama.shared.util.JsonExtractorUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -101,8 +103,20 @@ public class PlanningAgentService {
             if (cleanedJson.isEmpty() || "[]".equals(cleanedJson)) {
                 return Collections.emptyList();
             }
-            return objectMapper.readValue(cleanedJson, new TypeReference<>() {
-            });
+            try {
+                return objectMapper.readValue(cleanedJson, new TypeReference<>() {
+                });
+            } catch (MismatchedInputException e) {
+                log.warn("Не удалось распарсить как массив, попытка распарсить как объект. JSON: {}", cleanedJson);
+                JsonNode rootNode = objectMapper.readTree(cleanedJson);
+                JsonNode stepsNode = rootNode.has("steps") ? rootNode.get("steps") : rootNode.get("plan");
+
+                if (stepsNode != null && stepsNode.isArray()) {
+                    return objectMapper.convertValue(stepsNode, new TypeReference<>() {
+                    });
+                }
+                throw e;
+            }
         } catch (JsonProcessingException e) {
             log.error("Не удалось распарсить JSON-план от LLM: {}", jsonResponse, e);
             throw new ProcessingException("LLM вернула невалидный JSON-план.", e);
