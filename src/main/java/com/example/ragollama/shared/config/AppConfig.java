@@ -18,7 +18,10 @@ import org.springframework.core.task.TaskDecorator;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.http.codec.json.Jackson2JsonDecoder;
 import org.springframework.http.codec.json.Jackson2JsonEncoder;
+import org.springframework.lang.NonNull;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Hooks;
 import reactor.netty.http.client.HttpClient;
@@ -137,33 +140,38 @@ public class AppConfig {
         executor.setMaxPoolSize(props.maxPoolSize());
         executor.setQueueCapacity(props.queueCapacity());
         executor.setThreadNamePrefix(prefix);
-        executor.setTaskDecorator(new MdcTaskDecorator());
+        executor.setTaskDecorator(new ContextAwareTaskDecorator());
         executor.initialize();
         return executor;
     }
 
     /**
-     * Декоратор, который копирует MDC-контекст из родительского потока в дочерний.
-     * Это обеспечивает сквозную трассировку по `requestId` в асинхронных операциях.
+     * ИЗМЕНЕНИЕ: Декоратор переименован и улучшен для копирования SecurityContext.
+     * Декоратор, который копирует контексты MDC и SecurityContext из родительского
+     * потока в дочерний. Это обеспечивает сквозную трассировку и аутентификацию
+     * в асинхронных операциях.
      */
-    static class MdcTaskDecorator implements TaskDecorator {
-        /**
-         * Оборачивает {@link Runnable}, копируя в него MDC-контекст.
-         *
-         * @param runnable Исходная задача.
-         * @return Обернутая задача с сохраненным контекстом.
-         */
+    static class ContextAwareTaskDecorator implements TaskDecorator {
         @Override
-        public Runnable decorate(Runnable runnable) {
+        @NonNull
+        public Runnable decorate(@NonNull Runnable runnable) {
+            // Захватываем контексты из родительского потока
             Map<String, String> contextMap = MDC.getCopyOfContextMap();
+            SecurityContext securityContext = SecurityContextHolder.getContext();
+
             return () -> {
                 try {
+                    // Устанавливаем захваченные контексты в дочернем потоке
                     if (contextMap != null) {
                         MDC.setContextMap(contextMap);
                     }
+                    SecurityContextHolder.setContext(securityContext);
+
                     runnable.run();
                 } finally {
+                    // Очищаем контексты после выполнения
                     MDC.clear();
+                    SecurityContextHolder.clearContext();
                 }
             };
         }

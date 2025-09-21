@@ -1,9 +1,11 @@
 package com.example.ragollama.shared.config.security;
 
+import jakarta.annotation.PostConstruct;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -15,6 +17,17 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+
+    /**
+     * Этот метод будет выполнен один раз при старте приложения.
+     * Он глобально изменяет стратегию хранения SecurityContext, делая его
+     * доступным во всех дочерних потоках, включая потоки из пулов Reactor.
+     * Это решает проблему NullPointerException в асинхронных операциях.
+     */
+    @PostConstruct
+    public void enableInheritableSecurityContext() {
+        SecurityContextHolder.setStrategyName(SecurityContextHolder.MODE_INHERITABLETHREADLOCAL);
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -43,7 +56,6 @@ public class SecurityConfig {
                         .ignoringRequestMatchers("/api/**")
                 )
                 .authorizeHttpRequests(authorize -> authorize
-                        // ИСПРАВЛЕНИЕ: Убедимся, что все пути для Swagger разрешены
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/login", "/css/**", "/js/**", "/error").permitAll()
                         .requestMatchers("/api/**").hasRole("USER")

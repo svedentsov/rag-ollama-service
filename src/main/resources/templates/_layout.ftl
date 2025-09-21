@@ -1,20 +1,18 @@
-<#--
-    Определяем макрос с именем 'page'.
-    Это стандартный способ создания переиспользуемых макетов во FreeMarker.
-    Все, что находится внутри тега <@layout.page>, будет вставлено на место <#nested>.
--->
 <#macro page title>
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <meta name="_csrf" content="${_csrf.token}"/>
-    <meta name="_csrf_header" content="${_csrf.headerName}"/>
+    <meta name="_csrf" content="${(_csrf.token)!''}"/>
+    <meta name="_csrf_header" content="${(_csrf.headerName)!''}"/>
 
     <title>${title} | AI Agent Platform</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Prism JS for Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-java.min.js" defer></script>
     <style>
         :root {
             --primary-color: #1a73e8; --border-color: #e0e0e0; --bg-light: #f4f7f6;
@@ -62,12 +60,11 @@
             </ul>
         </div>
         <form action="/logout" method="post" class="logout-form" style="margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-             <input type="hidden" name="${_csrf.parameterName}" value="${_csrf.token}"/>
+             <input type="hidden" name="${(_csrf.parameterName)!''}" value="${(_csrf.token)!''}"/>
              <button type="submit">Выйти</button>
         </form>
     </nav>
     <main class="content-area">
-        <#-- Здесь будет вставлено содержимое конкретной страницы -->
         <#nested>
     </main>
 </div>
@@ -77,8 +74,10 @@
 document.addEventListener('DOMContentLoaded', function() {
     const chatList = document.getElementById('chat-list');
     const newChatBtn = document.getElementById('new-chat-btn');
-    const token = document.querySelector('meta[name="_csrf"]').getAttribute('content');
-    const header = document.querySelector('meta[name="_csrf_header"]').getAttribute('content');
+    const csrfTokenMeta = document.querySelector('meta[name="_csrf"]');
+    const csrfHeaderMeta = document.querySelector('meta[name="_csrf_header"]');
+    const token = csrfTokenMeta ? csrfTokenMeta.getAttribute('content') : null;
+    const header = csrfHeaderMeta ? csrfHeaderMeta.getAttribute('content') : null;
 
     async function fetchAndRenderChats() {
         try {
@@ -129,12 +128,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     newChatBtn.addEventListener('click', async () => {
         try {
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers[header] = token;
+
             const response = await fetch('/api/v1/chats', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    [header]: token
-                }
+                headers: headers
             });
             if (!response.ok) throw new Error('Failed to create new chat');
             const newChat = await response.json();
@@ -173,9 +172,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const newName = input.value.trim();
             if (newName && newName !== currentName) {
                 try {
+                    const headers = { [header]: token, 'Content-Type': 'application/json' };
                     await fetch(`/api/v1/chats/${sessionId}`, {
                         method: 'PUT',
-                        headers: { [header]: token, 'Content-Type': 'application/json' },
+                        headers: headers,
                         body: JSON.stringify({ newName: newName })
                     });
                 } catch (err) {
@@ -198,9 +198,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (confirm(`Вы уверены, что хотите удалить чат "${chatName}"?`)) {
             try {
+                const headers = { [header]: token };
                 const response = await fetch(`/api/v1/chats/${sessionId}`, {
                     method: 'DELETE',
-                    headers: { [header]: token }
+                    headers: headers
                 });
                 if (!response.ok) throw new Error('Failed to delete chat');
 

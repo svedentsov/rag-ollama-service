@@ -3,19 +3,20 @@
 <@layout.page title="Чат">
     <style>
         #chat-container { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; }
-        .message { max-width: 70%; padding: 0.75rem 1rem; border-radius: 18px; margin-bottom: 0.5rem; line-height: 1.4; word-wrap: break-word; }
+        .message { max-width: 80%; padding: 0.75rem 1rem; border-radius: 18px; margin-bottom: 0.5rem; line-height: 1.5; word-wrap: break-word; }
         .user-message { background-color: var(--primary-color); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
         .assistant-message { background-color: #ffffff; color: var(--text-color); align-self: flex-start; border: 1px solid var(--border-color); border-bottom-left-radius: 4px; }
         .assistant-message p { margin: 0 0 0.5em; }
         .assistant-message p:last-child { margin-bottom: 0; }
         .assistant-message ul, .assistant-message ol { margin: 0.5em 0; padding-left: 1.5em; }
         .assistant-message li { margin-bottom: 0.25em; }
-        .assistant-message pre { background-color: #2d2d2d; color: #f8f8f2; padding: 1em; border-radius: 8px; overflow-x: auto; font-family: "Courier New", Courier, monospace; }
-        .assistant-message code { font-family: "Courier New", Courier, monospace; background-color: #e0e0e0; padding: 0.2em 0.4em; border-radius: 3px; }
+        .assistant-message pre { margin: 1em 0 !important; border-radius: 8px !important; }
+        .assistant-message code[class*="language-"] { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace; font-size: 0.9em; }
         .assistant-message .sources { margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; font-size: 0.8rem; }
         .assistant-message .sources strong { display: block; margin-bottom: 5px; }
         .assistant-message .sources ul { padding-left: 15px; margin: 0; }
         .assistant-message .sources li { margin-bottom: 5px; }
+        .typing-indicator-container { display: flex; gap: 4px; align-items: center; padding: 0.75rem 1rem; }
         .typing-indicator { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: #999; animation: typing 1s infinite; }
         .typing-indicator:nth-child(2) { animation-delay: 0.2s; }
         .typing-indicator:nth-child(3) { animation-delay: 0.4s; }
@@ -28,6 +29,7 @@
     </style>
 
     <div id="chat-container"></div>
+
     <form id="chat-form">
         <input type="text" id="message-input" placeholder="Спросите что-нибудь..." autocomplete="off" required>
         <button type="submit">Отправить</button>
@@ -35,7 +37,7 @@
 
     <script>
         const sessionId = "${sessionId!''}";
-    <#noparse>
+        <#noparse>
         document.addEventListener('DOMContentLoaded', function() {
             const chatForm = document.getElementById('chat-form');
             if (!chatForm) return;
@@ -43,18 +45,21 @@
             const messageInput = document.getElementById('message-input');
             const chatContainer = document.getElementById('chat-container');
             const sendButton = chatForm.querySelector('button');
-            const token = document.querySelector('meta[name="_csrf"]').getAttribute('content');
-            const header = document.querySelector('meta[name="_csrf_header"]').getAttribute('content');
+
+            const csrfTokenMeta = document.querySelector('meta[name="_csrf"]');
+            const csrfHeaderMeta = document.querySelector('meta[name="_csrf_header"]');
+            const token = csrfTokenMeta ? csrfTokenMeta.getAttribute('content') : null;
+            const header = csrfHeaderMeta ? csrfHeaderMeta.getAttribute('content') : null;
 
             let currentSessionId = sessionId;
 
             async function loadChatHistory() {
                 if (!currentSessionId) {
-                    appendMessage("Чем я могу вам помочь сегодня?", "assistant");
+                    appendMessage("Чем я могу вам помочь сегодня?", "assistant", true);
                     return;
                 }
 
-                const tempMsg = appendMessage('', 'assistant');
+                const tempMsg = appendMessage('', 'assistant', false);
                 const typingIndicator = showTypingIndicator(tempMsg);
 
                 try {
@@ -65,11 +70,15 @@
                     const messages = await response.json();
 
                     tempMsg.remove();
+                    chatContainer.innerHTML = '';
 
-                    chatContainer.innerHTML = ''; // Очищаем контейнер перед рендерингом
-                    messages.forEach(msg => {
-                        appendMessage(msg.content, msg.role.toLowerCase());
-                    });
+                    if (messages.length === 0) {
+                        appendMessage("Чем я могу вам помочь в этом чате?", "assistant", true);
+                    } else {
+                        messages.forEach(msg => {
+                            appendMessage(msg.content, msg.role.toLowerCase(), true);
+                        });
+                    }
 
                 } catch (error) {
                     console.error("Error loading chat history:", error);
@@ -84,22 +93,28 @@
                 const message = messageInput.value.trim();
                 if (!message) return;
 
-                appendMessage(message, 'user');
+                appendMessage(message, 'user', true);
                 messageInput.value = '';
                 sendButton.disabled = true;
 
-                const assistantMsgContainer = appendMessage('', 'assistant');
+                const assistantMsgContainer = appendMessage('', 'assistant', false);
                 const typingIndicator = showTypingIndicator(assistantMsgContainer);
                 let assistantMarkdownContent = '';
+                let assistantContentDiv = document.createElement('div');
+                assistantMsgContainer.appendChild(assistantContentDiv);
 
                 try {
+                    const headers = {
+                        'Content-Type': 'application/json',
+                        'Accept': 'text/event-stream'
+                    };
+                    if (token && header) {
+                        headers[header] = token;
+                    }
+
                     const response = await fetch('/api/v1/orchestrator/ask-stream', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'text/event-stream',
-                            [header]: token
-                        },
+                        headers: headers,
                         body: JSON.stringify({ query: message, sessionId: currentSessionId || null })
                     });
 
@@ -111,16 +126,16 @@
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
                     let buffer = '';
-                    let assistantContentDiv = document.createElement('div');
-                    assistantMsgContainer.appendChild(assistantContentDiv);
 
                     while (true) {
                         const { value, done } = await reader.read();
                         if (done) break;
+
                         hideTypingIndicator(typingIndicator);
                         buffer += decoder.decode(value, { stream: true });
                         const lines = buffer.split('\n\n');
                         buffer = lines.pop();
+
                         for (const line of lines) {
                             if (line.startsWith('data:')) {
                                 const jsonData = line.substring(5).trim();
@@ -134,18 +149,22 @@
                 } catch (error) {
                     console.error('Error fetching stream:', error);
                     hideTypingIndicator(typingIndicator);
-                    assistantMsgContainer.innerHTML = `<p style="color: red;">Ошибка: ${error.message}</p>`;
+                    assistantContentDiv.innerHTML = `<p style="color: red;">Ошибка: ${error.message}</p>`;
                 } finally {
                     sendButton.disabled = false;
                     messageInput.focus();
+                    if (typeof Prism !== 'undefined') {
+                        Prism.highlightAllUnder(assistantContentDiv);
+                    }
                 }
             });
 
             function processStreamEvent(data, container, contentDiv, currentMarkdown) {
+                let updatedMarkdown = currentMarkdown;
                 switch (data.type) {
                     case 'content':
-                        currentMarkdown += data.text;
-                        contentDiv.innerHTML = marked.parse(currentMarkdown);
+                        updatedMarkdown += data.text;
+                        contentDiv.innerHTML = marked.parse(updatedMarkdown);
                         break;
                     case 'sources':
                         appendSources(data.sources, container);
@@ -164,35 +183,29 @@
                         break;
                 }
                 scrollToBottom();
-                return currentMarkdown;
+                return updatedMarkdown;
             }
 
-            function generateBugAnalysisHtml(analysis) {
-                let bugHtml = '<h4>Анализ Баг-репорта</h4>';
-                bugHtml += `<p><strong>Вердикт:</strong> ${analysis.isDuplicate ? 'Возможный дубликат' : 'Уникальный'}</p>`;
-                bugHtml += `<h5>Улучшенное описание:</h5>`;
-                bugHtml += `<p><strong>Заголовок:</strong> ${analysis.improvedDescription.title}</p>`;
-                bugHtml += '<strong>Шаги:</strong><ul>' + analysis.improvedDescription.stepsToReproduce.map(s => `<li>${s}</li>`).join('') + '</ul>';
-                bugHtml += `<p><strong>Ожидаемый результат:</strong> ${analysis.improvedDescription.expectedBehavior}</p>`;
-                bugHtml += `<p><strong>Фактический результат:</strong> ${analysis.improvedDescription.actualBehavior}</p>`;
-                if(analysis.duplicateCandidates && analysis.duplicateCandidates.length > 0) {
-                     bugHtml += '<strong>Кандидаты в дубликаты:</strong><ul>' + analysis.duplicateCandidates.map(c => `<li>${c}</li>`).join('') + '</ul>';
-                }
-                return bugHtml;
-            }
-
-            function appendMessage(text, type) {
+            function appendMessage(text, type, shouldHighlight) {
                 const messageDiv = document.createElement('div');
                 const messageType = type.toLowerCase();
                 messageDiv.classList.add('message', `${messageType}-message`);
-                messageDiv.innerHTML = marked.parse(text);
+                if (text) {
+                     messageDiv.innerHTML = marked.parse(text);
+                }
                 chatContainer.appendChild(messageDiv);
+
+                if (shouldHighlight && typeof Prism !== 'undefined') {
+                    Prism.highlightAllUnder(messageDiv);
+                }
+
                 scrollToBottom();
                 return messageDiv;
             }
 
             function showTypingIndicator(container) {
                 const indicatorContainer = document.createElement('div');
+                indicatorContainer.className = 'typing-indicator-container';
                 indicatorContainer.innerHTML = '<span class="typing-indicator"></span><span class="typing-indicator"></span><span class="typing-indicator"></span>';
                 container.appendChild(indicatorContainer);
                 scrollToBottom();
@@ -209,19 +222,43 @@
                 sourcesDiv.className = 'sources';
                 let sourcesHtml = '<strong>Источники:</strong><ul>';
                 sources.forEach(source => {
-                     sourcesHtml += `<li>${source.sourceName} (ID: ${source.chunkId})</li>`;
+                     sourcesHtml += `<li>${escapeHtml(source.sourceName)} (ID: ${escapeHtml(source.chunkId)})</li>`;
                 });
                 sourcesHtml += '</ul>';
                 sourcesDiv.innerHTML = sourcesHtml;
                 container.appendChild(sourcesDiv);
             }
 
+             function generateBugAnalysisHtml(analysis) {
+                let bugHtml = '<h4>Анализ Баг-репорта</h4>';
+                bugHtml += `<p><strong>Вердикт:</strong> ${analysis.isDuplicate ? 'Возможный дубликат' : 'Уникальный'}</p>`;
+                bugHtml += `<h5>Улучшенное описание:</h5>`;
+                bugHtml += `<p><strong>Заголовок:</strong> ${escapeHtml(analysis.improvedDescription.title)}</p>`;
+                bugHtml += '<strong>Шаги:</strong><ul>' + analysis.improvedDescription.stepsToReproduce.map(s => `<li>${escapeHtml(s)}</li>`).join('') + '</ul>';
+                bugHtml += `<p><strong>Ожидаемый результат:</strong> ${escapeHtml(analysis.improvedDescription.expectedBehavior)}</p>`;
+                bugHtml += `<p><strong>Фактический результат:</strong> ${escapeHtml(analysis.improvedDescription.actualBehavior)}</p>`;
+                if(analysis.duplicateCandidates && analysis.duplicateCandidates.length > 0) {
+                     bugHtml += '<strong>Кандидаты в дубликаты:</strong><ul>' + analysis.duplicateCandidates.map(c => `<li>${escapeHtml(c)}</li>`).join('') + '</ul>';
+                }
+                return bugHtml;
+            }
+
             function scrollToBottom() {
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             }
 
+            function escapeHtml(unsafe) {
+                if (!unsafe) return '';
+                return unsafe
+                     .replace(/&/g, "&amp;")
+                     .replace(/</g, "&lt;")
+                     .replace(/>/g, "&gt;")
+                     .replace(/"/g, "&quot;")
+                     .replace(/'/g, "&#039;");
+            }
+
             loadChatHistory();
         });
-    </#noparse>
+        </#noparse>
     </script>
 </@layout.page>

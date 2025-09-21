@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
@@ -44,5 +45,22 @@ public class CodeGenerationService {
 
         return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.BALANCED))
                 .map(generatedCode -> new CodeGenerationResponse(generatedCode, "java"));
+    }
+
+    /**
+     * Асинхронно генерирует фрагмент кода в потоковом режиме.
+     *
+     * @param request DTO с инструкцией и контекстом для генерации.
+     * @return {@link Flux}, который по мере генерации будет передавать
+     * фрагменты (токены) сгенерированного кода.
+     */
+    public Flux<String> generateCodeStream(CodeGenerationRequest request) {
+        log.info("CodeGenerationAgent: получен потоковый запрос на генерацию кода.");
+        String promptString = promptService.render("codeGenerationPrompt", Map.of(
+                "instruction", request.instruction(),
+                "context", request.context()
+        ));
+        Prompt prompt = new Prompt(promptString);
+        return llmClient.streamChat(prompt, ModelCapability.BALANCED);
     }
 }

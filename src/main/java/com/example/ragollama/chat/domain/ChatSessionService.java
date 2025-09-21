@@ -2,11 +2,11 @@ package com.example.ragollama.chat.domain;
 
 import com.example.ragollama.chat.domain.model.ChatMessage;
 import com.example.ragollama.chat.domain.model.ChatSession;
-import com.example.ragollama.chat.domain.model.MessageRole;
 import com.example.ragollama.shared.config.properties.AppProperties;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.ai.chat.messages.Message;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -24,7 +25,6 @@ public class ChatSessionService {
 
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
-    private final ChatHistoryService chatHistoryService;
     private final AppProperties appProperties;
 
     /**
@@ -56,6 +56,7 @@ public class ChatSessionService {
 
     /**
      * Находит существующую сессию по ID или создает новую, если ID не предоставлен.
+     * Также проверяет, что существующая сессия принадлежит текущему пользователю.
      *
      * @param sessionId ID сессии для поиска.
      * @return Существующая или новая сущность ChatSession.
@@ -64,7 +65,7 @@ public class ChatSessionService {
         if (sessionId == null) {
             return createNewChat();
         }
-        return chatSessionRepository.findById(sessionId).orElseGet(this::createNewChat);
+        return findAndVerifyOwnership(sessionId);
     }
 
     /**
@@ -94,26 +95,25 @@ public class ChatSessionService {
 
     /**
      * Возвращает историю сообщений для указанного чата, проверив права доступа.
+     * Этот метод напрямую запрашивает данные из репозитория и возвращает их
+     * в правильном для UI порядке.
      *
      * @param sessionId ID чата.
-     * @return Список сообщений.
+     * @return Список сообщений в хронологическом порядке.
      */
     @Transactional(readOnly = true)
     public List<ChatMessage> getMessagesForSession(UUID sessionId) {
         findAndVerifyOwnership(sessionId); // Проверка, что пользователь владеет этим чатом
         int historySize = appProperties.chat().history().maxMessages();
 
-        // Используем CompletableFuture.join() для синхронного получения результата
-        // внутри транзакционного метода, так как нам не нужна здесь дальнейшая асинхронность.
-        List<Message> springAiMessages = chatHistoryService.getLastNMessagesAsync(sessionId, historySize).join();
+        // Запрашиваем N последних сообщений (они будут отсортированы от новых к старым)
+        PageRequest pageRequest = PageRequest.of(0, historySize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        List<ChatMessage> recentMessages = chatMessageRepository.findBySessionId(sessionId, pageRequest);
 
-        // Преобразуем из Spring AI Message в нашу сущность для передачи в DTO
-        return springAiMessages.stream()
-                .map(msg -> ChatMessage.builder()
-                        .role(MessageRole.valueOf(msg.getMessageType().name()))
-                        .content(msg.getText())
-                        .build())
-                .toList();
+        // Переворачиваем список, чтобы он был в хронологическом порядке (старые -> новые) для отображения в UI
+        Collections.reverse(recentMessages);
+
+        return recentMessages;
     }
 
     /**
