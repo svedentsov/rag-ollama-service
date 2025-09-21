@@ -69,7 +69,7 @@ public class ChatHistoryMapper {
                 .sessionId(sessionId)
                 .role(role)
                 .content(content)
-                .createdAt(OffsetDateTime.now()) // ИСПРАВЛЕНИЕ: Используем OffsetDateTime
+                .createdAt(OffsetDateTime.now())
                 .build();
     }
 

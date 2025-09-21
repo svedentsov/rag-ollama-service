@@ -91,8 +91,15 @@ public record AppProperties(
     public record HttpClient(
             @NotNull Duration connectTimeout,
             @NotNull Duration responseTimeout,
-            @NotNull Duration readWriteTimeout
+            @NotNull Duration readWriteTimeout,
+            @NotNull Ollama ollama
     ) {
+        @Validated
+        public record Ollama(
+                @NotNull Duration responseTimeout,
+                @NotNull Duration readWriteTimeout
+        ) {
+        }
     }
 
     /**

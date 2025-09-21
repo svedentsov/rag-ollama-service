@@ -1,6 +1,8 @@
 package com.example.ragollama.orchestration;
 
 import com.example.ragollama.chat.domain.ChatHistoryService;
+import com.example.ragollama.chat.domain.ChatSessionService;
+import com.example.ragollama.chat.domain.model.ChatSession;
 import com.example.ragollama.chat.domain.model.MessageRole;
 import com.example.ragollama.shared.config.properties.AppProperties;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +33,7 @@ import java.util.concurrent.CompletableFuture;
 public class DialogManager {
 
     private final ChatHistoryService chatHistoryService;
+    private final ChatSessionService chatSessionService;
     private final AppProperties appProperties;
 
     /**
@@ -60,7 +63,8 @@ public class DialogManager {
      * @return {@link CompletableFuture} с контекстом текущего хода.
      */
     public CompletableFuture<TurnContext> startTurn(UUID sessionId, String userMessage, MessageRole role) {
-        final UUID finalSessionId = (sessionId != null) ? sessionId : UUID.randomUUID();
+        final ChatSession session = chatSessionService.findOrCreateSession(sessionId);
+        final UUID finalSessionId = session.getSessionId();
         final UserMessage currentMessage = new UserMessage(userMessage);
 
         CompletableFuture<Void> saveFuture = saveMessageAsync(finalSessionId, role, userMessage);
@@ -97,8 +101,6 @@ public class DialogManager {
         return chatHistoryService.saveMessageAsync(sessionId, role, content)
                 .exceptionally(ex -> {
                     log.error("Не удалось сохранить сообщение для сессии {}. Роль: {}", sessionId, role, ex);
-                    // Игнорируем ошибку, чтобы не прерывать основной поток ответа пользователю.
-                    // Это сознательное архитектурное решение для повышения отказоустойчивости.
                     return null;
                 });
     }
@@ -111,7 +113,6 @@ public class DialogManager {
      */
     private CompletableFuture<List<Message>> getHistoryAsync(UUID sessionId) {
         int maxHistory = appProperties.chat().history().maxMessages();
-        // Загружаем N-1 сообщений, так как текущее сообщение пользователя будет добавлено вручную.
         return chatHistoryService.getLastNMessagesAsync(sessionId, maxHistory - 1);
     }
 }

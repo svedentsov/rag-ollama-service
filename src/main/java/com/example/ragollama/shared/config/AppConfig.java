@@ -1,7 +1,9 @@
 package com.example.ragollama.shared.config;
 
 import com.example.ragollama.shared.config.properties.AppProperties;
+import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
@@ -28,7 +30,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Основной конфигурационный класс приложения.
- * <p> Содержит централизованную настройку ключевых бинов, таких как
+ * <p>
+ * Содержит централизованную настройку ключевых бинов, таких как
  * пулы потоков и HTTP-клиенты, обеспечивая консистентность и надежность во всем приложении.
  */
 @Configuration
@@ -36,7 +39,6 @@ import java.util.concurrent.TimeUnit;
 public class AppConfig {
 
     private final AppProperties appProperties;
-    private final ObjectMapper objectMapper;
 
     /**
      * Включает автоматическую передачу контекста Reactor в другие контексты,
@@ -48,16 +50,34 @@ public class AppConfig {
     }
 
     /**
+     * Создает и настраивает основной, переиспользуемый ObjectMapper для всего приложения.
+     * Эта конфигурация делает десериализацию Enum нечувствительной к регистру и
+     * добавляет поддержку современных типов даты/времени Java 8 (JSR-310).
+     *
+     * @return Сконфигурированный ObjectMapper.
+     */
+    @Bean
+    @Primary
+    public ObjectMapper objectMapper() {
+        return JsonMapper.builder()
+                .enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS)
+                .build()
+                .findAndRegisterModules();
+    }
+
+    /**
      * Создает и настраивает основной, переиспользуемый строитель для {@link WebClient}.
-     * <p> Эта конфигурация является центральной точкой для всех HTTP-взаимодействий. Она
+     * <p>
+     * Эта конфигурация является центральной точкой для всех HTTP-взаимодействий. Она
      * устанавливает таймауты, пулы соединений и использует кастомный {@link ObjectMapper},
      * что обеспечивает консистентность и надежность всех внешних вызовов.
      *
+     * @param objectMapper ObjectMapper, настроенный для всего приложения.
      * @return Сконфигурированный {@link WebClient.Builder}.
      */
     @Bean
     @Primary
-    public WebClient.Builder webClientBuilder() {
+    public WebClient.Builder webClientBuilder(ObjectMapper objectMapper) {
         final var httpClientProps = appProperties.httpClient();
         HttpClient httpClient = HttpClient.create()
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, (int) httpClientProps.connectTimeout().toMillis())
@@ -151,7 +171,8 @@ public class AppConfig {
 
     /**
      * Создает планировщик для библиотеки Resilience4j.
-     * <p> Этот планировщик используется компонентом TimeLimiter для асинхронного
+     * <p>
+     * Этот планировщик используется компонентом TimeLimiter для асинхронного
      * прерывания операций по таймауту. Выделение отдельного потока
      * обеспечивает изоляцию и предсказуемость работы механизмов отказоустойчивости.
      *

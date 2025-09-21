@@ -25,7 +25,8 @@ spring:
     # Явно указываем Spring Boot, где искать наши шаблоны.
     # Путь должен начинаться с 'classpath:' и указывать на директорию.
     template-loader-path: classpath:/templates/, classpath:/prompts/
-    # Опционально: можно указать суффикс, если все файлы имеют одинаковое расширение
+    expose-request-attributes: true # ВАЖНО: Для работы страницы логина
+    expose-spring-macro-helpers: true
     suffix: .ftl
     # Глобальная настройка для форматирования boolean-значений.
     # 'c' выводит true/false без кавычек, что безопасно для LLM и предотвращает ошибки.
@@ -48,6 +49,7 @@ spring:
     properties:
       hibernate:
         format_sql: true # Форматирует SQL для лучшей читаемости в логах.
+    open-in-view: false
   flyway:
     enabled: true
     locations: classpath:db/migration # Путь к SQL-миграциям.
@@ -200,7 +202,7 @@ resilience4j:
   timelimiter:
     instances:
       ollama:
-        timeout-duration: 2m
+        timeout-duration: 15m
         cancel-running-future: true
       database:
         timeout-duration: 10s
@@ -262,9 +264,12 @@ app:
       chunk-overlap: 32
 
   http-client:
-    connect-timeout: 5s # Таймаут на установку TCP-соединения
-    response-timeout: 2m # Общий таймаут на получение ответа
-    read-write-timeout: 2m # Таймаут на чтение/запись данных
+    connect-timeout: 5s
+    response-timeout: 30s
+    read-write-timeout: 30s
+    ollama:
+      response-timeout: 10m
+      read-write-timeout: 10m
 
   task-executor: # Настройки основного пула потоков для @Async задач.
     core-pool-size: 4
@@ -463,9 +468,11 @@ app:
       # Описание тарифных планов
       tiers:
         free:
-          total-tokens-limit: 100000   # 100 тысяч токенов в месяц
+          total-tokens-limit: 5000000
         pro:
-          total-tokens-limit: 5000000  # 5 миллионов токенов в месяц
+          total-tokens-limit: 5000000
+        developer:
+          total-tokens-limit: 2000000
       # Стоимость в USD за 1000 токенов (для отчетов)
       costs:
         input: 0.0005  # Примерная стоимость

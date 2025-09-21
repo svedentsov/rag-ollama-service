@@ -6,6 +6,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.scheduling.annotation.Async;
+// --- ДОБАВЬТЕ ЭТИ ИМПОРТЫ ---
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+// --- КОНЕЦ ИМПОРТОВ ---
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +52,10 @@ public class LlmUsageTracker {
     }
 
     private String getAuthenticatedUsername() {
-        return "anonymous_user";
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
+            return "anonymous_user";
+        }
+        return authentication.getName();
     }
 }

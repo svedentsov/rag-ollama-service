@@ -8,6 +8,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
 import java.util.stream.Collectors;
@@ -22,6 +23,23 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     private final MetricService metricService;
+
+    /**
+     * Обрабатывает исключения, когда запрашиваемый статический ресурс или API эндпоинт не найден.
+     * Логирует это событие с уровнем WARN, чтобы не засорять логи ошибками ERROR.
+     *
+     * @param e Исключение NoResourceFoundException.
+     * @return ProblemDetail с кодом 404 Not Found.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ProblemDetail handleNoResourceFoundException(NoResourceFoundException e) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+        problemDetail.setTitle("Resource Not Found");
+        problemDetail.setProperty("timestamp", Instant.now());
+        metricService.incrementApiError(HttpStatus.NOT_FOUND.value());
+        log.warn("Запрошен несуществующий ресурс: {}", e.getResourcePath());
+        return problemDetail;
+    }
 
     /**
      * Обрабатывает исключения валидации DTO.
