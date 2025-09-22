@@ -63,7 +63,7 @@ public class HybridRetrievalStrategy {
             return Mono.just(List.of());
         }
         Mono<List<Document>> vectorSearchMono = Mono.fromCallable(() ->
-                vectorSearchService.search(processedQueries.expansionQueries(), topK, similarityThreshold, businessFilter)
+                vectorSearchService.search(processedQueries.expansionQueries(), topK, similarityThreshold, businessFilter, null)
         ).subscribeOn(Schedulers.fromExecutor(applicationTaskExecutor));
         Mono<List<Document>> ftsSearchMono = ftsSearchService.search(originalQuery);
         Mono<List<Document>> graphSearchMono = isGraphQuery(originalQuery)

@@ -2,6 +2,9 @@ package com.example.ragollama.rag.retrieval.search;
 
 import com.example.ragollama.shared.exception.RetrievalException;
 import com.example.ragollama.shared.metrics.MetricService;
+import jakarta.annotation.Nullable;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
@@ -10,15 +13,13 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 /**
  * Базовая реализация {@link VectorSearchService}, отвечающая исключительно
  * за прямое взаимодействие с {@link VectorStore}.
- * <p>
- * Эта версия возвращает синхронный результат, что необходимо для корректной
- * работы декларативного кэширования Spring.
  */
 @Slf4j
 @Service
@@ -28,12 +29,22 @@ public class DefaultVectorSearchService implements VectorSearchService {
     private final VectorStore vectorStore;
     private final MetricService metricService;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     /**
      * {@inheritDoc}
      */
     @Override
-    public List<Document> search(List<String> queries, int topK, double similarityThreshold, Filter.Expression filter) {
-        // Выполняем поиск для каждого запроса и объединяем результаты
+    @Transactional(readOnly = true)
+    public List<Document> search(List<String> queries, int topK, double similarityThreshold, @Nullable Filter.Expression filter, @Nullable Integer efSearch) {
+        if (efSearch != null) {
+            log.debug("Установка локального параметра hnsw.ef_search = {} для текущей транзакции.", efSearch);
+            entityManager.createNativeQuery("SET LOCAL hnsw.ef_search = :efSearch")
+                    .setParameter("efSearch", efSearch)
+                    .executeUpdate();
+        }
+
         return queries.stream()
                 .parallel() // Распараллеливаем запросы для повышения производительности
                 .flatMap(query -> performSingleSearch(query, topK, similarityThreshold, filter).stream())

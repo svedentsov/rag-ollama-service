@@ -202,7 +202,7 @@ resilience4j:
   timelimiter:
     instances:
       ollama:
-        timeout-duration: 15m
+        timeout-duration: 20m
         cancel-running-future: true
       database:
         timeout-duration: 10s
@@ -268,8 +268,8 @@ app:
     response-timeout: 30s
     read-write-timeout: 30s
     ollama:
-      response-timeout: 10m
-      read-write-timeout: 10m
+      response-timeout: 15m
+      read-write-timeout: 15m
 
   task-executor: # Настройки основного пула потоков для @Async задач.
     core-pool-size: 4

@@ -1,21 +1,22 @@
 package com.example.ragollama.shared.tokenization;
 
+import com.example.ragollama.shared.util.FilterExpressionKeyHelper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.cache.interceptor.KeyGenerator;
 import org.springframework.stereotype.Component;
 import org.springframework.util.DigestUtils;
 
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.StringJoiner;
+import java.util.stream.Collectors;
 
 /**
  * Кастомный генератор ключей для кэширования результатов векторного поиска.
- * <p>
- * Реализует интерфейс {@link KeyGenerator}, что позволяет Spring использовать
- * его напрямую в аннотации {@code @Cacheable} по имени бина.
- * Создает надежный и уникальный ключ на основе содержимого объекта {@link SearchRequest},
- * который передается в качестве первого аргумента в кэшируемый метод.
+ * Создает уникальный ключ на основе всех параметров поиска, включая
+ * текст запросов, topK, порог, фильтры и динамический efSearch.
  */
 @Slf4j
 @Component("searchRequestKeyGenerator")
@@ -23,39 +24,33 @@ public class SearchRequestKeyGenerator implements KeyGenerator {
 
     private static final String PUNCTUATION_REGEX = "[\\p{Punct}\\s]+";
 
-    /**
-     * Генерирует ключ кэша для вызова метода.
-     * <p>
-     * Метод строит детерминированную строку из всех значимых полей
-     * объекта {@link SearchRequest} (запрос, topK, порог), нормализует ее
-     * и хеширует с помощью MD5 для получения компактного и безопасного ключа.
-     *
-     * @param target вызываемый объект.
-     * @param method вызываемый метод.
-     * @param params параметры, переданные в метод.
-     * @return сгенерированный и хешированный ключ.
-     * @throws IllegalArgumentException если первый параметр не является {@link SearchRequest}.
-     */
     @Override
+    @SuppressWarnings("unchecked")
     public Object generate(Object target, Method method, Object... params) {
-        if (params.length > 0 && params[0] instanceof SearchRequest request) {
-            // 1. Нормализация строки запроса
-            String normalizedQuery = request.getQuery().toLowerCase()
-                    .replaceAll(PUNCTUATION_REGEX, "")
-                    .trim();
-            // 2. Сборка всех параметров в одну строку
-            String rawKey = new StringBuilder()
-                    .append(normalizedQuery)
-                    .append("_")
-                    .append(request.getTopK())
-                    .append("_")
-                    .append(request.getSimilarityThreshold())
-                    .toString();
-            // 3. Хеширование для получения безопасного и уникального ключа
-            String hashedKey = DigestUtils.md5DigestAsHex(rawKey.getBytes(StandardCharsets.UTF_8));
-            log.trace("Сгенерирован ключ кэша: '{}' для запроса: '{}'", hashedKey, request.getQuery());
-            return hashedKey;
+        if (params.length < 5) {
+            throw new IllegalArgumentException("KeyGenerator ожидает как минимум 5 параметров для метода search.");
         }
-        throw new IllegalArgumentException("KeyGenerator ожидает первый параметр типа SearchRequest");
+        // 1. Извлекаем все параметры из вызова метода
+        List<String> queries = (List<String>) params[0];
+        int topK = (int) params[1];
+        double similarityThreshold = (double) params[2];
+        Filter.Expression filter = (Filter.Expression) params[3];
+        Integer efSearch = (Integer) params[4];
+        // 2. Нормализуем и объединяем запросы
+        String normalizedQueries = queries.stream()
+                .map(q -> q.toLowerCase().replaceAll(PUNCTUATION_REGEX, "").trim())
+                .sorted() // Сортируем, чтобы порядок не влиял на ключ
+                .collect(Collectors.joining("|"));
+        // 3. Собираем все параметры в одну детерминированную строку
+        StringJoiner rawKeyBuilder = new StringJoiner("_")
+                .add(normalizedQueries)
+                .add("k" + topK)
+                .add("t" + similarityThreshold)
+                .add("f" + FilterExpressionKeyHelper.generateKey(filter))
+                .add("ef" + (efSearch != null ? efSearch.toString() : "default"));
+        // 4. Хешируем для получения безопасного и уникального ключа
+        String hashedKey = DigestUtils.md5DigestAsHex(rawKeyBuilder.toString().getBytes(StandardCharsets.UTF_8));
+        log.trace("Сгенерирован ключ кэша: '{}' для запроса: '{}'", hashedKey, queries.get(0));
+        return hashedKey;
     }
 }

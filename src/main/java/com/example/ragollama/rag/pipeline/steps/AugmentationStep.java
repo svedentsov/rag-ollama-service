@@ -28,9 +28,11 @@ public class AugmentationStep implements RagPipelineStep {
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
         log.info("Шаг [38] Augmentation: запуск обогащения и сборки финального промпта...");
+        // 1. Запускаем все советники для обогащения модели промпта
         Mono<RagFlowContext> finalContextMono = Flux.fromIterable(advisors)
                 .reduce(Mono.just(context), (contextMono, advisor) -> contextMono.flatMap(advisor::advise))
                 .flatMap(mono -> mono);
+        // 2. После работы советников, собираем финальный промпт
         return finalContextMono.map(finalContext -> {
             String structuredContext = finalContext.compressedContext();
             if (structuredContext == null || structuredContext.isBlank()) {
@@ -40,7 +42,7 @@ public class AugmentationStep implements RagPipelineStep {
             finalContext.promptModel().put("question", finalContext.originalQuery());
             finalContext.promptModel().put("history", formatHistory(finalContext.history()));
             String promptString = promptService.render("ragPrompt", finalContext.promptModel());
-            log.debug("Этап Augmentation успешно завершен.");
+            log.debug("Этап Augmentation успешно завершен. Финальный промпт собран.");
             return finalContext.withFinalPrompt(new Prompt(promptString));
         });
     }

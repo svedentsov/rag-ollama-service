@@ -47,11 +47,10 @@ public class RagEvaluationService {
                 return Mono.just(new EvaluationResult(0, 0, 0, 0, 0, 0, List.of(), Map.of()));
             }
             log.info("Начинается оценка по {} записям из 'золотого датасета'.", dataset.size());
-
             Map<String, EvaluationResult.RecordResult> details = new ConcurrentHashMap<>();
             Set<String> failures = ConcurrentHashMap.newKeySet();
             final int concurrency = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
-
+            log.info("Оценка будет выполняться с параллелизмом: {}", concurrency);
             return Flux.fromIterable(dataset)
                     .flatMap(record -> evaluateRecord(record)
                                     .doOnNext(resultTuple -> details.put(resultTuple.getT1(), resultTuple.getT2()))
@@ -62,7 +61,6 @@ public class RagEvaluationService {
                                     .onErrorResume(e -> Mono.empty()),
                             concurrency) // Ограничиваем параллелизм
                     .then(Mono.fromCallable(() -> calculateFinalResults(dataset.size(), details, failures)));
-
         } catch (IOException e) {
             log.error("Не удалось загрузить 'золотой датасет' из {}", GOLDEN_DATASET_PATH, e);
             return Mono.error(new IllegalStateException("Ошибка загрузки датасета", e));

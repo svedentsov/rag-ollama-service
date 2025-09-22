@@ -7,10 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -72,9 +69,9 @@ public class TextSplitterService {
                 newMetadata.put("chunkId", childChunkId);
                 newMetadata.put("documentId", originalDocumentId);
                 newMetadata.put("parentChunkId", parentChunkId);
-                newMetadata.put("parentChunkText", parentChunk.getText()); // Сохраняем текст родителя
-                // Используем уникальный ID чанка как ID документа для VectorStore
-                finalChildChunks.add(new Document(childChunkId, childChunk.getText(), newMetadata));
+                newMetadata.put("parentChunkText", parentChunk.getText());
+                String newDocumentId = UUID.randomUUID().toString();
+                finalChildChunks.add(new Document(newDocumentId, childChunk.getText(), newMetadata));
             }
         }
         log.info("Создано {} дочерних чанков для документа '{}'", finalChildChunks.size(), document.getMetadata().get("source"));

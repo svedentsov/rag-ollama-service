@@ -1,6 +1,7 @@
 package com.example.ragollama.rag.retrieval.search;
 
 import com.example.ragollama.shared.metrics.MetricService;
+import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
@@ -12,14 +13,6 @@ import java.util.List;
 
 /**
  * Декоратор, добавляющий кэширование к сервису векторного поиска.
- * <p>
- * Эта реализация {@link VectorSearchService} оборачивает другой сервис
- * (например, {@link DefaultVectorSearchService}) и кэширует его результаты
- * с помощью Spring Cache Abstraction. Это позволяет значительно ускорить
- * повторные запросы, снижая нагрузку на базу данных и повышая отзывчивость API.
- * <p>
- * Данный бин помечен как {@code @Primary} в {@link com.example.ragollama.shared.config.VectorSearchConfig},
- * чтобы именно он внедрялся по умолчанию.
  */
 @Slf4j
 @Service
@@ -46,10 +39,9 @@ public class CachingVectorSearchService implements VectorSearchService {
      */
     @Override
     @Cacheable(value = "vector_search_results", keyGenerator = "searchRequestKeyGenerator")
-    public List<Document> search(List<String> queries, int topK, double similarityThreshold, Filter.Expression filter) {
-        log.warn("ПРОМАХ КЭША: Выполнение реального векторного поиска для запроса: '{}'", queries.get(0));
+    public List<Document> search(List<String> queries, int topK, double similarityThreshold, @Nullable Filter.Expression filter, @Nullable Integer efSearch) {
+        log.warn("ПРОМАХ КЭША: Выполнение реального векторного поиска для запроса: '{}' с efSearch={}", queries.get(0), efSearch);
         metricService.incrementCacheMiss();
-        // Делегируем выполнение реальному сервису
-        return delegate.search(queries, topK, similarityThreshold, filter);
+        return delegate.search(queries, topK, similarityThreshold, filter, efSearch);
     }
 }

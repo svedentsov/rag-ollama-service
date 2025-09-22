@@ -2,6 +2,7 @@ package com.example.ragollama.shared.config;
 
 import com.example.ragollama.agent.finops.domain.LlmUsageTracker;
 import com.example.ragollama.agent.finops.domain.QuotaService;
+import com.example.ragollama.rag.embedding.NormalizingEmbeddingModel;
 import com.example.ragollama.shared.config.properties.AppProperties;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.LlmGateway;
@@ -13,7 +14,9 @@ import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.ollama.OllamaChatModel;
+import org.springframework.ai.ollama.OllamaEmbeddingModel;
 import org.springframework.ai.ollama.api.OllamaApi;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -64,6 +67,20 @@ public class AiConfig {
                 .webClientBuilder(webClientBuilder)
                 .responseErrorHandler(new DefaultResponseErrorHandler())
                 .build();
+    }
+
+    /**
+     * Создает бин EmbeddingModel-декоратора, который добавляет L2-нормализацию.
+     * Аннотация @Primary гарантирует, что именно этот бин будет внедряться
+     * везде, где требуется EmbeddingModel (включая PgVectorStore).
+     *
+     * @param ollamaEmbeddingModel Стандартный бин, созданный автоконфигурацией Spring AI.
+     * @return Декоратор, который будет использоваться во всем приложении.
+     */
+    @Bean
+    @Primary
+    public EmbeddingModel normalizingEmbeddingModel(OllamaEmbeddingModel ollamaEmbeddingModel) {
+        return new NormalizingEmbeddingModel(ollamaEmbeddingModel);
     }
 
     /**
