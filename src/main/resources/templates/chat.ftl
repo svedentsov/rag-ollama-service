@@ -46,11 +46,6 @@
             const chatContainer = document.getElementById('chat-container');
             const sendButton = chatForm.querySelector('button');
 
-            const csrfTokenMeta = document.querySelector('meta[name="_csrf"]');
-            const csrfHeaderMeta = document.querySelector('meta[name="_csrf_header"]');
-            const token = csrfTokenMeta ? csrfTokenMeta.getAttribute('content') : null;
-            const header = csrfHeaderMeta ? csrfHeaderMeta.getAttribute('content') : null;
-
             let currentSessionId = sessionId;
 
             async function loadChatHistory() {
@@ -108,9 +103,6 @@
                         'Content-Type': 'application/json',
                         'Accept': 'text/event-stream'
                     };
-                    if (token && header) {
-                        headers[header] = token;
-                    }
 
                     const response = await fetch('/api/v1/orchestrator/ask-stream', {
                         method: 'POST',

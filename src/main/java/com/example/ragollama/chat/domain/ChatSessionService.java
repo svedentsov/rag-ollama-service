@@ -7,8 +7,6 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +16,15 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Сервис для управления жизненным циклом сессий чата и их сообщениями.
+ * Этот сервис инкапсулирует всю бизнес-логику, связанную с чатами,
+ * такую как создание, поиск, обновление и удаление сессий. Он также
+ * предоставляет методы для доступа к истории сообщений, соблюдая
+ * правила пагинации и владения данными.
+ * В данной версии сервиса отсутствует явная аутентификация, и все
+ * операции выполняются от имени пользователя по умолчанию.
+ */
 @Service
 @Transactional
 @RequiredArgsConstructor
@@ -28,7 +35,9 @@ public class ChatSessionService {
     private final AppProperties appProperties;
 
     /**
-     * Возвращает список всех чатов для текущего аутентифицированного пользователя.
+     * Возвращает список всех чатов для текущего пользователя.
+     * Поскольку аутентификация удалена, все чаты относятся к одному
+     * пользователю по умолчанию.
      *
      * @return Список сущностей ChatSession.
      */
@@ -38,7 +47,7 @@ public class ChatSessionService {
     }
 
     /**
-     * Создает новый чат для текущего пользователя с именем по умолчанию.
+     * Создает новый чат для пользователя по умолчанию.
      *
      * @return Сохраненная сущность нового чата.
      */
@@ -56,7 +65,6 @@ public class ChatSessionService {
 
     /**
      * Находит существующую сессию по ID или создает новую, если ID не предоставлен.
-     * Также проверяет, что существующая сессия принадлежит текущему пользователю.
      *
      * @param sessionId ID сессии для поиска.
      * @return Существующая или новая сущность ChatSession.
@@ -69,8 +77,7 @@ public class ChatSessionService {
     }
 
     /**
-     * Обновляет имя указанного чата, предварительно проверив,
-     * что он принадлежит текущему пользователю.
+     * Обновляет имя указанного чата.
      *
      * @param sessionId ID чата для обновления.
      * @param newName   Новое имя.
@@ -82,8 +89,7 @@ public class ChatSessionService {
     }
 
     /**
-     * Удаляет чат и все связанные с ним сообщения, предварительно
-     * проверив, что он принадлежит текущему пользователю.
+     * Удаляет чат и все связанные с ним сообщения.
      *
      * @param sessionId ID чата для удаления.
      */
@@ -94,53 +100,39 @@ public class ChatSessionService {
     }
 
     /**
-     * Возвращает историю сообщений для указанного чата, проверив права доступа.
-     * Этот метод напрямую запрашивает данные из репозитория и возвращает их
-     * в правильном для UI порядке.
+     * Возвращает историю сообщений для указанного чата.
      *
      * @param sessionId ID чата.
      * @return Список сообщений в хронологическом порядке.
      */
     @Transactional(readOnly = true)
     public List<ChatMessage> getMessagesForSession(UUID sessionId) {
-        findAndVerifyOwnership(sessionId); // Проверка, что пользователь владеет этим чатом
+        findAndVerifyOwnership(sessionId); // Проверка, что сессия существует
         int historySize = appProperties.chat().history().maxMessages();
-
-        // Запрашиваем N последних сообщений (они будут отсортированы от новых к старым)
         PageRequest pageRequest = PageRequest.of(0, historySize, Sort.by(Sort.Direction.DESC, "createdAt"));
         List<ChatMessage> recentMessages = chatMessageRepository.findBySessionId(sessionId, pageRequest);
-
-        // Переворачиваем список, чтобы он был в хронологическом порядке (старые -> новые) для отображения в UI
         Collections.reverse(recentMessages);
-
         return recentMessages;
     }
 
     /**
-     * Вспомогательный метод для поиска сессии и проверки, что она
-     * принадлежит текущему пользователю.
+     * Вспомогательный метод для поиска сессии.
      *
      * @param sessionId ID сессии.
      * @return Найденная сущность ChatSession.
      * @throws EntityNotFoundException если сессия не найдена.
-     * @throws AccessDeniedException   если сессия принадлежит другому пользователю.
      */
     private ChatSession findAndVerifyOwnership(UUID sessionId) {
-        ChatSession session = chatSessionRepository.findById(sessionId)
+        return chatSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new EntityNotFoundException("Чат с ID " + sessionId + " не найден."));
-
-        if (!session.getUserName().equals(getCurrentUsername())) {
-            throw new AccessDeniedException("Доступ к чату запрещен.");
-        }
-        return session;
     }
 
     /**
-     * Получает имя текущего аутентифицированного пользователя из SecurityContext.
+     * Возвращает имя пользователя по умолчанию, так как аутентификация удалена.
      *
-     * @return Имя пользователя (username).
+     * @return Имя пользователя "default-user".
      */
     private String getCurrentUsername() {
-        return SecurityContextHolder.getContext().getAuthentication().getName();
+        return "default-user";
     }
 }

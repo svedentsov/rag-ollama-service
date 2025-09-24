@@ -5,7 +5,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.ModelAndView;
 
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -16,11 +15,22 @@ import java.util.UUID;
 @Controller
 public class WebUIController {
 
+    /**
+     * Отображает главную страницу.
+     *
+     * @return ModelAndView для шаблона 'index'.
+     */
     @GetMapping("/")
     public ModelAndView getIndexPage() {
         return new ModelAndView("index");
     }
 
+    /**
+     * Отображает страницу чата, опционально для существующей сессии.
+     *
+     * @param sessionId Опциональный ID сессии чата.
+     * @return ModelAndView для шаблона 'chat'.
+     */
     @GetMapping("/chat")
     public ModelAndView getChatPage(@RequestParam(required = false) UUID sessionId) {
         ModelAndView mav = new ModelAndView("chat");
@@ -28,13 +38,5 @@ public class WebUIController {
             mav.addObject("sessionId", sessionId.toString());
         }
         return mav;
-    }
-
-    @GetMapping("/login")
-    public ModelAndView getLoginPage(@RequestParam Optional<String> error, @RequestParam Optional<String> logout) {
-        ModelAndView modelAndView = new ModelAndView("login");
-        error.ifPresent(e -> modelAndView.addObject("error", true));
-        logout.ifPresent(l -> modelAndView.addObject("logout", true));
-        return modelAndView;
     }
 }

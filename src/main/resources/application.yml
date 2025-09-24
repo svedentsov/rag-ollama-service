@@ -25,7 +25,7 @@ spring:
     # Явно указываем Spring Boot, где искать наши шаблоны.
     # Путь должен начинаться с 'classpath:' и указывать на директорию.
     template-loader-path: classpath:/templates/, classpath:/prompts/
-    expose-request-attributes: true # ВАЖНО: Для работы страницы логина
+    expose-request-attributes: true
     expose-spring-macro-helpers: true
     suffix: .ftl
     # Глобальная настройка для форматирования boolean-значений.
@@ -109,7 +109,7 @@ management:
         include: health, info, metrics, rageval
   endpoint:
     health:
-      show-details: when_authorized # Показывать детали для health-чеков.
+      show-details: always # Показывать детали для health-чеков.
   tracing:
     enabled: false # Явно отключаем автоконфигурацию трассировки
     sampling:

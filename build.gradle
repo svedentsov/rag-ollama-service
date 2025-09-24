@@ -65,7 +65,6 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-amqp'
     implementation 'org.springframework.boot:spring-boot-starter-freemarker'
     implementation 'org.springframework.boot:spring-boot-starter-data-neo4j'
-    implementation 'org.springframework.boot:spring-boot-starter-security'
 
     // HTTP Client for WebClient
     implementation 'io.projectreactor.netty:reactor-netty-http'

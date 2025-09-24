@@ -6,10 +6,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.scheduling.annotation.Async;
-// --- ДОБАВЬТЕ ЭТИ ИМПОРТЫ ---
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-// --- КОНЕЦ ИМПОРТОВ ---
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,8 +21,7 @@ public class LlmUsageTracker {
 
     /**
      * Асинхронно сохраняет запись об использовании LLM.
-     * Выполняется в выделенном пуле потоков для баз данных, чтобы не конкурировать
-     * с долгими вызовами LLM.
+     * Выполняется в выделенном пуле потоков для баз данных, чтобы не конкурировать с долгими вызовами LLM.
      *
      * @param modelName Имя использованной модели.
      * @param response  Объект ответа от LLM, содержащий метаданные об использовании.
@@ -51,11 +46,14 @@ public class LlmUsageTracker {
         log.debug("Записано использование LLM для пользователя '{}': {} токенов.", username, logEntry.getTotalTokens());
     }
 
+    /**
+     * Возвращает имя пользователя для логирования.
+     * Поскольку аутентификация удалена из проекта, все действия
+     * считаются анонимными.
+     *
+     * @return Статическое имя "anonymous_user".
+     */
     private String getAuthenticatedUsername() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
-            return "anonymous_user";
-        }
-        return authentication.getName();
+        return "anonymous_user";
     }
 }
