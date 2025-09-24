@@ -47,9 +47,11 @@ public class PromptGuardStep implements RagPipelineStep {
 
     /**
      * DTO для десериализации структурированного JSON-ответа от LLM-стража.
+     * Поле `reasoning` имеет тип Object, чтобы гибко обрабатывать как строковые,
+     * так и объектные ответы от LLM.
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record SecurityCheckResponse(boolean is_safe, String reasoning) {
+    private record SecurityCheckResponse(boolean is_safe, Object reasoning) {
     }
 
     /**
@@ -91,10 +93,10 @@ public class PromptGuardStep implements RagPipelineStep {
                     SecurityCheckResponse checkResponse = parseLlmResponse(responseJson);
                     if (!checkResponse.is_safe()) {
                         log.warn("Обнаружена и заблокирована потенциальная атака Prompt Injection. Запрос: '{}'. Обоснование AI: {}",
-                                query, checkResponse.reasoning());
+                                query, formatReasoning(checkResponse.reasoning()));
                         return Mono.error(new PromptInjectionException("Обнаружена потенциально вредоносная инструкция. Запрос отклонен.", query));
                     }
-                    log.debug("AI-анализ безопасности для запроса пройден успешно. Обоснование: {}", checkResponse.reasoning());
+                    log.debug("AI-анализ безопасности для запроса пройден успешно. Обоснование: {}", formatReasoning(checkResponse.reasoning()));
                     return Mono.just(context);
                 });
     }
@@ -130,6 +132,24 @@ public class PromptGuardStep implements RagPipelineStep {
         } catch (JsonProcessingException e) {
             log.error("Не удалось распарсить JSON-ответ от PromptGuard LLM: {}", jsonResponse, e);
             throw new LlmJsonResponseParseException("PromptGuard LLM вернул невалидный JSON.", e, jsonResponse);
+        }
+    }
+
+    /**
+     * Форматирует поле 'reasoning' для логирования,
+     * корректно обрабатывая как строки, так и объекты.
+     *
+     * @param reasoning Поле из ответа LLM.
+     * @return Отформатированная строка.
+     */
+    private String formatReasoning(Object reasoning) {
+        if (reasoning instanceof String) {
+            return (String) reasoning;
+        }
+        try {
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(reasoning);
+        } catch (JsonProcessingException e) {
+            return String.valueOf(reasoning);
         }
     }
 }

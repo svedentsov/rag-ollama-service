@@ -65,13 +65,6 @@ spring:
       # Общие настройки для всех кэшей. Для кэша сессий задаем время жизни.
       spec: "maximumSize=500,expireAfterAccess=30m"
 
-  # --- RabbitMQ Configuration ---
-  rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
-
   # ===================================================================
   # AI & RAG Pipeline Configuration
   # ===================================================================

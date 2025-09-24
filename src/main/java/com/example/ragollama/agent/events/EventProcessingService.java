@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -26,8 +27,10 @@ import java.util.stream.Collectors;
 /**
  * Сервис-обработчик, который является ядром асинхронного конвейера.
  * <p>
- * Содержит всю бизнес-логику по парсингу входящих сообщений, обогащению
- * контекста через API и запуску соответствующих конвейеров агентов.
+ * Все публичные методы этого сервиса аннотированы {@code @Async}, что
+ * заставляет Spring выполнять их в отдельном потоке из пула `applicationTaskExecutor`.
+ * Это позволяет вызывающим компонентам (например, {@link com.example.ragollama.agent.events.api.WebhookController})
+ * немедленно вернуть ответ, не дожидаясь завершения долгой операции.
  */
 @Slf4j
 @Service
@@ -40,6 +43,21 @@ public class EventProcessingService {
     private final AgentOrchestratorService agentOrchestratorService;
     private final PlanningAgentService planningAgentService;
     private final DynamicPipelineExecutionService executionService;
+
+    /**
+     * Асинхронно обрабатывает любое событие от GitHub.
+     *
+     * @param eventType  Тип события (например, "pull_request").
+     * @param payloadRaw Сырой JSON payload.
+     */
+    @Async("applicationTaskExecutor")
+    public void processGitHubEvent(String eventType, String payloadRaw) {
+        switch (eventType) {
+            case "pull_request" -> processGitHubPullRequestEvent(payloadRaw);
+            case "push" -> processGitHubPushEvent(payloadRaw);
+            default -> log.trace("Пропускаем необрабатываемое событие GitHub: {}", eventType);
+        }
+    }
 
     /**
      * Обрабатывает событие открытия или синхронизации Pull Request из GitHub.
@@ -113,10 +131,11 @@ public class EventProcessingService {
     }
 
     /**
-     * Создан новый публичный метод для обработки всех событий Jira.
+     * Асинхронно обрабатывает любое событие от Jira.
      *
      * @param payloadRaw Сырой JSON payload.
      */
+    @Async("applicationTaskExecutor")
     public void processJiraEvent(String payloadRaw) {
         try {
             JiraIssuePayload payload = objectMapper.readValue(payloadRaw, JiraIssuePayload.class);
