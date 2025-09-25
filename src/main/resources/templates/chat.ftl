@@ -21,19 +21,23 @@
         .typing-indicator:nth-child(2) { animation-delay: 0.2s; }
         .typing-indicator:nth-child(3) { animation-delay: 0.4s; }
         @keyframes typing { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-        #chat-form { display: flex; padding: 1rem; background-color: #ffffff; border-top: 1px solid var(--border-color); }
-        #message-input { flex: 1; padding: 0.75rem; border: 1px solid #ccc; border-radius: 20px; margin-right: 0.5rem; font-size: 1rem; }
+        #form-container { display: flex; padding: 1rem; background-color: #ffffff; border-top: 1px solid var(--border-color); align-items: center; gap: 0.5rem; }
+        #message-input { flex: 1; padding: 0.75rem; border: 1px solid #ccc; border-radius: 20px; font-size: 1rem; }
         #message-input:focus { outline: none; border-color: var(--primary-color); }
-        #chat-form button { padding: 0.75rem 1.5rem; border: none; background-color: var(--primary-color); color: white; border-radius: 20px; cursor: pointer; font-size: 1rem; font-weight: 500; }
-        #chat-form button:disabled { background-color: #9e9e9e; cursor: not-allowed; }
+        #form-container button { padding: 0.75rem 1.5rem; border: none; color: white; border-radius: 20px; cursor: pointer; font-size: 1rem; font-weight: 500; }
+        #send-btn { background-color: var(--primary-color); }
+        #send-btn:disabled { background-color: #9e9e9e; cursor: not-allowed; }
+        #stop-btn { background-color: #d93025; display: none; }
     </style>
 
     <div id="chat-container"></div>
 
-    <form id="chat-form">
+    <div id="form-container">
         <input type="text" id="message-input" placeholder="Спросите что-нибудь..." autocomplete="off" required>
-        <button type="submit">Отправить</button>
-    </form>
+        <button id="send-btn" type="submit" form="chat-form">Отправить</button>
+        <button id="stop-btn" type="button">Остановить</button>
+    </div>
+    <form id="chat-form" style="display: none;"></form>
 
     <script>
         const sessionId = "${sessionId!''}";
@@ -44,9 +48,12 @@
 
             const messageInput = document.getElementById('message-input');
             const chatContainer = document.getElementById('chat-container');
-            const sendButton = chatForm.querySelector('button');
+            const sendButton = document.getElementById('send-btn');
+            const stopButton = document.getElementById('stop-btn');
 
             let currentSessionId = sessionId;
+            let currentTaskId = null; // Для хранения ID текущей задачи
+            let abortController = new AbortController(); // Для отмены fetch
 
             async function loadChatHistory() {
                 if (!currentSessionId) {
@@ -98,16 +105,14 @@
                 let assistantContentDiv = document.createElement('div');
                 assistantMsgContainer.appendChild(assistantContentDiv);
 
-                try {
-                    const headers = {
-                        'Content-Type': 'application/json',
-                        'Accept': 'text/event-stream'
-                    };
+                abortController = new AbortController();
 
+                try {
                     const response = await fetch('/api/v1/orchestrator/ask-stream', {
                         method: 'POST',
-                        headers: headers,
-                        body: JSON.stringify({ query: message, sessionId: currentSessionId || null })
+                        headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+                        body: JSON.stringify({ query: message, sessionId: currentSessionId || null }),
+                        signal: abortController.signal // Привязываем AbortController
                     });
 
                     if (!response.ok) {
@@ -139,21 +144,40 @@
                         }
                     }
                 } catch (error) {
-                    console.error('Error fetching stream:', error);
-                    hideTypingIndicator(typingIndicator);
-                    assistantContentDiv.innerHTML = `<p style="color: red;">Ошибка: ${error.message}</p>`;
-                } finally {
-                    sendButton.disabled = false;
-                    messageInput.focus();
-                    if (typeof Prism !== 'undefined') {
-                        Prism.highlightAllUnder(assistantContentDiv);
+                    if (error.name !== 'AbortError') { // Не показываем ошибку, если отмена была инициирована пользователем
+                        console.error('Error fetching stream:', error);
+                        hideTypingIndicator(typingIndicator);
+                        assistantContentDiv.innerHTML = `<p style="color: red;">Ошибка: ${error.message}</p>`;
                     }
+                } finally {
+                    resetUiState();
+                }
+            });
+
+            stopButton.addEventListener('click', async () => {
+                if (!currentTaskId) return;
+                stopButton.disabled = true;
+                stopButton.textContent = "Остановка...";
+                abortController.abort(); // Отменяем fetch на стороне клиента
+                try {
+                    await fetch(`/api/v1/tasks/${currentTaskId}`, { method: 'DELETE' });
+                    appendMessage("Генерация ответа остановлена пользователем.", "assistant", false);
+                } catch (error) {
+                    console.error("Failed to cancel task:", error);
+                    appendMessage("Не удалось остановить задачу.", "assistant", false);
+                } finally {
+                    resetUiState();
                 }
             });
 
             function processStreamEvent(data, container, contentDiv, currentMarkdown) {
                 let updatedMarkdown = currentMarkdown;
                 switch (data.type) {
+                    case 'task_started':
+                        currentTaskId = data.taskId;
+                        stopButton.style.display = 'inline-block';
+                        sendButton.style.display = 'none';
+                        break;
                     case 'content':
                         updatedMarkdown += data.text;
                         contentDiv.innerHTML = marked.parse(updatedMarkdown);
@@ -221,7 +245,7 @@
                 container.appendChild(sourcesDiv);
             }
 
-             function generateBugAnalysisHtml(analysis) {
+            function generateBugAnalysisHtml(analysis) {
                 let bugHtml = '<h4>Анализ Баг-репорта</h4>';
                 bugHtml += `<p><strong>Вердикт:</strong> ${analysis.isDuplicate ? 'Возможный дубликат' : 'Уникальный'}</p>`;
                 bugHtml += `<h5>Улучшенное описание:</h5>`;
@@ -233,6 +257,19 @@
                      bugHtml += '<strong>Кандидаты в дубликаты:</strong><ul>' + analysis.duplicateCandidates.map(c => `<li>${escapeHtml(c)}</li>`).join('') + '</ul>';
                 }
                 return bugHtml;
+            }
+
+            function resetUiState() {
+                sendButton.disabled = false;
+                sendButton.style.display = 'inline-block';
+                stopButton.style.display = 'none';
+                stopButton.disabled = false;
+                stopButton.textContent = "Остановить";
+                currentTaskId = null;
+                messageInput.focus();
+                if (typeof Prism !== 'undefined') {
+                    Prism.highlightAll();
+                }
             }
 
             function scrollToBottom() {

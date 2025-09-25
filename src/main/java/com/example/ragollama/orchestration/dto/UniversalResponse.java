@@ -10,16 +10,15 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Запечатанный (sealed) интерфейс для представления различных частей
  * унифицированного потокового ответа от оркестратора.
- * <p>
- * Добавлен новый тип `BugAnalysis` для передачи полного результата
- * анализа бага в рамках единого потока событий.
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes({
+        @JsonSubTypes.Type(value = UniversalResponse.TaskStarted.class, name = "task_started"),
         @JsonSubTypes.Type(value = UniversalResponse.Content.class, name = "content"),
         @JsonSubTypes.Type(value = UniversalResponse.Sources.class, name = "sources"),
         @JsonSubTypes.Type(value = UniversalResponse.Code.class, name = "code"),
@@ -29,6 +28,10 @@ import java.util.List;
 })
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public sealed interface UniversalResponse {
+
+    @Schema(description = "Сигнал о старте задачи, содержит ее ID")
+    record TaskStarted(UUID taskId) implements UniversalResponse {
+    }
 
     @Schema(description = "Часть сгенерированного текстового контента")
     record Content(String text) implements UniversalResponse {

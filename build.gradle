@@ -38,6 +38,7 @@ ext {
     awaitilityVersion = '4.2.1'
     lombokMapstructBindingVersion = '0.2.0'
     djlVersion = '0.27.0'
+    guavaVersion = '33.2.1-jre'
 }
 
 repositories {
@@ -100,6 +101,7 @@ dependencies {
     annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
     annotationProcessor "org.projectlombok:lombok-mapstruct-binding:${lombokMapstructBindingVersion}"
     implementation "org.jsoup:jsoup:${jsoupVersion}"
+    implementation "com.google.guava:guava:${guavaVersion}"
 
     // Agent Tooling & Code Analysis
     implementation "com.github.javaparser:javaparser-core:${javaparserVersion}"

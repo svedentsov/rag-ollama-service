@@ -4,8 +4,9 @@ import com.example.ragollama.agent.routing.QueryIntent;
 import com.example.ragollama.agent.routing.RouterAgentService;
 import com.example.ragollama.orchestration.dto.UniversalRequest;
 import com.example.ragollama.orchestration.dto.UniversalResponse;
-import com.example.ragollama.orchestration.dto.UniversalSyncResponse;
 import com.example.ragollama.orchestration.handlers.IntentHandler;
+import com.example.ragollama.shared.task.CancellableTaskService;
+import com.example.ragollama.shared.task.TaskSubmissionResponse;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,40 +14,26 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.io.IOException;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Сервис-оркестратор, который является единой точкой входа для всех запросов.
- * <p>
- * Эта версия реализует паттерн "Стратегия". Она больше не содержит `switch`-конструкцию,
- * а делегирует выполнение конкретному обработчику {@link IntentHandler},
- * который выбирается на основе результата работы {@link RouterAgentService}.
- * Контракт {@link IntentHandler} был разделен на два метода для явной
- * поддержки синхронных и потоковых ответов.
- */
 @Slf4j
 @Service
 public class OrchestrationService {
 
     private final RouterAgentService router;
     private final Map<QueryIntent, IntentHandler> handlerMap;
+    private final CancellableTaskService taskService;
 
-    /**
-     * Конструктор, который автоматически обнаруживает все реализации {@link IntentHandler}
-     * и индексирует их в {@link EnumMap} для сверхбыстрого доступа.
-     * <p>
-     * Аннотация {@code @Autowired} явно указывает Spring использовать этот конструктор
-     * для внедрения зависимостей, что решает проблему {@code UnsatisfiedDependencyException}.
-     *
-     * @param handlers Список всех бинов {@link IntentHandler}, предоставленный Spring.
-     * @param router   Сервис для определения намерения.
-     */
     @Autowired
-    public OrchestrationService(List<IntentHandler> handlers, RouterAgentService router) {
+    public OrchestrationService(List<IntentHandler> handlers, RouterAgentService router, CancellableTaskService taskService) {
         this.router = router;
+        this.taskService = taskService;
         this.handlerMap = new EnumMap<>(QueryIntent.class);
         for (IntentHandler handler : handlers) {
             handlerMap.put(handler.canHandle(), handler);
@@ -56,54 +43,65 @@ public class OrchestrationService {
         }
     }
 
-    /**
-     * Логирует информацию о зарегистрированных обработчиках при старте приложения.
-     */
     @PostConstruct
     public void init() {
         log.info("OrchestrationService инициализирован. Зарегистрировано {} обработчиков для интентов: {}",
                 handlerMap.size(), handlerMap.keySet());
     }
 
-    /**
-     * Обрабатывает унифицированный запрос от пользователя, возвращая полный ответ после его генерации.
-     *
-     * @param request DTO с запросом пользователя.
-     * @return {@link CompletableFuture} с полным, агрегированным ответом.
-     */
-    public CompletableFuture<UniversalSyncResponse> processSync(UniversalRequest request) {
-        return router.route(request.query())
+    public TaskSubmissionResponse processAsync(UniversalRequest request) {
+        CompletableFuture<?> taskFuture = router.route(request.query())
                 .flatMap(intent -> {
                     log.info("Маршрутизация запроса с намерением: {}. SessionID: {}", intent, request.sessionId());
                     IntentHandler handler = findHandler(intent);
-                    // Вызываем синхронный метод обработчика и оборачиваем его в Mono
                     return Mono.fromFuture(handler.handleSync(request));
                 }).toFuture();
+
+        UUID taskId = taskService.register(taskFuture);
+        return new TaskSubmissionResponse(taskId);
     }
 
-    /**
-     * Обрабатывает универсальный потоковый запрос.
-     *
-     * @param request DTO с запросом пользователя.
-     * @return {@link Flux} со структурированными частями ответа.
-     */
     public Flux<UniversalResponse> processStream(UniversalRequest request) {
-        return router.route(request.query())
-                .flatMapMany(intent -> {
+        CompletableFuture<Flux<UniversalResponse>> fluxFuture = new CompletableFuture<>();
+        UUID taskId = taskService.register(fluxFuture);
+
+        router.route(request.query())
+                .doOnSuccess(intent -> {
                     log.info("Маршрутизация потокового запроса с намерением: {}. SessionID: {}", intent, request.sessionId());
                     IntentHandler handler = findHandler(intent);
-                    // Вызываем потоковый метод обработчика
-                    return handler.handleStream(request);
-                });
+                    Flux<UniversalResponse> responseFlux = handler.handleStream(request)
+                            .doOnCancel(() -> {
+                                log.warn("Поток для задачи {} был отменен клиентом (doOnCancel).", taskId);
+                                taskService.cancel(taskId);
+                            });
+                    fluxFuture.complete(responseFlux);
+                })
+                .doOnError(fluxFuture::completeExceptionally)
+                .subscribe();
+
+        UniversalResponse.TaskStarted taskStartedEvent = new UniversalResponse.TaskStarted(taskId);
+
+        return Flux.concat(
+                Flux.just(taskStartedEvent),
+                Flux.from(Mono.fromFuture(fluxFuture)).flatMap(flux -> flux)
+        ).onErrorResume(e -> { // !!! КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ !!!
+            Throwable cause = (e.getCause() != null) ? e.getCause() : e;
+
+            if (cause instanceof CancellationException) {
+                log.warn("Задача {} была отменена, чисто завершаем поток SSE.", taskId);
+                return Flux.empty();
+            }
+            if (cause instanceof IOException) {
+                log.warn("Соединение для задачи {} было разорвано клиентом (IOException). Чисто завершаем поток.", taskId);
+                return Flux.empty();
+            }
+
+            log.error("Непредвиденная ошибка в основном потоке задачи {}: {}", taskId, e.getMessage(), cause);
+            return Flux.just(new UniversalResponse.Error("Произошла внутренняя ошибка: " + e.getMessage()));
+        });
     }
 
-    /**
-     * Находит подходящий обработчик для заданного намерения.
-     *
-     * @param intent Намерение пользователя.
-     * @return Найденный {@link IntentHandler}.
-     * @throws IllegalStateException если подходящий обработчик не зарегистрирован.
-     */
+
     private IntentHandler findHandler(QueryIntent intent) {
         IntentHandler handler = handlerMap.get(intent);
         if (handler == null) {

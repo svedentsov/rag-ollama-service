@@ -3,20 +3,21 @@ package com.example.ragollama.orchestration.api;
 import com.example.ragollama.orchestration.OrchestrationService;
 import com.example.ragollama.orchestration.dto.UniversalRequest;
 import com.example.ragollama.orchestration.dto.UniversalResponse;
-import com.example.ragollama.orchestration.dto.UniversalSyncResponse;
+import com.example.ragollama.shared.task.TaskSubmissionResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
-
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Универсальный контроллер, являющийся единой точкой входа для всех
@@ -32,15 +33,18 @@ public class UniversalController {
     private final OrchestrationService orchestrationService;
 
     /**
-     * Обрабатывает любой пользовательский запрос и возвращает полный ответ после его генерации.
+     * Асинхронно запускает выполнение задачи и немедленно возвращает ее ID.
      *
      * @param request Унифицированный DTO с запросом от пользователя.
-     * @return {@link CompletableFuture} с полным, агрегированным ответом {@link UniversalSyncResponse}.
+     * @return {@link ResponseEntity} со статусом 202 (Accepted) и {@link TaskSubmissionResponse} в теле.
      */
     @PostMapping("/ask")
-    @Operation(summary = "Универсальный синхронный эндпоинт (полный ответ)")
-    public CompletableFuture<UniversalSyncResponse> ask(@Valid @RequestBody UniversalRequest request) {
-        return orchestrationService.processSync(request);
+    @Operation(summary = "Универсальный асинхронный эндпоинт для запуска задач",
+            description = "Немедленно принимает задачу в обработку и возвращает ее ID для отслеживания.")
+    @ApiResponse(responseCode = "202", description = "Задача принята в обработку")
+    public ResponseEntity<TaskSubmissionResponse> ask(@Valid @RequestBody UniversalRequest request) {
+        TaskSubmissionResponse response = orchestrationService.processAsync(request);
+        return new ResponseEntity<>(response, HttpStatus.ACCEPTED);
     }
 
     /**
