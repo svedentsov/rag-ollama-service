@@ -41,6 +41,7 @@ public class ChatSessionController {
         return ResponseEntity.ok().build();
     }
 
+    // !!! ИЗМЕНЕНИЕ: Добавлен новый эндпоинт для удаления чата.
     @DeleteMapping("/{sessionId}")
     public ResponseEntity<Void> deleteChat(@PathVariable UUID sessionId) {
         chatSessionService.deleteChat(sessionId);

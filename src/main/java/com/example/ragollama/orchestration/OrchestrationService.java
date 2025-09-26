@@ -6,8 +6,10 @@ import com.example.ragollama.orchestration.dto.UniversalRequest;
 import com.example.ragollama.orchestration.dto.UniversalResponse;
 import com.example.ragollama.orchestration.handlers.IntentHandler;
 import com.example.ragollama.shared.task.CancellableTaskService;
+import com.example.ragollama.shared.task.TaskStateService;
 import com.example.ragollama.shared.task.TaskSubmissionResponse;
 import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -29,11 +31,13 @@ public class OrchestrationService {
     private final RouterAgentService router;
     private final Map<QueryIntent, IntentHandler> handlerMap;
     private final CancellableTaskService taskService;
+    private final TaskStateService taskStateService;
 
     @Autowired
-    public OrchestrationService(List<IntentHandler> handlers, RouterAgentService router, CancellableTaskService taskService) {
+    public OrchestrationService(List<IntentHandler> handlers, RouterAgentService router, CancellableTaskService taskService, TaskStateService taskStateService) {
         this.router = router;
         this.taskService = taskService;
+        this.taskStateService = taskStateService;
         this.handlerMap = new EnumMap<>(QueryIntent.class);
         for (IntentHandler handler : handlers) {
             handlerMap.put(handler.canHandle(), handler);
@@ -58,49 +62,61 @@ public class OrchestrationService {
                 }).toFuture();
 
         UUID taskId = taskService.register(taskFuture);
+        if(request.sessionId() != null){
+            taskStateService.registerSessionTask(request.sessionId(), taskId);
+        }
+        taskFuture.whenComplete((res, err) -> {
+            if(request.sessionId() != null){
+                taskStateService.clearSessionTask(request.sessionId());
+            }
+        });
         return new TaskSubmissionResponse(taskId);
     }
 
     public Flux<UniversalResponse> processStream(UniversalRequest request) {
-        CompletableFuture<Flux<UniversalResponse>> fluxFuture = new CompletableFuture<>();
-        UUID taskId = taskService.register(fluxFuture);
+        // !!! ИЗМЕНЕНИЕ: Теперь мы не создаем Future, а сразу работаем с Flux !!!
+        return router.route(request.query())
+                .flatMapMany(intent -> {
+                    // Создаем Future, который будет сигнализировать о завершении
+                    CompletableFuture<Void> streamCompletionFuture = new CompletableFuture<>();
+                    UUID taskId = taskService.register(streamCompletionFuture);
 
-        router.route(request.query())
-                .doOnSuccess(intent -> {
-                    log.info("Маршрутизация потокового запроса с намерением: {}. SessionID: {}", intent, request.sessionId());
+                    if (request.sessionId() != null) {
+                        taskStateService.registerSessionTask(request.sessionId(), taskId);
+                    }
+
+                    log.info("Маршрутизация потокового запроса с намерением: {}. TaskID: {}", intent, taskId);
                     IntentHandler handler = findHandler(intent);
-                    Flux<UniversalResponse> responseFlux = handler.handleStream(request)
-                            .doOnCancel(() -> {
-                                log.warn("Поток для задачи {} был отменен клиентом (doOnCancel).", taskId);
-                                taskService.cancel(taskId);
-                            });
-                    fluxFuture.complete(responseFlux);
+
+                    // Запускаем реальный обработчик и подписываемся на его события, чтобы публиковать их в наш Sink
+                    handler.handleStream(request)
+                            .subscribe(
+                                    event -> taskService.emitEvent(taskId, event), // Публикуем событие
+                                    error -> streamCompletionFuture.completeExceptionally(error), // Передаем ошибку в Future
+                                    () -> streamCompletionFuture.complete(null) // Завершаем Future
+                            );
+
+                    // Возвращаем клиенту Flux, который читает из нашего Sink'а
+                    return Flux.concat(
+                            Flux.just(new UniversalResponse.TaskStarted(taskId)),
+                            taskService.getTaskStream(taskId).orElse(Flux.empty())
+                    );
                 })
-                .doOnError(fluxFuture::completeExceptionally)
-                .subscribe();
-
-        UniversalResponse.TaskStarted taskStartedEvent = new UniversalResponse.TaskStarted(taskId);
-
-        return Flux.concat(
-                Flux.just(taskStartedEvent),
-                Flux.from(Mono.fromFuture(fluxFuture)).flatMap(flux -> flux)
-        ).onErrorResume(e -> { // !!! КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ !!!
-            Throwable cause = (e.getCause() != null) ? e.getCause() : e;
-
-            if (cause instanceof CancellationException) {
-                log.warn("Задача {} была отменена, чисто завершаем поток SSE.", taskId);
-                return Flux.empty();
-            }
-            if (cause instanceof IOException) {
-                log.warn("Соединение для задачи {} было разорвано клиентом (IOException). Чисто завершаем поток.", taskId);
-                return Flux.empty();
-            }
-
-            log.error("Непредвиденная ошибка в основном потоке задачи {}: {}", taskId, e.getMessage(), cause);
-            return Flux.just(new UniversalResponse.Error("Произошла внутренняя ошибка: " + e.getMessage()));
-        });
+                .doOnTerminate(() -> {
+                    if (request.sessionId() != null) {
+                        taskStateService.clearSessionTask(request.sessionId());
+                    }
+                })
+                .onErrorResume(e -> {
+                    Throwable cause = (e.getCause() != null) ? e.getCause() : e;
+                    if (cause instanceof CancellationException || cause instanceof IOException) {
+                        log.warn("Соединение было разорвано клиентом (IOException/Cancellation). Чисто завершаем поток.");
+                        return Flux.empty();
+                    }
+                    log.error("Непредвиденная ошибка в потоке: {}", e.getMessage(), cause);
+                    return Flux.just(new UniversalResponse.Error("Произошла внутренняя ошибка: " + e.getMessage()));
+                });
     }
-
 
     private IntentHandler findHandler(QueryIntent intent) {
         IntentHandler handler = handlerMap.get(intent);

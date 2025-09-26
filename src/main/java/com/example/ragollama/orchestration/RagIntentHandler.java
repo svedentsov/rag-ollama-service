@@ -36,7 +36,7 @@ public class RagIntentHandler implements IntentHandler {
     public Flux<UniversalResponse> handleStream(UniversalRequest request) {
         return ragApplicationService.processRagRequestStream(request.toRagQueryRequest())
                 .map(UniversalResponse::from)
-                .onErrorResume(e -> { // !!! ДОБАВЛЕНО !!!
+                .onErrorResume(e -> {
                     Throwable cause = (e.getCause() != null) ? e.getCause() : e;
                     if (cause instanceof CancellationException || cause instanceof IOException) {
                         log.warn("Поток RAG был прерван клиентом: {}", cause.getMessage());

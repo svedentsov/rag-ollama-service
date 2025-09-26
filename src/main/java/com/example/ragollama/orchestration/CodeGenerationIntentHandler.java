@@ -1,4 +1,3 @@
-// src/main/java/com/example/ragollama/orchestration/CodeGenerationIntentHandler.java
 package com.example.ragollama.orchestration;
 
 import com.example.ragollama.agent.codegeneration.domain.CodeGenerationService;
