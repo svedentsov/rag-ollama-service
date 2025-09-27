@@ -91,7 +91,7 @@ export function ChatMessage({ message, onContextMenu, isThinking = false }: Chat
                             );
                         },
                         table: ({node, ...props}) => <table className={styles.markdownTable} {...props} />,
-                        p: ({node, ...props}) => <p className={styles.paragraph} {...props} />
+                        p: ({node, ...props}) => <p {...props} />
                     }}
                 >
                     {message.text || (message.error ? `**Ошибка:** ${message.error}` : '')}

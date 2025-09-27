@@ -1,7 +1,8 @@
 .chatInputContainer {
     padding: 1rem;
-    background-color: #fff;
-    border-top: 1px solid #e4e4e7; /* Zinc 200 */
+    background-color: hsl(var(--background)); /* Изменено с #fff для поддержки тем */
+    border-top: 1px solid hsl(var(--border)); /* Изменено с e4e4e7 */
+    position: relative; /* ДОБАВЛЕНО */
 }
 
 .chatInputForm {
@@ -14,8 +15,8 @@
     flex-grow: 1;
     padding: 0.6rem 0.75rem;
     border-radius: 0.5rem;
-    border: 1px solid #e4e4e7;
-    background-color: #f4f4f5;
+    border: 1px solid hsl(var(--border)); /* Изменено */
+    background-color: hsl(var(--secondary)); /* Изменено */
     resize: none;
     box-shadow: none !important;
     font-size: 1rem;
@@ -23,11 +24,12 @@
     max-height: 10.2rem;
     overflow-y: auto;
     box-sizing: border-box;
+    color: hsl(var(--foreground)); /* Добавлено для поддержки тем */
 }
 
 .textarea:focus {
     outline: none;
-    border-color: #a1a1aa;
+    border-color: hsl(var(--ring)); /* Изменено */
 }
 
 .sendButton, .stopButton {
@@ -45,12 +47,12 @@
 }
 
 .sendButton {
-    background-color: #09090b;
-    color: white;
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
 }
 
 .sendButton:hover:not(:disabled) {
-    background-color: #27272a;
+    background-color: hsl(var(--primary) / 0.9);
 }
 
 .sendButton:disabled {
@@ -59,10 +61,10 @@
 }
 
 .stopButton {
-    background-color: #dc3545;
-    color: white;
+    background-color: hsl(var(--destructive));
+    color: hsl(var(--destructive-foreground));
 }
 
 .stopButton:hover:not(:disabled) {
-    background-color: #bb2d3b;
+    background-color: hsl(var(--destructive) / 0.9);
 }

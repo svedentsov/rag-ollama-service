@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Сервис, реализующий логику "Router Agent".
@@ -30,6 +31,10 @@ public class RouterAgentService {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+
+    private static final Set<String> CODE_KEYWORDS = Set.of(
+            "код", "функция", "метод", "скрипт", "пример", "code", "function", "method", "script", "example"
+    );
 
     /**
      * Внутренний DTO для надежного парсинга JSON-ответа от LLM.
@@ -47,8 +52,6 @@ public class RouterAgentService {
     public Mono<QueryIntent> route(String query) {
         String promptString = promptService.render("routerAgentPrompt", Map.of("query", query));
         Prompt prompt = new Prompt(promptString);
-
-        // Используем FAST_RELIABLE модель, чтобы гарантировать получение чистого JSON
         return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FAST_RELIABLE, true))
                 .map(this::parseIntentFromLlmResponse)
                 .doOnSuccess(intent -> log.info("Запрос '{}' классифицирован с намерением: {}", query, intent))
@@ -81,10 +84,14 @@ public class RouterAgentService {
     }
 
     /**
-     * Fallback-стратегия: если запрос похож на вопрос, считаем его RAG_QUERY.
+     * Fallback-стратегия: если LLM не справилась, применяем эвристики.
      */
     private QueryIntent fallbackToRagIfQuestion(String query) {
         String lowerCaseQuery = query.toLowerCase();
+        if (CODE_KEYWORDS.stream().anyMatch(lowerCaseQuery::contains)) {
+            log.debug("Fallback: запрос содержит ключевые слова для кода, классифицируем как CODE_GENERATION.");
+            return QueryIntent.CODE_GENERATION;
+        }
         if (lowerCaseQuery.matches(".*(что|где|когда|кто|как|почему|сколько|какой|whose|what|where|when|who|how|why).*") || lowerCaseQuery.endsWith("?")) {
             log.debug("Fallback: запрос похож на вопрос, классифицируем как RAG_QUERY.");
             return QueryIntent.RAG_QUERY;

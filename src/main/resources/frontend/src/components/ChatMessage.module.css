@@ -104,6 +104,22 @@
   50%, 100% { background-color: hsl(var(--muted-foreground)); opacity: 0.2; }
 }
 
+.bubble :global(p) {
+    margin-top: 0;
+    margin-bottom: 1rem;
+}
+
+.bubble :global(ul),
+.bubble :global(ol) {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    padding-left: 2rem;
+}
+
+.bubble :global(li) {
+    margin-bottom: 0.25rem;
+}
+
 .inlineCode {
     background-color: hsl(var(--muted));
     padding: 0.1em 0.3em;
@@ -163,4 +179,7 @@
 }
 .markdownTable tbody tr:nth-of-type(odd) {
     background-color: hsl(var(--accent));
+}
+
+.paragraph {
 }

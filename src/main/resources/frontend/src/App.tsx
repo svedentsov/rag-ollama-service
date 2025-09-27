@@ -6,11 +6,13 @@ import { ChatMessage } from './components/ChatMessage';
 import { ChatInput } from './components/ChatInput';
 import { Message, UniversalStreamResponse } from './types';
 import { fetchMessages } from './api';
-import { Copy, ChevronsUpDown } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import styles from './App.module.css';
 
 interface MessageContextMenuState { show: boolean; x: number; y: number; message: Message | null; }
 interface AppProps { sessionId: string; }
+
+const SCROLL_THRESHOLD = 100;
 
 const App: React.FC<AppProps> = ({ sessionId }) => {
     const [messages, setMessages] = useState<Message[]>([]);
@@ -22,6 +24,11 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
     const lastRequestId = useRef<string | null>(null);
     const queryClient = useQueryClient();
 
+    const chatContainerRef = useRef<HTMLDivElement>(null);
+    const [isAtBottom, setIsAtBottom] = useState(true);
+    const textBufferRef = useRef<string>('');
+    const animationFrameRef = useRef<number | null>(null);
+
     const { data: history, isLoading: isLoadingHistory, error: historyError } = useQuery({
         queryKey: ['messages', sessionId],
         queryFn: () => fetchMessages(sessionId),
@@ -32,8 +39,12 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
 
     useEffect(() => {
         const handleClick = () => {
+            const selection = window.getSelection();
+            if (selection && !selection.isCollapsed) {
+                return;
+            }
             setContextMenu(prev => ({ ...prev, show: false }));
-            lastRightClickedMessageId.current = null; // Сбрасываем при любом клике
+            lastRightClickedMessageId.current = null;
         };
         document.addEventListener('click', handleClick);
         return () => document.removeEventListener('click', handleClick);
@@ -43,19 +54,86 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
     const [isStreaming, setIsStreaming] = useState(false);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, isStreaming, isThinking]);
+        if (isAtBottom) {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [messages, isStreaming, isThinking, isAtBottom]);
+
+    useEffect(() => {
+        const container = chatContainerRef.current;
+        if (!container) return;
+        const handleScroll = () => {
+            const { scrollHeight, scrollTop, clientHeight } = container;
+            const atBottom = scrollHeight - scrollTop - clientHeight < SCROLL_THRESHOLD;
+            setIsAtBottom(atBottom);
+        };
+        container.addEventListener('scroll', handleScroll);
+        handleScroll();
+        return () => container.removeEventListener('scroll', handleScroll);
+    }, [chatContainerRef]);
+
+    useEffect(() => {
+        const typeCharacter = () => {
+            if (textBufferRef.current.length > 0) {
+                const bufferSize = textBufferRef.current.length;
+                const charsToType = Math.max(1, Math.min(Math.floor(bufferSize * 0.1), 10));
+                const chunk = textBufferRef.current.substring(0, charsToType);
+                textBufferRef.current = textBufferRef.current.substring(charsToType);
+                setMessages(prev => {
+                    if (prev.length === 0 || prev[prev.length - 1].type !== 'assistant') {
+                        return prev;
+                    }
+                    const newMessages = [...prev];
+                    const lastMessage = newMessages[newMessages.length - 1];
+                    lastMessage.text += chunk;
+                    return newMessages;
+                });
+            }
+
+            if (isStreaming || textBufferRef.current.length > 0) {
+                const interval = textBufferRef.current.length > 50 ? 10 : 30;
+                setTimeout(() => {
+                    animationFrameRef.current = requestAnimationFrame(typeCharacter);
+                }, interval);
+            }
+        };
+
+        if (isStreaming) {
+            animationFrameRef.current = requestAnimationFrame(typeCharacter);
+        } else {
+             if (textBufferRef.current.length > 0) {
+                 setMessages(prev => {
+                    if (prev.length === 0 || prev[prev.length - 1].type !== 'assistant') return prev;
+                    const newMessages = [...prev];
+                    const lastMessage = newMessages[newMessages.length - 1];
+                    lastMessage.text += textBufferRef.current;
+                    textBufferRef.current = '';
+                    return newMessages;
+                });
+            }
+        }
+
+        return () => {
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
+        };
+    }, [isStreaming]);
 
     const handleStopGenerating = () => {
-        if (abortControllerRef.current) abortControllerRef.current.abort();
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
     };
 
     const handleSendMessage = async (inputText: string) => {
         if (!inputText.trim() || isStreaming || isThinking) return;
 
+        scrollToBottom(); // Принудительно скроллим вниз при отправке нового сообщения
         const userMessage: Message = { id: uuidv4(), type: 'user', text: inputText };
         setMessages(prev => [...prev, userMessage]);
         setIsThinking(true);
+        textBufferRef.current = '';
         abortControllerRef.current = new AbortController();
 
         try {
@@ -80,27 +158,37 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
                 buffer += value;
                 const lines = buffer.split('\n\n');
                 buffer = lines.pop() || '';
+
                 for (const line of lines) {
                     if (line.startsWith('data:')) {
                         if (isFirstChunk) {
-                            setIsThinking(false); setIsStreaming(true);
+                            setIsThinking(false);
+                            setIsStreaming(true);
                             setMessages(prev => [...prev, { id: assistantMessageId, type: 'assistant', text: '', sources: [] }]);
                             isFirstChunk = false;
                         }
+
                         const jsonData = line.substring(5).trim();
                         if (!jsonData) continue;
+
                         try {
                             const eventData = JSON.parse(jsonData) as UniversalStreamResponse;
-                            setMessages(currentMessages => {
-                                const newMessages = [...currentMessages];
-                                let lastMessage = newMessages[newMessages.length - 1];
-                                if (!lastMessage || lastMessage.type !== 'assistant') return currentMessages;
-                                if (eventData.type === 'task_started') lastRequestId.current = eventData.taskId;
-                                else if (eventData.type === 'content') lastMessage.text += eventData.text;
-                                else if (eventData.type === 'sources') lastMessage.sources = [...(lastMessage.sources || []), ...eventData.sources];
-                                else if (eventData.type === 'error') lastMessage.error = eventData.message;
-                                return newMessages;
-                            });
+
+                            if (eventData.type === 'content') {
+                                textBufferRef.current += eventData.text;
+                            } else {
+                                setMessages(currentMessages => {
+                                    const newMessages = [...currentMessages];
+                                    let lastMessage = newMessages[newMessages.length - 1];
+                                    if (!lastMessage || lastMessage.type !== 'assistant') return currentMessages;
+
+                                    if (eventData.type === 'task_started') lastRequestId.current = eventData.taskId;
+                                    else if (eventData.type === 'sources') lastMessage.sources = [...(lastMessage.sources || []), ...eventData.sources];
+                                    else if (eventData.type === 'error') lastMessage.error = eventData.message;
+
+                                    return newMessages;
+                                });
+                            }
                         } catch (e) { console.error('Failed to parse SSE data:', jsonData, e); }
                     }
                 }
@@ -109,17 +197,18 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
             if (error.name === 'AbortError') console.log('Stream stopped by user.');
             else setMessages(prev => [...prev, { id: uuidv4(), type: 'assistant', text: '', error: error.message || "Произошла неизвестная ошибка." }]);
         } finally {
-            setIsThinking(false); setIsStreaming(false); abortControllerRef.current = null;
+            setIsThinking(false);
+            setIsStreaming(false);
+            abortControllerRef.current = null;
             queryClient.invalidateQueries({ queryKey: ['chatSessions'] });
         }
     };
 
     const handleShowContextMenu = (e: React.MouseEvent, message: Message) => {
         if (lastRightClickedMessageId.current === message.id) {
-            lastRightClickedMessageId.current = null; // Сбрасываем для следующего раза
+            lastRightClickedMessageId.current = null;
             return;
         }
-
         e.preventDefault();
         e.stopPropagation();
         setContextMenu({ show: true, x: e.clientX, y: e.clientY, message });
@@ -134,10 +223,15 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
         }
     };
 
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        setIsAtBottom(true);
+    };
+
     return (
         <>
             <div className={styles.chatContainer}>
-                <div className={styles.chatMessageContainer}>
+                <div className={styles.chatMessageContainer} ref={chatContainerRef}>
                     {isLoadingHistory && <div className={styles.centered}><div className={styles.spinner}></div></div>}
                     {historyError && <div className={styles.errorAlert}>Не удалось загрузить историю сообщений.</div>}
                     {!isLoadingHistory && messages.map((msg) => (
@@ -156,7 +250,13 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
                     )}
                     <div ref={messagesEndRef} />
                 </div>
-                <ChatInput onSendMessage={handleSendMessage} onStopGenerating={handleStopGenerating} isLoading={isStreaming || isThinking} />
+                <ChatInput
+                    onSendMessage={handleSendMessage}
+                    onStopGenerating={handleStopGenerating}
+                    isLoading={isStreaming || isThinking}
+                    showScrollButton={!isAtBottom}
+                    onScrollToBottom={scrollToBottom}
+                />
             </div>
 
             {contextMenu.show && contextMenu.message && (

@@ -1,0 +1,44 @@
+.scrollButton {
+    position: absolute;
+    bottom: 5.25rem; /* Скорректировано для выравнивания */
+    right: 1rem;
+    z-index: 10;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 44px;  /* ИЗМЕНЕНО: Как у кнопки Отправить */
+    height: 44px; /* ИЗМЕНЕНО: Как у кнопки Отправить */
+
+    /* ИЗМЕНЕНО: Стили как у кнопки Отправить для консистентности */
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    cursor: pointer;
+
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+
+    opacity: 0;
+    transform: translateY(10px);
+    animation: fadeIn 0.3s ease-out forwards;
+}
+
+.scrollButton:hover {
+    background-color: hsl(var(--primary) / 0.9); /* ИЗМЕНЕНО: hover-эффект как у кнопки Отправить */
+    transform: scale(1.1);
+}
+
+/* Увеличим размер иконки внутри кнопки */
+.scrollButton :global(svg) {
+    width: 20px;
+    height: 20px;
+}
+
+@keyframes fadeIn {
+    to {
+        opacity: 0.9;
+        transform: translateY(0);
+    }
+}

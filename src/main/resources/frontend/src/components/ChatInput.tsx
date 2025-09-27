@@ -1,21 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Square } from 'lucide-react';
+import { ScrollToBottomButton } from "./ScrollToBottomButton";
 import styles from './ChatInput.module.css';
 
 interface ChatInputProps {
     onSendMessage: (text: string) => void;
     onStopGenerating: () => void;
     isLoading: boolean;
+    showScrollButton: boolean;
+    onScrollToBottom: () => void;
 }
 
-export function ChatInput({ onSendMessage, onStopGenerating, isLoading }: ChatInputProps) {
+export function ChatInput({ onSendMessage, onStopGenerating, isLoading, showScrollButton, onScrollToBottom }: ChatInputProps) {
     const [inputText, setInputText] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     useEffect(() => {
         const textarea = textareaRef.current;
         if (textarea) {
-            textarea.style.height = '';
+            textarea.style.height = 'auto'; // Сбрасываем высоту
             const scrollHeight = textarea.scrollHeight;
             textarea.style.height = `${scrollHeight}px`;
         }
@@ -38,6 +41,7 @@ export function ChatInput({ onSendMessage, onStopGenerating, isLoading }: ChatIn
 
     return (
         <div className={styles.chatInputContainer}>
+            {showScrollButton && <ScrollToBottomButton onClick={onScrollToBottom} />}
             <form onSubmit={handleSubmit} className={styles.chatInputForm}>
                 <textarea
                     ref={textareaRef}
