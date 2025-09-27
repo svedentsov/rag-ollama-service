@@ -1,66 +1,32 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Nav, Button, Spinner, Form } from 'react-bootstrap';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import toast from 'react-hot-toast';
 import { ChatSession } from './types';
-import { fetchChatSessions, createNewChat, deleteChatSession, updateChatName } from './api';
-import TrashIcon from './assets/trash.svg?react';
-import EditIcon from './assets/edit.svg?react';
+import { useChatSessions } from './hooks/useChatSessions';
+import { Trash, Edit, Plus, Search } from 'lucide-react';
+import styles from './ChatSidebar.module.css';
 
-interface ContextMenuState {
-    show: boolean;
-    x: number;
-    y: number;
-    session: ChatSession | null;
-}
-
-interface ChatSidebarProps {
-    currentSessionId: string | null;
-}
-
-function formatTimestamp(dateString?: string): string {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffSeconds = Math.round((now.getTime() - date.getTime()) / 1000);
-
-    if (diffSeconds < 60) return `${diffSeconds}s ago`;
-    const diffMinutes = Math.round(diffSeconds / 60);
-    if (diffMinutes < 60) return `${diffMinutes}m ago`;
-    const diffHours = Math.round(diffMinutes / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-
-    return date.toLocaleDateString();
-}
+interface ContextMenuState { show: boolean; x: number; y: number; session: ChatSession | null; }
+interface ChatSidebarProps { currentSessionId: string | null; }
 
 export function ChatSidebar({ currentSessionId }: ChatSidebarProps) {
-    const [sessions, setSessions] = useState<ChatSession[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const { sessions, isLoading, createChat, deleteChat, renameChat } = useChatSessions();
     const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
     const [editingName, setEditingName] = useState('');
-    const [rightClickState, setRightClickState] = useState<{ sessionId: string | null, count: number }>({ sessionId: null, count: 0 });
     const [contextMenu, setContextMenu] = useState<ContextMenuState>({ show: false, x: 0, y: 0, session: null });
+    const [searchTerm, setSearchTerm] = useState('');
     const editInputRef = useRef<HTMLInputElement>(null);
 
+    const filteredSessions = useMemo(() => {
+        if (!searchTerm) return sessions;
+        return sessions.filter(session =>
+            session.chatName.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [sessions, searchTerm]);
+
     useEffect(() => {
-        const loadSessions = async () => {
-            try {
-                setIsLoading(true);
-                setSessions(await fetchChatSessions());
-            } catch (error) { console.error("Failed to load chat sessions:", error); }
-            finally { setIsLoading(false); }
-        };
-        loadSessions();
-
-        const handleClickAndContextMenu = () => {
-            setContextMenu(prev => ({ ...prev, show: false }));
-        };
-        document.addEventListener("click", handleClickAndContextMenu);
-        // Используем фазу захвата, чтобы этот листенер сработал до всплытия нашего кастомного
-        document.addEventListener("contextmenu", handleClickAndContextMenu, true);
-
-        return () => {
-            document.removeEventListener("click", handleClickAndContextMenu);
-            document.removeEventListener("contextmenu", handleClickAndContextMenu, true);
-        };
+        const handleClick = () => setContextMenu(prev => ({ ...prev, show: false }));
+        document.addEventListener('click', handleClick);
+        return () => document.removeEventListener('click', handleClick);
     }, []);
 
     useEffect(() => {
@@ -70,14 +36,10 @@ export function ChatSidebar({ currentSessionId }: ChatSidebarProps) {
         }
     }, [editingSessionId]);
 
-    const handleNewChat = () => createNewChat().then(chat => window.location.href = `/chat?sessionId=${chat.sessionId}`).catch(console.error);
-
+    const handleNewChat = () => toast.promise(Promise.resolve(createChat()), { loading: 'Создание чата...', success: 'Чат создан!', error: 'Ошибка.' });
     const handleDelete = (session: ChatSession) => {
-        if (window.confirm('Вы уверены, что хотите удалить этот чат?')) {
-            deleteChatSession(session.sessionId).then(() => {
-                setSessions(prev => prev.filter(s => s.sessionId !== session.sessionId));
-                if (session.sessionId === currentSessionId) window.location.href = '/';
-            }).catch(() => alert("Не удалось удалить чат."));
+        if (window.confirm(`Вы уверены, что хотите удалить чат "${session.chatName}"?`)) {
+            toast.promise(Promise.resolve(deleteChat(session.sessionId)), { loading: 'Удаление...', success: 'Чат удален!', error: 'Ошибка.' });
         }
     };
 
@@ -86,97 +48,73 @@ export function ChatSidebar({ currentSessionId }: ChatSidebarProps) {
         setEditingName(session.chatName);
     };
 
-    const handleNameSubmit = async (e: React.FormEvent, sessionId: string) => {
+    const handleNameSubmit = async (e: React.FormEvent, session: ChatSession) => {
         e.preventDefault();
-        const originalName = sessions.find(s => s.sessionId === sessionId)?.chatName || '';
-        if (editingName.trim() === '' || editingName === originalName) {
-            setEditingSessionId(null);
-            return;
-        }
-        try {
-            await updateChatName(sessionId, editingName);
-            setSessions(prev => prev.map(s => s.sessionId === sessionId ? { ...s, chatName: editingName } : s));
-        } catch (error) {
-            alert("Не удалось переименовать чат.");
-        } finally {
-            setEditingSessionId(null);
+        const originalName = sessions.find(s => s.sessionId === session.sessionId)?.chatName || '';
+        setEditingSessionId(null);
+        if (editingName.trim() && editingName !== originalName) {
+            renameChat({ sessionId: session.sessionId, newName: editingName });
+            toast.success('Чат переименован.');
         }
     };
 
     const handleContextMenu = (e: React.MouseEvent, session: ChatSession) => {
-        const isSameElement = rightClickState.sessionId === session.sessionId;
-        const newCount = isSameElement ? rightClickState.count + 1 : 1;
-
-        if (newCount >= 2) {
-            setRightClickState({ sessionId: null, count: 0 });
-            return;
-        }
-
         e.preventDefault();
         e.stopPropagation();
         setContextMenu({ show: true, x: e.clientX, y: e.clientY, session });
-        setRightClickState({ sessionId: session.sessionId, count: 1 });
-    };
-
-    const handleLeftClick = () => {
-        if (rightClickState.count > 0) {
-            setRightClickState({ sessionId: null, count: 0 });
-        }
     };
 
     return (
         <>
-            <nav className="d-flex flex-column p-2 bg-light border-end h-100 sidebar-nav">
-                <div className="p-2 mb-2">
-                    <Button variant="outline-secondary" className="w-100" onClick={handleNewChat}>+ Новый чат</Button>
+            <nav className={styles.sidebar}>
+                <div className={styles.sidebarHeader}>
+                    <div className={styles.searchWrapper}>
+                        <Search className={styles.searchIcon} size={16} />
+                        <input
+                            type="text"
+                            placeholder="Поиск..."
+                            className={styles.searchInput}
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
                 </div>
-                {isLoading ? (
-                    <div className="text-center p-4"><Spinner animation="border" size="sm" /></div>
-                ) : (
-                    <Nav variant="pills" className="flex-column mb-auto gap-1">
-                        {sessions.map(session => (
-                            <Nav.Item key={session.sessionId}>
-                                <Nav.Link
-                                    href={`/chat?sessionId=${session.sessionId}`}
-                                    active={session.sessionId === currentSessionId && !editingSessionId}
-                                    className="d-flex flex-column align-items-start"
-                                    onContextMenu={(e) => handleContextMenu(e, session)}
-                                    onClick={handleLeftClick}
-                                >
-                                    <div className="chat-title-container">
+                <div className={styles.sidebarContent}>
+                    {isLoading && <div className={styles.centered}><div className={styles.spinner}></div></div>}
+                    {!isLoading && filteredSessions.length === 0 && (
+                        <div className={styles.emptyState}>
+                            <small>{searchTerm ? 'Чаты не найдены.' : 'История чатов пуста.'}</small>
+                        </div>
+                    )}
+                    {!isLoading && (
+                        <ul className={styles.navList}>
+                            {filteredSessions.map(session => (
+                                <li key={session.sessionId}>
+                                    <a href={`/chat?sessionId=${session.sessionId}`} className={`${styles.navLink} ${session.sessionId === currentSessionId && !editingSessionId ? styles.active : ''}`} onContextMenu={(e) => handleContextMenu(e, session)}>
                                         {editingSessionId === session.sessionId ? (
-                                            <Form onSubmit={(e) => handleNameSubmit(e, session.sessionId)} className="w-100">
-                                                <Form.Control
-                                                    ref={editInputRef} size="sm" value={editingName}
-                                                    onChange={(e) => setEditingName(e.target.value)}
-                                                    onBlur={(e) => handleNameSubmit(e as any, session.sessionId)}
-                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                                                    onContextMenu={(e) => e.stopPropagation()}
-                                                />
-                                            </Form>
+                                            <form onSubmit={(e) => handleNameSubmit(e, session)} className={styles.renameForm}>
+                                                <input ref={editInputRef} type="text" value={editingName} onChange={(e) => setEditingName(e.target.value)} onBlur={(e) => handleNameSubmit(e as any, session)} onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className={styles.renameInput} />
+                                            </form>
                                         ) : (
-                                            <span className="chat-title">{session.chatName}</span>
+                                            <span className={styles.chatTitle}>{session.chatName}</span>
                                         )}
-                                    </div>
-                                    <div className="w-100 d-flex justify-content-between">
-                                        <span className="chat-snippet">{session.lastMessageContent || 'Нет сообщений...'}</span>
-                                        <span className="chat-meta">{formatTimestamp(session.lastMessageTimestamp)}</span>
-                                    </div>
-                                </Nav.Link>
-                            </Nav.Item>
-                        ))}
-                    </Nav>
-                )}
+                                    </a>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+                <div className={styles.sidebarFooter}>
+                    <button className={styles.newChatButton} onClick={handleNewChat}>
+                        <Plus size={16} /> <span>Новый чат</span>
+                    </button>
+                </div>
             </nav>
 
             {contextMenu.show && contextMenu.session && (
-                <div className="custom-context-menu" style={{ top: contextMenu.y, left: contextMenu.x }}>
-                    <button className="custom-context-menu-item" onClick={() => handleRename(contextMenu.session!)}>
-                        <EditIcon className="me-1" /> Переименовать
-                    </button>
-                    <button className="custom-context-menu-item danger" onClick={() => handleDelete(contextMenu.session!)}>
-                        <TrashIcon className="me-1" /> Удалить
-                    </button>
+                <div className={styles.contextMenu} style={{ top: contextMenu.y, left: contextMenu.x }}>
+                    <button className={styles.contextMenuItem} onClick={() => handleRename(contextMenu.session!)}><Edit size={14}/> Переименовать</button>
+                    <button className={`${styles.contextMenuItem} ${styles.danger}`} onClick={() => handleDelete(contextMenu.session!)}><Trash size={14}/> Удалить</button>
                 </div>
             )}
         </>

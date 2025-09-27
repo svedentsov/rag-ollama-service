@@ -1,40 +1,49 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import 'bootstrap/dist/css/bootstrap.min.css';
 import './index.css';
-
-import { ChatPage } from './ChatPage.tsx';
+import App from './App.tsx';
 import { ChatSidebar } from './ChatSidebar.tsx';
 import { WelcomePage } from './WelcomePage.tsx';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from 'react-hot-toast';
 
-// --- Монтирование Сайдбара ---
-const sidebarRootEl = document.getElementById('sidebar-root');
-if (sidebarRootEl) {
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+/**
+ * Корневой компонент, который определяет основную структуру страницы.
+ */
+const Root = () => {
     const params = new URLSearchParams(window.location.search);
     const currentSessionId = params.get('sessionId');
-    const sidebarRoot = ReactDOM.createRoot(sidebarRootEl);
-    sidebarRoot.render(
+
+    return (
+        <div id="root-layout">
+            <QueryClientProvider client={queryClient}>
+                <Toaster position="bottom-center" />
+                <ChatSidebar currentSessionId={currentSessionId} />
+                <main>
+                    {currentSessionId ? <App sessionId={currentSessionId} /> : <WelcomePage />}
+                </main>
+            </QueryClientProvider>
+        </div>
+    );
+};
+
+const rootEl = document.getElementById('app-root');
+if (rootEl) {
+    const root = ReactDOM.createRoot(rootEl);
+    root.render(
         <React.StrictMode>
-            <ChatSidebar currentSessionId={currentSessionId} />
+            <Root />
         </React.StrictMode>
     );
 } else {
-    console.error('Не найден корневой элемент #sidebar-root для сайдбара.');
-}
-
-
-// --- Монтирование Основного Контента ---
-const chatWidgetRootEl = document.getElementById('chat-widget-root');
-if (chatWidgetRootEl) {
-    const params = new URLSearchParams(window.location.search);
-    const sessionId = params.get('sessionId');
-    const chatWidgetRoot = ReactDOM.createRoot(chatWidgetRootEl);
-
-    chatWidgetRoot.render(
-        <React.StrictMode>
-            {sessionId ? <ChatPage sessionId={sessionId} /> : <WelcomePage />}
-        </React.StrictMode>
-    );
-} else {
-    console.error('Не найден корневой элемент #chat-widget-root для основного контента.');
+    console.error('Не найден корневой элемент #app-root.');
 }

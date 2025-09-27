@@ -21,22 +21,22 @@
     <#else>
         <#-- Режим Production: подключаем скомпилированные ассеты -->
         <link rel="stylesheet" href="/assets/main.css">
-        <script type="module" src="/assets/main.js"></script>
+        <script type="module" defer src="/assets/main.js"></script>
     </#if>
-
 </head>
 <body class="bg-light">
-<div class="d-flex vh-100">
-    <#--
-      ИСПРАВЛЕНИЕ: Статическая разметка навигации полностью удалена.
-      Остался только пустой div, который React будет использовать для монтирования сайдбара.
-    -->
-    <div id="sidebar-root" style="width: 280px; flex-shrink: 0;"></div>
-
-    <main class="flex-grow-1 d-flex flex-column" style="overflow: hidden;">
-        <#nested>
-    </main>
-</div>
+    <#-- *** КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Единая точка входа для всего React-приложения *** -->
+    <div id="app-root">
+        <#--
+          Этот скелетный загрузчик будет виден пользователю короткое время,
+          пока Vite/React загружает и инициализирует все приложение.
+        -->
+        <div style="display: flex; justify-content: center; align-items: center; height: 100vh;">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Загрузка приложения...</span>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
 </#macro>

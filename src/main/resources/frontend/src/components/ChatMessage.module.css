@@ -1,0 +1,166 @@
+.messageWrapper {
+    display: flex;
+    margin-bottom: 1rem;
+    max-width: 85%;
+}
+
+.user {
+    justify-content: flex-end;
+    margin-left: auto;
+}
+
+.assistant {
+    justify-content: flex-start;
+    margin-right: auto;
+}
+
+.bubble {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.6;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.bubble > :first-child {
+    margin-top: 0;
+}
+.bubble > :last-child {
+    margin-bottom: 0;
+}
+
+.userBubble {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border-radius: 1rem 1rem 0.25rem 1rem;
+}
+
+.assistantBubble {
+    background-color: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
+    border: 1px solid hsl(var(--border));
+    border-radius: 1rem 1rem 1rem 0.25rem;
+}
+
+.isError {
+    background-color: hsla(var(--destructive), 0.1);
+    border: 1px solid hsl(var(--destructive));
+    color: hsl(var(--destructive));
+}
+
+.thinkingBubble {
+    padding: 0.75rem 1rem;
+    border-radius: 1rem 1rem 1rem 0.25rem;
+    background-color: hsl(var(--secondary));
+    display: flex;
+    align-items: center;
+    height: 2.5rem;
+    box-sizing: border-box;
+}
+
+.dotFlashing {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 5px;
+  background-color: hsl(var(--muted-foreground));
+  color: hsl(var(--muted-foreground));
+  animation: dotFlashing 1s infinite linear alternate;
+  animation-delay: .5s;
+}
+
+.dotFlashing::before, .dotFlashing::after {
+  content: '';
+  display: inline-block;
+  position: absolute;
+  top: 0;
+}
+
+.dotFlashing::before {
+  left: -12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 5px;
+  background-color: hsl(var(--muted-foreground));
+  color: hsl(var(--muted-foreground));
+  animation: dotFlashing 1s infinite alternate;
+  animation-delay: 0s;
+}
+
+.dotFlashing::after {
+  left: 12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 5px;
+  background-color: hsl(var(--muted-foreground));
+  color: hsl(var(--muted-foreground));
+  animation: dotFlashing 1s infinite alternate;
+  animation-delay: 1s;
+}
+
+@keyframes dotFlashing {
+  0% { background-color: hsl(var(--muted-foreground)); opacity: 1; }
+  50%, 100% { background-color: hsl(var(--muted-foreground)); opacity: 0.2; }
+}
+
+.inlineCode {
+    background-color: hsl(var(--muted));
+    padding: 0.1em 0.3em;
+    border-radius: 0.25rem;
+    font-size: 0.9em;
+}
+
+.codeBlockWrapper {
+    margin: 0.75rem 0;
+    position: relative;
+    border-radius: var(--radius);
+    border: 1px solid hsl(var(--border));
+    overflow: hidden;
+}
+.codeHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background-color: hsl(var(--muted));
+    font-size: 0.8rem;
+    color: hsl(var(--muted-foreground));
+    border-bottom: 1px solid hsl(var(--border));
+}
+.btnCopy {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+    background-color: transparent;
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--muted-foreground));
+    border-radius: 0.25rem;
+    cursor: pointer;
+}
+.btnCopy:hover {
+    opacity: 1;
+    background-color: hsl(var(--accent));
+}
+
+.markdownTable {
+    width: 100%;
+    margin: 1rem 0;
+    color: hsl(var(--foreground));
+    border-collapse: collapse;
+}
+.markdownTable th, .markdownTable td {
+    padding: .5rem;
+    border: 1px solid hsl(var(--border));
+}
+.markdownTable thead th {
+    font-weight: 600;
+    background-color: hsl(var(--muted));
+}
+.markdownTable tbody tr:nth-of-type(odd) {
+    background-color: hsl(var(--accent));
+}

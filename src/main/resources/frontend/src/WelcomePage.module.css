@@ -1,0 +1,17 @@
+.welcomeContainer {
+    padding: 2rem;
+    text-align: center;
+    color: hsl(var(--muted-foreground));
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    background-color: hsl(var(--background));
+}
+
+.welcomeContainer h2 {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}

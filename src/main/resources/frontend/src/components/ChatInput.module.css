@@ -1,0 +1,68 @@
+.chatInputContainer {
+    padding: 1rem;
+    background-color: #fff;
+    border-top: 1px solid #e4e4e7; /* Zinc 200 */
+}
+
+.chatInputForm {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-end;
+}
+
+.textarea {
+    flex-grow: 1;
+    padding: 0.6rem 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid #e4e4e7;
+    background-color: #f4f4f5;
+    resize: none;
+    box-shadow: none !important;
+    font-size: 1rem;
+    min-height: 44px;
+    max-height: 10.2rem;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+.textarea:focus {
+    outline: none;
+    border-color: #a1a1aa;
+}
+
+.sendButton, .stopButton {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: none;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.15s ease-in-out;
+}
+
+.sendButton {
+    background-color: #09090b;
+    color: white;
+}
+
+.sendButton:hover:not(:disabled) {
+    background-color: #27272a;
+}
+
+.sendButton:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.stopButton {
+    background-color: #dc3545;
+    color: white;
+}
+
+.stopButton:hover:not(:disabled) {
+    background-color: #bb2d3b;
+}

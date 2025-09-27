@@ -17,6 +17,10 @@ import java.io.IOException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Обработчик, реализующий логику для намерения {@link QueryIntent#CODE_GENERATION}.
+ * Эта версия исправлена для корректной потоковой передачи данных.
+ */
 @Service
 @Slf4j
 @RequiredArgsConstructor
