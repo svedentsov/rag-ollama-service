@@ -1,10 +1,13 @@
 package com.example.ragollama.rag.pipeline.steps;
 
+import com.example.ragollama.orchestration.dto.UniversalResponse;
 import com.example.ragollama.rag.pipeline.RagFlowContext;
 import com.example.ragollama.rag.pipeline.RagPipelineStep;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
+import com.example.ragollama.shared.task.CancellableTaskService;
+import com.example.ragollama.shared.task.TaskStateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -19,6 +22,8 @@ import java.util.stream.Collectors;
 
 /**
  * Шаг RAG-конвейера, отвечающий за интеллектуальное сжатие контекста перед передачей его в LLM-генератор.
+ * <p>
+ * Перед началом выполнения отправляет статусное сообщение в UI.
  */
 @Slf4j
 @Component
@@ -28,7 +33,12 @@ public class ContextualCompressionStep implements RagPipelineStep {
 
     private final LlmClient llmClient;
     private final PromptService promptService;
+    private final TaskStateService taskStateService;
+    private final CancellableTaskService taskService;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
         List<Document> documents = context.rerankedDocuments();
@@ -37,6 +47,8 @@ public class ContextualCompressionStep implements RagPipelineStep {
             return Mono.just(context.withCompressedContext(""));
         }
         log.info("Шаг [35] Context Compression: запуск сжатия {} документов...", documents.size());
+        taskStateService.getActiveTaskIdForSession(context.sessionId()).ifPresent(taskId ->
+                taskService.emitEvent(taskId, new UniversalResponse.StatusUpdate("Сжимаю найденную информацию...")));
         String documentsForPrompt = documents.stream()
                 .map(doc -> String.format("<doc id=\"%s\">\n%s\n</doc>",
                         doc.getMetadata().get("chunkId"), doc.getText()))

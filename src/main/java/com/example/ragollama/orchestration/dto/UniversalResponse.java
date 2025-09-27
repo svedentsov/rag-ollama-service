@@ -19,6 +19,7 @@ import java.util.UUID;
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes({
         @JsonSubTypes.Type(value = UniversalResponse.TaskStarted.class, name = "task_started"),
+        @JsonSubTypes.Type(value = UniversalResponse.StatusUpdate.class, name = "status_update"),
         @JsonSubTypes.Type(value = UniversalResponse.Content.class, name = "content"),
         @JsonSubTypes.Type(value = UniversalResponse.Sources.class, name = "sources"),
         @JsonSubTypes.Type(value = UniversalResponse.Code.class, name = "code"),
@@ -31,6 +32,10 @@ public sealed interface UniversalResponse {
 
     @Schema(description = "Сигнал о старте задачи, содержит ее ID")
     record TaskStarted(UUID taskId) implements UniversalResponse {
+    }
+
+    @Schema(description = "Обновление статуса выполнения задачи на бэкенде")
+    record StatusUpdate(String text) implements UniversalResponse {
     }
 
     @Schema(description = "Часть сгенерированного текстового контента")

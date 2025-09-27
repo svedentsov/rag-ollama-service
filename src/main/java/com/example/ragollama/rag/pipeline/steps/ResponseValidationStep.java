@@ -1,6 +1,7 @@
 package com.example.ragollama.rag.pipeline.steps;
 
 import com.example.ragollama.evaluation.model.ValidationReport;
+import com.example.ragollama.orchestration.dto.UniversalResponse;
 import com.example.ragollama.rag.domain.model.RagAnswer;
 import com.example.ragollama.rag.pipeline.RagFlowContext;
 import com.example.ragollama.rag.pipeline.RagPipelineStep;
@@ -9,6 +10,8 @@ import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
+import com.example.ragollama.shared.task.CancellableTaskService;
+import com.example.ragollama.shared.task.TaskStateService;
 import com.example.ragollama.shared.util.JsonExtractorUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,14 +43,15 @@ public class ResponseValidationStep implements RagPipelineStep {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final TaskStateService taskStateService;
+    private final CancellableTaskService taskService;
 
-    /**
-     * Конструктор, который также логирует информацию об активации.
-     */
-    public ResponseValidationStep(LlmClient llmClient, PromptService promptService, ObjectMapper objectMapper, AppProperties appProperties) {
+    public ResponseValidationStep(LlmClient llmClient, PromptService promptService, ObjectMapper objectMapper, AppProperties appProperties, TaskStateService taskStateService, CancellableTaskService taskService) {
         this.llmClient = llmClient;
         this.promptService = promptService;
         this.objectMapper = objectMapper;
+        this.taskStateService = taskStateService;
+        this.taskService = taskService;
         if (appProperties.rag().validation().enabled()) {
             log.info("Активирован шаг конвейера: ResponseValidationStep (AI-Критик)");
         }
@@ -62,6 +66,8 @@ public class ResponseValidationStep implements RagPipelineStep {
             return Mono.just(context);
         }
         log.info("Шаг [70] Response Validation: запуск AI-критика...");
+        taskStateService.getActiveTaskIdForSession(context.sessionId()).ifPresent(taskId ->
+                taskService.emitEvent(taskId, new UniversalResponse.StatusUpdate("Проверяю ответ на галлюцинации...")));
         String contextForPrompt = context.rerankedDocuments().stream()
                 .map(doc -> String.format("<doc id=\"%s\">%s</doc>", doc.getMetadata().get("chunkId"), doc.getText()))
                 .collect(Collectors.joining("\n\n"));

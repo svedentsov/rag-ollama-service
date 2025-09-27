@@ -7,11 +7,14 @@ import { ChatInput } from './components/ChatInput';
 import { Message, UniversalStreamResponse } from './types';
 import { fetchMessages } from './api';
 import { Copy } from 'lucide-react';
+import { ScrollToBottomButton } from "./components/ScrollToBottomButton";
+import { StatusIndicator } from "./components/StatusIndicator";
 import styles from './App.module.css';
 
 interface MessageContextMenuState { show: boolean; x: number; y: number; message: Message | null; }
 interface AppProps { sessionId: string; }
 
+// Порог в пикселях. Если пользователь находится ближе к низу, считаем, что он внизу.
 const SCROLL_THRESHOLD = 100;
 
 const App: React.FC<AppProps> = ({ sessionId }) => {
@@ -24,10 +27,17 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
     const lastRequestId = useRef<string | null>(null);
     const queryClient = useQueryClient();
 
+    // Refs и State для интеллектуального скролла и плавной анимации
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const [isAtBottom, setIsAtBottom] = useState(true);
     const textBufferRef = useRef<string>('');
     const animationFrameRef = useRef<number | null>(null);
+
+    // Состояния для управления UI во время ожидания
+    const [isThinking, setIsThinking] = useState(false);
+    const [statusText, setStatusText] = useState<string | null>(null);
+    const [elapsedTime, setElapsedTime] = useState(0);
+    const [isStreaming, setIsStreaming] = useState(false);
 
     const { data: history, isLoading: isLoadingHistory, error: historyError } = useQuery({
         queryKey: ['messages', sessionId],
@@ -50,35 +60,54 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
         return () => document.removeEventListener('click', handleClick);
     }, []);
 
-    const [isThinking, setIsThinking] = useState(false);
-    const [isStreaming, setIsStreaming] = useState(false);
-
+    // Условный автоскролл
     useEffect(() => {
         if (isAtBottom) {
             messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }
     }, [messages, isStreaming, isThinking, isAtBottom]);
 
+    // Обработчик события скролла
     useEffect(() => {
         const container = chatContainerRef.current;
         if (!container) return;
+
         const handleScroll = () => {
             const { scrollHeight, scrollTop, clientHeight } = container;
             const atBottom = scrollHeight - scrollTop - clientHeight < SCROLL_THRESHOLD;
             setIsAtBottom(atBottom);
         };
+
         container.addEventListener('scroll', handleScroll);
-        handleScroll();
+        handleScroll(); // Устанавливаем начальное состояние
+
         return () => container.removeEventListener('scroll', handleScroll);
     }, [chatContainerRef]);
 
+    // Секундомер
+    useEffect(() => {
+        let timerInterval: number | undefined;
+        if (isThinking) {
+            timerInterval = window.setInterval(() => {
+                setElapsedTime(prev => prev + 1);
+            }, 1000);
+        } else {
+            clearInterval(timerInterval);
+            setElapsedTime(0);
+        }
+        return () => clearInterval(timerInterval);
+    }, [isThinking]);
+
+    // Анимация печати
     useEffect(() => {
         const typeCharacter = () => {
             if (textBufferRef.current.length > 0) {
                 const bufferSize = textBufferRef.current.length;
                 const charsToType = Math.max(1, Math.min(Math.floor(bufferSize * 0.1), 10));
+
                 const chunk = textBufferRef.current.substring(0, charsToType);
                 textBufferRef.current = textBufferRef.current.substring(charsToType);
+
                 setMessages(prev => {
                     if (prev.length === 0 || prev[prev.length - 1].type !== 'assistant') {
                         return prev;
@@ -129,10 +158,12 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
     const handleSendMessage = async (inputText: string) => {
         if (!inputText.trim() || isStreaming || isThinking) return;
 
-        scrollToBottom(); // Принудительно скроллим вниз при отправке нового сообщения
+        scrollToBottom();
         const userMessage: Message = { id: uuidv4(), type: 'user', text: inputText };
         setMessages(prev => [...prev, userMessage]);
+
         setIsThinking(true);
+        setStatusText("Подготовка ответа...");
         textBufferRef.current = '';
         abortControllerRef.current = new AbortController();
 
@@ -149,7 +180,7 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
 
             const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
             let buffer = '';
-            let isFirstChunk = true;
+            let isFirstContentChunk = true;
             const assistantMessageId = uuidv4();
 
             while (true) {
@@ -161,20 +192,22 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
 
                 for (const line of lines) {
                     if (line.startsWith('data:')) {
-                        if (isFirstChunk) {
-                            setIsThinking(false);
-                            setIsStreaming(true);
-                            setMessages(prev => [...prev, { id: assistantMessageId, type: 'assistant', text: '', sources: [] }]);
-                            isFirstChunk = false;
-                        }
-
                         const jsonData = line.substring(5).trim();
                         if (!jsonData) continue;
 
                         try {
                             const eventData = JSON.parse(jsonData) as UniversalStreamResponse;
 
-                            if (eventData.type === 'content') {
+                            if (eventData.type === 'status_update') {
+                                setStatusText(eventData.text);
+                            } else if (eventData.type === 'content') {
+                                if (isFirstContentChunk) {
+                                    setIsThinking(false);
+                                    setStatusText(null);
+                                    setIsStreaming(true);
+                                    setMessages(prev => [...prev, { id: assistantMessageId, type: 'assistant', text: '', sources: [] }]);
+                                    isFirstContentChunk = false;
+                                }
                                 textBufferRef.current += eventData.text;
                             } else {
                                 setMessages(currentMessages => {
@@ -194,11 +227,15 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
                 }
             }
         } catch (error: any) {
-            if (error.name === 'AbortError') console.log('Stream stopped by user.');
-            else setMessages(prev => [...prev, { id: uuidv4(), type: 'assistant', text: '', error: error.message || "Произошла неизвестная ошибка." }]);
+            if (error.name === 'AbortError') {
+                console.log('Stream stopped by user.');
+            } else {
+                setMessages(prev => [...prev, { id: uuidv4(), type: 'assistant', text: '', error: error.message || "Произошла неизвестная ошибка." }]);
+            }
         } finally {
             setIsThinking(false);
             setIsStreaming(false);
+            setStatusText(null);
             abortControllerRef.current = null;
             queryClient.invalidateQueries({ queryKey: ['chatSessions'] });
         }
@@ -241,13 +278,11 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
                             onContextMenu={(e) => handleShowContextMenu(e, msg)}
                         />
                     ))}
-                    {isThinking && (
-                        <ChatMessage
-                            message={{id: 'thinking', type: 'assistant', text: '...'}}
-                            isThinking={true}
-                            onContextMenu={()=>{}}
-                        />
+
+                    {isThinking && statusText && (
+                        <StatusIndicator statusText={statusText} elapsedTime={elapsedTime} />
                     )}
+
                     <div ref={messagesEndRef} />
                 </div>
                 <ChatInput

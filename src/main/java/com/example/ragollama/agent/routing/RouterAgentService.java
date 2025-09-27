@@ -5,7 +5,7 @@ import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import com.example.ragollama.shared.util.JsonExtractorUtil;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties; // ИМПОРТ
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +15,6 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Сервис, реализующий логику "Router Agent".
@@ -32,13 +31,6 @@ public class RouterAgentService {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
 
-    private static final Set<String> CODE_KEYWORDS = Set.of(
-            "код", "функция", "метод", "скрипт", "пример", "code", "function", "method", "script", "example"
-    );
-
-    /**
-     * Внутренний DTO для надежного парсинга JSON-ответа от LLM.
-     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record IntentResponse(QueryIntent intent) {
     }
@@ -57,7 +49,7 @@ public class RouterAgentService {
                 .doOnSuccess(intent -> log.info("Запрос '{}' классифицирован с намерением: {}", query, intent))
                 .onErrorResume(e -> {
                     log.warn("Ошибка при маршрутизации запроса '{}'. Используется fallback.", query, e);
-                    return Mono.just(fallbackToRagIfQuestion(query));
+                    return Mono.just(fallbackLogic(query));
                 });
     }
 
@@ -84,11 +76,11 @@ public class RouterAgentService {
     }
 
     /**
-     * Fallback-стратегия: если LLM не справилась, применяем эвристики.
+     * Улучшенная Fallback-стратегия.
      */
-    private QueryIntent fallbackToRagIfQuestion(String query) {
+    private QueryIntent fallbackLogic(String query) {
         String lowerCaseQuery = query.toLowerCase();
-        if (CODE_KEYWORDS.stream().anyMatch(lowerCaseQuery::contains)) {
+        if (lowerCaseQuery.matches(".*\\b(код|code|пример|example|sample|java|python|javascript|selenide)\\b.*")) {
             log.debug("Fallback: запрос содержит ключевые слова для кода, классифицируем как CODE_GENERATION.");
             return QueryIntent.CODE_GENERATION;
         }

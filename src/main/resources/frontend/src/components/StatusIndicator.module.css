@@ -1,0 +1,46 @@
+.statusWrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem; /* 12px */
+    padding: 0.75rem 1rem; /* 12px 16px */
+    background-color: hsl(var(--secondary));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    max-width: 85%;
+    margin-bottom: 1rem; /* Отступ снизу, как у обычного сообщения */
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.spinner {
+    width: 1.25rem; /* 20px */
+    height: 1.25rem; /* 20px */
+    flex-shrink: 0;
+    border: 0.2em solid hsl(var(--primary));
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spinner-border .75s linear infinite;
+}
+
+@keyframes spinner-border {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.statusText {
+    color: hsl(var(--muted-foreground));
+    font-size: 0.875rem; /* 14px */
+    display: flex;
+    align-items: center;
+    gap: 0.5rem; /* 8px */
+}
+
+.timer {
+    font-variant-numeric: tabular-nums; /* Моноширинные цифры */
+    color: hsl(var(--foreground));
+    font-weight: 500;
+    background-color: hsl(var(--background));
+    padding: 0.125rem 0.375rem; /* 2px 6px */
+    border-radius: 0.25rem;
+    border: 1px solid hsl(var(--border));
+}

@@ -1,5 +1,6 @@
 package com.example.ragollama.rag.pipeline.steps;
 
+import com.example.ragollama.orchestration.dto.UniversalResponse;
 import com.example.ragollama.rag.pipeline.RagFlowContext;
 import com.example.ragollama.rag.pipeline.RagPipelineStep;
 import com.example.ragollama.shared.exception.LlmJsonResponseParseException;
@@ -7,6 +8,8 @@ import com.example.ragollama.shared.exception.PromptInjectionException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
+import com.example.ragollama.shared.task.CancellableTaskService;
+import com.example.ragollama.shared.task.TaskStateService;
 import com.example.ragollama.shared.util.JsonExtractorUtil;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -44,6 +47,8 @@ public class PromptGuardStep implements RagPipelineStep {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final TaskStateService taskStateService;
+    private final CancellableTaskService taskService;
 
     /**
      * DTO для десериализации структурированного JSON-ответа от LLM-стража.
@@ -73,6 +78,8 @@ public class PromptGuardStep implements RagPipelineStep {
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
         log.info("Шаг [01] Prompt Guard: проверка запроса на безопасность...");
+        taskStateService.getActiveTaskIdForSession(context.sessionId()).ifPresent(taskId ->
+                taskService.emitEvent(taskId, new UniversalResponse.StatusUpdate("Проверяю запрос...")));
         String query = context.originalQuery();
         // Уровень 1: Быстрая блокировка по "черному списку"
         if (isBlacklisted(query)) {

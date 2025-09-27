@@ -16,15 +16,26 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Шаг RAG-конвейера, отвечающий за финальное обогащение и сборку промпта.
+ * <p>
+ * Этот шаг оркестрирует работу всех "советников" ({@link RagAdvisor}), которые
+ * добавляют в модель промпта различный динамический контекст (текущая дата,
+ * саммари истории и т.д.). После этого он использует {@link PromptService}
+ * для рендеринга финального текста промпта из шаблона и модели.
+ */
 @Slf4j
 @Component
-@Order(38)
+@Order(38) // Выполняется после сжатия (35), но до генерации (40)
 @RequiredArgsConstructor
 public class AugmentationStep implements RagPipelineStep {
 
     private final List<RagAdvisor> advisors;
     private final PromptService promptService;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
         log.info("Шаг [38] Augmentation: запуск обогащения и сборки финального промпта...");
