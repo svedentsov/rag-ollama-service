@@ -28,7 +28,6 @@ public record ChatSessionDto(
         );
     }
 
-    // !!! ИЗМЕНЕНИЕ: Добавлен DTO для запроса на обновление имени.
     @Schema(description = "DTO для обновления имени чата")
     public record UpdateRequest(
             @NotBlank @Size(min = 1, max = 255)

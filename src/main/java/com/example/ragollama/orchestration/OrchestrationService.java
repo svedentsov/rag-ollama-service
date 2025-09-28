@@ -74,29 +74,21 @@ public class OrchestrationService {
     }
 
     public Flux<UniversalResponse> processStream(UniversalRequest request) {
-        // !!! ИЗМЕНЕНИЕ: Теперь мы не создаем Future, а сразу работаем с Flux !!!
         return router.route(request.query())
                 .flatMapMany(intent -> {
-                    // Создаем Future, который будет сигнализировать о завершении
                     CompletableFuture<Void> streamCompletionFuture = new CompletableFuture<>();
                     UUID taskId = taskService.register(streamCompletionFuture);
-
                     if (request.sessionId() != null) {
                         taskStateService.registerSessionTask(request.sessionId(), taskId);
                     }
-
                     log.info("Маршрутизация потокового запроса с намерением: {}. TaskID: {}", intent, taskId);
                     IntentHandler handler = findHandler(intent);
-
-                    // Запускаем реальный обработчик и подписываемся на его события, чтобы публиковать их в наш Sink
                     handler.handleStream(request)
                             .subscribe(
                                     event -> taskService.emitEvent(taskId, event), // Публикуем событие
                                     error -> streamCompletionFuture.completeExceptionally(error), // Передаем ошибку в Future
                                     () -> streamCompletionFuture.complete(null) // Завершаем Future
                             );
-
-                    // Возвращаем клиенту Flux, который читает из нашего Sink'а
                     return Flux.concat(
                             Flux.just(new UniversalResponse.TaskStarted(taskId)),
                             taskService.getTaskStream(taskId).orElse(Flux.empty())

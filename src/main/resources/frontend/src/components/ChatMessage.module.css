@@ -10,7 +10,6 @@
 }
 
 .assistant {
-    justify-content: flex-start;
     margin-right: auto;
 }
 
@@ -34,12 +33,14 @@
     background-color: hsl(var(--primary));
     color: hsl(var(--primary-foreground));
     border-radius: 1rem 1rem 0.25rem 1rem;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 }
 
 .assistantBubble {
-    background-color: hsl(var(--secondary));
+    background-color: transparent;
     color: hsl(var(--secondary-foreground));
-    border: 1px solid hsl(var(--border));
+    border: none;
+    box-shadow: none;
     border-radius: 1rem 1rem 1rem 0.25rem;
 }
 
@@ -133,7 +134,9 @@
     border-radius: var(--radius);
     border: 1px solid hsl(var(--border));
     overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 }
+
 .codeHeader {
     display: flex;
     justify-content: space-between;

@@ -1,8 +1,8 @@
 .chatInputContainer {
     padding: 1rem;
-    background-color: hsl(var(--background)); /* Изменено с #fff для поддержки тем */
-    border-top: 1px solid hsl(var(--border)); /* Изменено с e4e4e7 */
-    position: relative; /* ДОБАВЛЕНО */
+    background-color: hsl(var(--background));
+    border-top: 1px solid hsl(var(--border));
+    position: relative;
 }
 
 .chatInputForm {
@@ -15,8 +15,8 @@
     flex-grow: 1;
     padding: 0.6rem 0.75rem;
     border-radius: 0.5rem;
-    border: 1px solid hsl(var(--border)); /* Изменено */
-    background-color: hsl(var(--secondary)); /* Изменено */
+    border: 1px solid hsl(var(--border));
+    background-color: hsl(var(--secondary));
     resize: none;
     box-shadow: none !important;
     font-size: 1rem;
@@ -24,12 +24,12 @@
     max-height: 10.2rem;
     overflow-y: auto;
     box-sizing: border-box;
-    color: hsl(var(--foreground)); /* Добавлено для поддержки тем */
+    color: hsl(var(--foreground));
 }
 
 .textarea:focus {
     outline: none;
-    border-color: hsl(var(--ring)); /* Изменено */
+    border-color: hsl(var(--ring));
 }
 
 .sendButton, .stopButton {

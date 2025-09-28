@@ -21,7 +21,6 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
     <S extends ChatMessage> S save(S entity);
 
     /**
-     * !!! ИЗМЕНЕНИЕ: Добавлен новый метод.
      * Удаляет все сообщения, принадлежащие одной сессии.
      * Этот метод необходим для каскадного удаления: перед тем как удалить
      * сессию чата, нужно удалить все связанные с ней сообщения.

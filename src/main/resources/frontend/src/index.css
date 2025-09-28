@@ -30,10 +30,16 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
-#app-root, #root-layout {
-    display: flex;
-    height: 100vh;
+#app-root {
     width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+#root-layout {
+    display: flex;
+    height: 100%;
+    width: 100%;
     background-color: hsl(var(--background));
 }
 
@@ -42,4 +48,8 @@ main {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+}
+
+.layoutSpacer {
+    display: none;
 }

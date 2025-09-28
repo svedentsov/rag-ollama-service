@@ -32,7 +32,6 @@ public class ChatSessionService {
     private final CancellableTaskService cancellableTaskService;
     private final TaskStateService taskStateService;
 
-    // !!! ИЗМЕНЕНИЕ: Метод теперь загружает последнее сообщение для каждого чата.
     @Transactional(readOnly = true)
     public List<ChatSession> getChatsForCurrentUser() {
         List<ChatSession> sessions = chatSessionRepository.findByUserNameOrderByUpdatedAtDesc(getCurrentUsername());

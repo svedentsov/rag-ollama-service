@@ -16,9 +16,6 @@ const queryClient = new QueryClient({
   },
 });
 
-/**
- * Корневой компонент, который определяет основную структуру страницы.
- */
 const Root = () => {
     const params = new URLSearchParams(window.location.search);
     const currentSessionId = params.get('sessionId');
@@ -31,6 +28,7 @@ const Root = () => {
                 <main>
                     {currentSessionId ? <App sessionId={currentSessionId} /> : <WelcomePage />}
                 </main>
+                <div className="layoutSpacer"></div>
             </QueryClientProvider>
         </div>
     );

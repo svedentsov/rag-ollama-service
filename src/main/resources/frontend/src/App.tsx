@@ -14,7 +14,6 @@ import styles from './App.module.css';
 interface MessageContextMenuState { show: boolean; x: number; y: number; message: Message | null; }
 interface AppProps { sessionId: string; }
 
-// Порог в пикселях. Если пользователь находится ближе к низу, считаем, что он внизу.
 const SCROLL_THRESHOLD = 100;
 
 const App: React.FC<AppProps> = ({ sessionId }) => {
@@ -27,13 +26,12 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
     const lastRequestId = useRef<string | null>(null);
     const queryClient = useQueryClient();
 
-    // Refs и State для интеллектуального скролла и плавной анимации
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const [isAtBottom, setIsAtBottom] = useState(true);
     const textBufferRef = useRef<string>('');
     const animationFrameRef = useRef<number | null>(null);
+    const isInitialLoad = useRef(true);
 
-    // Состояния для управления UI во время ожидания
     const [isThinking, setIsThinking] = useState(false);
     const [statusText, setStatusText] = useState<string | null>(null);
     const [elapsedTime, setElapsedTime] = useState(0);
@@ -45,7 +43,22 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
         enabled: !!sessionId,
     });
 
-    useEffect(() => { if (history) setMessages(history); }, [history]);
+    useEffect(() => {
+        isInitialLoad.current = true;
+    }, [sessionId]);
+
+    useEffect(() => {
+        if (history) {
+            setMessages(history);
+            if (isInitialLoad.current) {
+                setTimeout(() => {
+                    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+                    setIsAtBottom(true);
+                    isInitialLoad.current = false;
+                }, 0);
+            }
+        }
+    }, [history]);
 
     useEffect(() => {
         const handleClick = () => {
@@ -60,14 +73,13 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
         return () => document.removeEventListener('click', handleClick);
     }, []);
 
-    // Условный автоскролл
     useEffect(() => {
-        if (isAtBottom) {
+        if (!isInitialLoad.current && isAtBottom) {
             messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }
     }, [messages, isStreaming, isThinking, isAtBottom]);
 
-    // Обработчик события скролла
+
     useEffect(() => {
         const container = chatContainerRef.current;
         if (!container) return;
@@ -79,12 +91,11 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
         };
 
         container.addEventListener('scroll', handleScroll);
-        handleScroll(); // Устанавливаем начальное состояние
+        handleScroll();
 
         return () => container.removeEventListener('scroll', handleScroll);
     }, [chatContainerRef]);
 
-    // Секундомер
     useEffect(() => {
         let timerInterval: number | undefined;
         if (isThinking) {
@@ -98,7 +109,6 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
         return () => clearInterval(timerInterval);
     }, [isThinking]);
 
-    // Анимация печати
     useEffect(() => {
         const typeCharacter = () => {
             if (textBufferRef.current.length > 0) {
@@ -269,21 +279,23 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
         <>
             <div className={styles.chatContainer}>
                 <div className={styles.chatMessageContainer} ref={chatContainerRef}>
-                    {isLoadingHistory && <div className={styles.centered}><div className={styles.spinner}></div></div>}
-                    {historyError && <div className={styles.errorAlert}>Не удалось загрузить историю сообщений.</div>}
-                    {!isLoadingHistory && messages.map((msg) => (
-                        <ChatMessage
-                            key={msg.id}
-                            message={msg}
-                            onContextMenu={(e) => handleShowContextMenu(e, msg)}
-                        />
-                    ))}
+                    <div className={styles.messagesWrapper}>
+                        {isLoadingHistory && <div className={styles.centered}><div className={styles.spinner}></div></div>}
+                        {historyError && <div className={styles.errorAlert}>Не удалось загрузить историю сообщений.</div>}
+                        {!isLoadingHistory && messages.map((msg) => (
+                            <ChatMessage
+                                key={msg.id}
+                                message={msg}
+                                onContextMenu={(e) => handleShowContextMenu(e, msg)}
+                            />
+                        ))}
 
-                    {isThinking && statusText && (
-                        <StatusIndicator statusText={statusText} elapsedTime={elapsedTime} />
-                    )}
+                        {isThinking && statusText && (
+                            <StatusIndicator statusText={statusText} elapsedTime={elapsedTime} />
+                        )}
 
-                    <div ref={messagesEndRef} />
+                        <div ref={messagesEndRef} />
+                    </div>
                 </div>
                 <ChatInput
                     onSendMessage={handleSendMessage}
