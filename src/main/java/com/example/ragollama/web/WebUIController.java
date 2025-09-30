@@ -7,11 +7,25 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.ModelAndView;
 
 import java.util.Arrays;
-import java.util.UUID;
 
 /**
  * Контроллер для отображения веб-интерфейса чата.
- * ИСПРАВЛЕНО: Добавлена логика для передачи режима разработки в шаблон.
+ * <p>
+ * Этот контроллер является единой точкой входа для фронтенд-приложения,
+ * написанного на React. Он использует FreeMarker для рендеринга
+ * базовой HTML-страницы ("скелета"), которая затем "оживляется"
+ * с помощью JavaScript.
+ * <p>
+ * <b>Архитектурное решение:</b> Вместо того, чтобы рендерить разные
+ * HTML-страницы, этот контроллер всегда рендерит один и тот же шаблон-обертку,
+ * который содержит единую точку монтирования для React (`<div id="app-root">`).
+ * React-приложение само отвечает за всю маршрутизацию на стороне клиента
+ * на основе URL, что соответствует подходу Single-Page Application (SPA).
+ * Это упрощает бэкенд и переносит всю логику отображения на фронтенд.
+ * <p>
+ * Контроллер также передает в шаблон флаг `isDevelopmentMode`, который
+ * позволяет шаблону подключать скрипты либо с Vite Dev Server (для
+ * Hot Module Replacement), либо скомпилированные production-ассеты.
  */
 @Controller
 public class WebUIController {
@@ -24,6 +38,7 @@ public class WebUIController {
 
     /**
      * Проверяет, запущен ли сервис в режиме разработки.
+     *
      * @return true, если активен профиль "dev" или "development".
      */
     private boolean isDevelopmentMode() {
@@ -35,35 +50,18 @@ public class WebUIController {
     }
 
     /**
-     * Отображает главную страницу.
-     * @return ModelAndView для шаблона 'index'.
-     */
-    @GetMapping("/")
-    public ModelAndView getIndexPage() {
-        ModelAndView mav = new ModelAndView("index");
-        mav.addObject("isDevelopmentMode", isDevelopmentMode());
-        return mav;
-    }
-
-    /**
-     * Отображает страницу чата, опционально для существующей сессии.
+     * Отображает главную страницу-обертку для SPA-приложения.
+     * Этот метод обрабатывает все основные URL (`/`, `/chat`), так как
+     * реальная маршрутизация происходит на клиенте.
      *
-     * @param sessionIdAsString Опциональный ID сессии чата в виде строки.
-     * @return ModelAndView для шаблона 'chat'.
+     * @param sessionIdAsString Опциональный ID сессии чата (игнорируется на бэкенде,
+     *                          обрабатывается React).
+     * @return ModelAndView для корневого шаблона `_layout`, который загружает React.
      */
-    @GetMapping("/chat")
-    public ModelAndView getChatPage(@RequestParam(required = false) String sessionIdAsString) {
-        ModelAndView mav = new ModelAndView("chat");
+    @GetMapping({"/", "/chat"})
+    public ModelAndView getIndexPage(@RequestParam(required = false) String sessionIdAsString) {
+        ModelAndView mav = new ModelAndView("index_spa");
         mav.addObject("isDevelopmentMode", isDevelopmentMode());
-
-        if (sessionIdAsString != null && !sessionIdAsString.isBlank()) {
-            try {
-                UUID sessionId = UUID.fromString(sessionIdAsString);
-                mav.addObject("sessionId", sessionId.toString());
-            } catch (IllegalArgumentException e) {
-                mav.addObject("error", "Invalid session ID format.");
-            }
-        }
         return mav;
     }
 }

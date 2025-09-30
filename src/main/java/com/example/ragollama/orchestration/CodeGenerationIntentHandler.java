@@ -40,7 +40,7 @@ public class CodeGenerationIntentHandler implements IntentHandler {
                 .thenCompose(turnContext ->
                         codeGenerationService.generateCode(request.toCodeGenerationRequest())
                                 .flatMap(response -> Mono.fromFuture(
-                                        dialogManager.endTurn(turnContext.sessionId(), response.generatedCode(), MessageRole.ASSISTANT)
+                                        dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), response.generatedCode(), MessageRole.ASSISTANT)
                                                 .thenApply(v -> UniversalSyncResponse.from(response, canHandle()))
                                 )).toFuture()
                 );
@@ -56,7 +56,7 @@ public class CodeGenerationIntentHandler implements IntentHandler {
                             .doOnComplete(() -> {
                                 String fullResponse = fullResponseBuilder.toString();
                                 if (!fullResponse.isBlank()) {
-                                    dialogManager.endTurn(turnContext.sessionId(), fullResponse, MessageRole.ASSISTANT);
+                                    dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), fullResponse, MessageRole.ASSISTANT);
                                 }
                             })
                             .map(UniversalResponse::from)

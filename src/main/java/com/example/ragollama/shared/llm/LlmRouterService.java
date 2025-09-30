@@ -1,28 +1,25 @@
 package com.example.ragollama.shared.llm;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
 
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Сервис-роутер, отвечающий за интеллектуальный выбор LLM для выполнения запроса.
- * <p> Реализует логику отказоустойчивости на уровне моделей: если основная модель,
- * настроенная для определенной возможности, недоступна, сервис автоматически
- * переключится на резервную (fallback) модель. Это повышает общую надежность
- * системы, делая ее менее чувствительной к временной недоступности отдельных моделей в Ollama.
+ * <p>
+ * Эта версия была отрефакторена для соответствия Принципу Единственной Ответственности.
+ * Роутер больше не занимается проверкой доступности моделей; он делегирует эту
+ * задачу специализированному сервису {@link OllamaModelManager}.
+ * <p>
+ * Его единственная задача — на основе требуемой "возможности" (`ModelCapability`)
+ * выбрать основную модель из конфигурации и, в случае ее недоступности,
+ * запросить резервную (fallback) модель.
  */
 @Slf4j
 @Service
@@ -60,77 +57,9 @@ public class LlmRouterService {
             return fallbackModel;
         }
 
-        log.error("Критическая ошибка: ни основная модель '{}', ни fallback-модель '{}' не доступны в Ollama.",
-                primaryModel, fallbackModel);
+        log.error("Критическая ошибка: ни основная модель '{}', ни fallback-модель '{}' не доступны в Ollama. Доступные модели: {}",
+                primaryModel, fallbackModel, availableModels);
         throw new IllegalStateException("Нет доступных LLM для обработки запроса.");
-    }
-
-    /**
-     * Внутренний компонент для управления состоянием доступных моделей в Ollama.
-     * <p> Этот класс инкапсулирует логику взаимодействия с Ollama API для получения
-     * списка загруженных моделей. Результаты кэшируются для снижения нагрузки
-     * и повышения производительности.
-     */
-    @Service
-    public static class OllamaModelManager {
-        private final WebClient.Builder webClientBuilder;
-        private final String ollamaBaseUrl;
-
-        public OllamaModelManager(WebClient.Builder webClientBuilder,
-                                  @Value("${spring.ai.ollama.base-url}") String ollamaBaseUrl) {
-            this.webClientBuilder = webClientBuilder;
-            this.ollamaBaseUrl = ollamaBaseUrl;
-        }
-
-        /**
-         * DTO для десериализации корневого объекта ответа от Ollama /api/tags.
-         *
-         * @param models Список моделей.
-         */
-        private record OllamaTagResponse(List<OllamaModel> models) {
-        }
-
-        /**
-         * DTO для десериализации объекта одной модели.
-         *
-         * @param name Имя модели (например, 'llama3:latest').
-         */
-        @JsonIgnoreProperties(ignoreUnknown = true)
-        private record OllamaModel(String name) {
-        }
-
-        /**
-         * Получает список всех доступных (загруженных) моделей из Ollama.
-         * <p> Результат кэшируется в кэше с именем 'ollama_available_models'.
-         * Кэш является синхронизированным, чтобы предотвратить множественные
-         * одновременные запросы к Ollama API при старте или при истечении TTL.
-         *
-         * @return Множество имен доступных моделей без тега ':latest'.
-         */
-        @Cacheable(value = "ollama_available_models", sync = true)
-        public Set<String> getAvailableModels() {
-            log.info("Обновление списка доступных моделей из Ollama...");
-            try {
-                WebClient client = webClientBuilder.baseUrl(this.ollamaBaseUrl).build();
-                OllamaTagResponse response = client.get()
-                        .uri("/api/tags")
-                        .retrieve()
-                        .bodyToMono(OllamaTagResponse.class)
-                        .block();
-
-                if (response == null || response.models() == null) {
-                    throw new IllegalStateException("Ollama API вернул пустой ответ.");
-                }
-
-                return response.models().stream()
-                        .map(OllamaModel::name)
-                        .map(name -> name.replace(":latest", ""))
-                        .collect(Collectors.toSet());
-            } catch (Exception e) {
-                log.error("Не удалось получить список моделей из Ollama API. Проверьте, что сервис Ollama запущен и доступен по адресу '{}'.", this.ollamaBaseUrl, e);
-                return Collections.emptySet();
-            }
-        }
     }
 
     /**

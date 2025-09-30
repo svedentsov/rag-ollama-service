@@ -1,7 +1,7 @@
 .messageWrapper {
     display: flex;
     margin-bottom: 1rem;
-    max-width: 85%;
+    max-width: 90%;
 }
 
 .user {
@@ -10,7 +10,22 @@
 }
 
 .assistant {
+    justify-content: flex-start;
     margin-right: auto;
+}
+
+.contentWrapper {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.user .contentWrapper {
+    align-items: flex-end;
+}
+
+.assistant .contentWrapper {
+    align-items: flex-start;
 }
 
 .bubble {
@@ -18,36 +33,34 @@
     border-radius: var(--radius);
     word-wrap: break-word;
     overflow-wrap: break-word;
-    line-height: 1.6;
-    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    line-height: var(--line-height-normal);
 }
 
-.bubble > :first-child {
-    margin-top: 0;
-}
-.bubble > :last-child {
-    margin-bottom: 0;
-}
+.bubble > :first-child { margin-top: 0; }
+.bubble > :last-child { margin-bottom: 0; }
 
 .userBubble {
     background-color: hsl(var(--primary));
     color: hsl(var(--primary-foreground));
-    border-radius: 1rem 1rem 0.25rem 1rem;
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    border-radius: 1rem 0.25rem 1rem 1rem;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    transition: box-shadow 0.2s ease-in-out;
 }
 
 .assistantBubble {
-    background-color: transparent;
+    background-color: hsl(var(--background));
     color: hsl(var(--secondary-foreground));
     border: none;
+    border-radius: 0.25rem 1rem 1rem 1rem;
     box-shadow: none;
-    border-radius: 1rem 1rem 1rem 0.25rem;
+    padding: 0;
 }
 
 .isError {
     background-color: hsla(var(--destructive), 0.1);
     border: 1px solid hsl(var(--destructive));
     color: hsl(var(--destructive));
+    padding: 0.75rem 1rem;
 }
 
 .thinkingBubble {
@@ -105,65 +118,18 @@
   50%, 100% { background-color: hsl(var(--muted-foreground)); opacity: 0.2; }
 }
 
-.bubble :global(p) {
-    margin-top: 0;
-    margin-bottom: 1rem;
-}
-
-.bubble :global(ul),
-.bubble :global(ol) {
-    margin-top: 0;
-    margin-bottom: 1rem;
-    padding-left: 2rem;
-}
-
-.bubble :global(li) {
-    margin-bottom: 0.25rem;
-}
+.bubble :global(p) { margin-top: 0; margin-bottom: 1rem; }
+.bubble :global(ul), .bubble :global(ol) { margin-top: 0; margin-bottom: 1rem; padding-left: 2rem; }
+.bubble :global(li) { margin-bottom: 0.25rem; }
 
 .inlineCode {
     background-color: hsl(var(--muted));
-    padding: 0.1em 0.3em;
+    padding: 0.2em 0.4em;
+    margin: 0;
     border-radius: 0.25rem;
-    font-size: 0.9em;
-}
-
-.codeBlockWrapper {
-    margin: 0.75rem 0;
-    position: relative;
-    border-radius: var(--radius);
     border: 1px solid hsl(var(--border));
-    overflow: hidden;
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-}
-
-.codeHeader {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.5rem 0.75rem;
-    background-color: hsl(var(--muted));
-    font-size: 0.8rem;
-    color: hsl(var(--muted-foreground));
-    border-bottom: 1px solid hsl(var(--border));
-}
-.btnCopy {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: 0.75rem;
-    padding: 0.25rem 0.5rem;
-    opacity: 0.7;
-    transition: opacity 0.2s;
-    background-color: transparent;
-    border: 1px solid hsl(var(--border));
-    color: hsl(var(--muted-foreground));
-    border-radius: 0.25rem;
-    cursor: pointer;
-}
-.btnCopy:hover {
-    opacity: 1;
-    background-color: hsl(var(--accent));
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family-mono);
 }
 
 .markdownTable {
@@ -172,17 +138,85 @@
     color: hsl(var(--foreground));
     border-collapse: collapse;
 }
-.markdownTable th, .markdownTable td {
-    padding: .5rem;
-    border: 1px solid hsl(var(--border));
-}
-.markdownTable thead th {
-    font-weight: 600;
-    background-color: hsl(var(--muted));
-}
-.markdownTable tbody tr:nth-of-type(odd) {
-    background-color: hsl(var(--accent));
+.markdownTable th, .markdownTable td { padding: .5rem; border: 1px solid hsl(var(--border)); }
+.markdownTable thead th { font-weight: 600; background-color: hsl(var(--muted)); }
+.markdownTable tbody tr:nth-of-type(odd) { background-color: hsl(var(--accent)); }
+
+.messageActions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
 }
 
-.paragraph {
+.messageWrapper:hover .messageActions {
+    opacity: 1;
+}
+
+.actionButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem;
+    border-radius: 50%;
+    border: none;
+    background-color: transparent;
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.actionButton:hover {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+}
+
+.editContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.editTextarea {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid hsl(var(--ring));
+    background-color: hsl(var(--background));
+    resize: none;
+    min-height: 44px;
+    max-height: 20rem;
+    overflow-y: auto;
+    box-sizing: border-box;
+    color: hsl(var(--foreground));
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-base);
+}
+
+.editActions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+.saveButton, .cancelButton {
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius);
+    border: 1px solid hsl(var(--border));
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+}
+
+.saveButton {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+}
+
+.cancelButton {
+    background-color: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
 }

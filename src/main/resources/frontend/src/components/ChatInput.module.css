@@ -19,7 +19,9 @@
     background-color: hsl(var(--secondary));
     resize: none;
     box-shadow: none !important;
-    font-size: 1rem;
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-snug);
     min-height: 44px;
     max-height: 10.2rem;
     overflow-y: auto;

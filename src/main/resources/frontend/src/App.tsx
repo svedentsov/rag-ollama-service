@@ -1,320 +1,126 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
+import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { v4 as uuidv4 } from 'uuid';
 import { ChatMessage } from './components/ChatMessage';
 import { ChatInput } from './components/ChatInput';
-import { Message, UniversalStreamResponse } from './types';
-import { fetchMessages } from './api';
-import { Copy } from 'lucide-react';
-import { ScrollToBottomButton } from "./components/ScrollToBottomButton";
+import { Message } from './types';
+import { useChatMessages } from './hooks/useChatMessages';
+import { useChatStream } from './hooks/useChatStream';
+import { useScrollManager } from './hooks/useScrollManager';
 import { StatusIndicator } from "./components/StatusIndicator";
 import styles from './App.module.css';
 
-interface MessageContextMenuState { show: boolean; x: number; y: number; message: Message | null; }
-interface AppProps { sessionId: string; }
+interface AppProps {
+  sessionId: string;
+}
 
-const SCROLL_THRESHOLD = 100;
-
+/**
+ * Главный компонент-контейнер для чата.
+ * Отвечает за оркестрацию дочерних компонентов и управление потоками данных,
+ * делегируя сложную логику специализированным хукам.
+ * @param {AppProps} props - Пропсы компонента.
+ */
 const App: React.FC<AppProps> = ({ sessionId }) => {
-    const [messages, setMessages] = useState<Message[]>([]);
-    const [contextMenu, setContextMenu] = useState<MessageContextMenuState>({ show: false, x: 0, y: 0, message: null });
-    const lastRightClickedMessageId = useRef<string | null>(null);
+  const queryClient = useQueryClient();
+  const { messages, isLoading: isLoadingHistory, error: historyError, updateMessage, deleteMessage } = useChatMessages(sessionId);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [currentStatusText, setCurrentStatusText] = useState<string | null>(null);
 
-    const messagesEndRef = useRef<HTMLDivElement>(null);
-    const abortControllerRef = useRef<AbortController | null>(null);
-    const lastRequestId = useRef<string | null>(null);
-    const queryClient = useQueryClient();
+  const { containerRef, messagesEndRef, showScrollButton, scrollToBottom } = useScrollManager([messages]);
 
-    const chatContainerRef = useRef<HTMLDivElement>(null);
-    const [isAtBottom, setIsAtBottom] = useState(true);
-    const textBufferRef = useRef<string>('');
-    const animationFrameRef = useRef<number | null>(null);
-    const isInitialLoad = useRef(true);
+  const { mutate: streamRequest, isPending: isThinking, stop } = useChatStream({
+    sessionId,
+    queryClient,
+    onStreamEnd: () => {
+      setCurrentStatusText(null);
+      // Финальная сверка с сервером для консистентности
+      queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['chatSessions'] });
+    },
+  });
 
-    const [isThinking, setIsThinking] = useState(false);
-    const [statusText, setStatusText] = useState<string | null>(null);
-    const [elapsedTime, setElapsedTime] = useState(0);
-    const [isStreaming, setIsStreaming] = useState(false);
+  // Таймер для индикатора загрузки
+  useEffect(() => {
+    let timerInterval: number | undefined;
+    if (isThinking) {
+      setCurrentStatusText("Думаю..."); // Начальный статус
+      timerInterval = window.setInterval(() => {
+        setElapsedTime(prev => prev + 1);
+      }, 1000);
+    } else {
+      clearInterval(timerInterval);
+      setElapsedTime(0);
+    }
+    return () => clearInterval(timerInterval);
+  }, [isThinking]);
 
-    const { data: history, isLoading: isLoadingHistory, error: historyError } = useQuery({
-        queryKey: ['messages', sessionId],
-        queryFn: () => fetchMessages(sessionId),
-        enabled: !!sessionId,
-    });
+  const handleSendMessage = (inputText: string) => {
+    if (!inputText.trim()) return;
 
-    useEffect(() => {
-        isInitialLoad.current = true;
-    }, [sessionId]);
+    const userMessage: Message = { id: uuidv4(), type: 'user', text: inputText, sources: [] };
+    const assistantMessage: Message = { id: uuidv4(), type: 'assistant', text: '', sources: [], parentId: userMessage.id, isStreaming: true };
 
-    useEffect(() => {
-        if (history) {
-            setMessages(history);
-            if (isInitialLoad.current) {
-                setTimeout(() => {
-                    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
-                    setIsAtBottom(true);
-                    isInitialLoad.current = false;
-                }, 0);
-            }
-        }
-    }, [history]);
+    // Оптимистичное обновление кэша для мгновенного отображения
+    const queryKey = ['messages', sessionId];
+    queryClient.setQueryData<Message[]>(queryKey, (oldData = []) => [...oldData, userMessage, assistantMessage]);
 
-    useEffect(() => {
-        const handleClick = () => {
-            const selection = window.getSelection();
-            if (selection && !selection.isCollapsed) {
-                return;
-            }
-            setContextMenu(prev => ({ ...prev, show: false }));
-            lastRightClickedMessageId.current = null;
-        };
-        document.addEventListener('click', handleClick);
-        return () => document.removeEventListener('click', handleClick);
-    }, []);
+    streamRequest({ query: inputText, assistantMessageId: assistantMessage.id });
+  };
 
-    useEffect(() => {
-        if (!isInitialLoad.current && isAtBottom) {
-            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }
-    }, [messages, isStreaming, isThinking, isAtBottom]);
+  const handleRegenerate = (assistantMessage: Message) => {
+    if (!assistantMessage.parentId) return;
+    const parentMessage = messages.find(m => m.id === assistantMessage.parentId);
+    if (parentMessage) {
+      // Удаляем старый ответ ассистента и создаем новый
+      const newAssistantMessage: Message = { id: uuidv4(), type: 'assistant', text: '', sources: [], parentId: parentMessage.id, isStreaming: true };
 
+      const queryKey = ['messages', sessionId];
+      queryClient.setQueryData<Message[]>(queryKey, (oldData = []) =>
+        [...oldData.filter(m => m.id !== assistantMessage.id), newAssistantMessage]
+      );
+      streamRequest({ query: parentMessage.text, assistantMessageId: newAssistantMessage.id });
+    }
+  };
 
-    useEffect(() => {
-        const container = chatContainerRef.current;
-        if (!container) return;
+  const lastUserMessage = [...messages].reverse().find(m => m.type === 'user');
 
-        const handleScroll = () => {
-            const { scrollHeight, scrollTop, clientHeight } = container;
-            const atBottom = scrollHeight - scrollTop - clientHeight < SCROLL_THRESHOLD;
-            setIsAtBottom(atBottom);
-        };
+  return (
+    <div className={styles.chatContainer}>
+      <div className={styles.chatMessageContainer} ref={containerRef}>
+        <div className={styles.messagesWrapper}>
+          {isLoadingHistory && <div className={styles.centered}><div className={styles.spinner} role="status" aria-label="Загрузка истории"></div></div>}
+          {historyError && <div className={styles.errorAlert}>Не удалось загрузить историю: {(historyError as Error).message}</div>}
 
-        container.addEventListener('scroll', handleScroll);
-        handleScroll();
+          {messages.map((msg, index) => (
+            <ChatMessage
+              key={msg.id}
+              message={msg}
+              isLastMessage={index === messages.length - 1}
+              isLastUserMessage={msg.type === 'user' && msg.id === lastUserMessage?.id}
+              onRegenerate={() => handleRegenerate(msg)}
+              onUpdate={(messageId, newContent) => updateMessage({ messageId, newContent })}
+              onDelete={deleteMessage}
+            />
+          ))}
 
-        return () => container.removeEventListener('scroll', handleScroll);
-    }, [chatContainerRef]);
-
-    useEffect(() => {
-        let timerInterval: number | undefined;
-        if (isThinking) {
-            timerInterval = window.setInterval(() => {
-                setElapsedTime(prev => prev + 1);
-            }, 1000);
-        } else {
-            clearInterval(timerInterval);
-            setElapsedTime(0);
-        }
-        return () => clearInterval(timerInterval);
-    }, [isThinking]);
-
-    useEffect(() => {
-        const typeCharacter = () => {
-            if (textBufferRef.current.length > 0) {
-                const bufferSize = textBufferRef.current.length;
-                const charsToType = Math.max(1, Math.min(Math.floor(bufferSize * 0.1), 10));
-
-                const chunk = textBufferRef.current.substring(0, charsToType);
-                textBufferRef.current = textBufferRef.current.substring(charsToType);
-
-                setMessages(prev => {
-                    if (prev.length === 0 || prev[prev.length - 1].type !== 'assistant') {
-                        return prev;
-                    }
-                    const newMessages = [...prev];
-                    const lastMessage = newMessages[newMessages.length - 1];
-                    lastMessage.text += chunk;
-                    return newMessages;
-                });
-            }
-
-            if (isStreaming || textBufferRef.current.length > 0) {
-                const interval = textBufferRef.current.length > 50 ? 10 : 30;
-                setTimeout(() => {
-                    animationFrameRef.current = requestAnimationFrame(typeCharacter);
-                }, interval);
-            }
-        };
-
-        if (isStreaming) {
-            animationFrameRef.current = requestAnimationFrame(typeCharacter);
-        } else {
-             if (textBufferRef.current.length > 0) {
-                 setMessages(prev => {
-                    if (prev.length === 0 || prev[prev.length - 1].type !== 'assistant') return prev;
-                    const newMessages = [...prev];
-                    const lastMessage = newMessages[newMessages.length - 1];
-                    lastMessage.text += textBufferRef.current;
-                    textBufferRef.current = '';
-                    return newMessages;
-                });
-            }
-        }
-
-        return () => {
-            if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-            }
-        };
-    }, [isStreaming]);
-
-    const handleStopGenerating = () => {
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-        }
-    };
-
-    const handleSendMessage = async (inputText: string) => {
-        if (!inputText.trim() || isStreaming || isThinking) return;
-
-        scrollToBottom();
-        const userMessage: Message = { id: uuidv4(), type: 'user', text: inputText };
-        setMessages(prev => [...prev, userMessage]);
-
-        setIsThinking(true);
-        setStatusText("Подготовка ответа...");
-        textBufferRef.current = '';
-        abortControllerRef.current = new AbortController();
-
-        try {
-            const response = await fetch('/api/v1/orchestrator/ask-stream', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: inputText, sessionId }),
-                signal: abortControllerRef.current.signal,
-            });
-
-            if (!response.body) throw new Error("Stream body is missing");
-            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-
-            const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-            let buffer = '';
-            let isFirstContentChunk = true;
-            const assistantMessageId = uuidv4();
-
-            while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
-                buffer += value;
-                const lines = buffer.split('\n\n');
-                buffer = lines.pop() || '';
-
-                for (const line of lines) {
-                    if (line.startsWith('data:')) {
-                        const jsonData = line.substring(5).trim();
-                        if (!jsonData) continue;
-
-                        try {
-                            const eventData = JSON.parse(jsonData) as UniversalStreamResponse;
-
-                            if (eventData.type === 'status_update') {
-                                setStatusText(eventData.text);
-                            } else if (eventData.type === 'content') {
-                                if (isFirstContentChunk) {
-                                    setIsThinking(false);
-                                    setStatusText(null);
-                                    setIsStreaming(true);
-                                    setMessages(prev => [...prev, { id: assistantMessageId, type: 'assistant', text: '', sources: [] }]);
-                                    isFirstContentChunk = false;
-                                }
-                                textBufferRef.current += eventData.text;
-                            } else {
-                                setMessages(currentMessages => {
-                                    const newMessages = [...currentMessages];
-                                    let lastMessage = newMessages[newMessages.length - 1];
-                                    if (!lastMessage || lastMessage.type !== 'assistant') return currentMessages;
-
-                                    if (eventData.type === 'task_started') lastRequestId.current = eventData.taskId;
-                                    else if (eventData.type === 'sources') lastMessage.sources = [...(lastMessage.sources || []), ...eventData.sources];
-                                    else if (eventData.type === 'error') lastMessage.error = eventData.message;
-
-                                    return newMessages;
-                                });
-                            }
-                        } catch (e) { console.error('Failed to parse SSE data:', jsonData, e); }
-                    }
-                }
-            }
-        } catch (error: any) {
-            if (error.name === 'AbortError') {
-                console.log('Stream stopped by user.');
-            } else {
-                setMessages(prev => [...prev, { id: uuidv4(), type: 'assistant', text: '', error: error.message || "Произошла неизвестная ошибка." }]);
-            }
-        } finally {
-            setIsThinking(false);
-            setIsStreaming(false);
-            setStatusText(null);
-            abortControllerRef.current = null;
-            queryClient.invalidateQueries({ queryKey: ['chatSessions'] });
-        }
-    };
-
-    const handleShowContextMenu = (e: React.MouseEvent, message: Message) => {
-        if (lastRightClickedMessageId.current === message.id) {
-            lastRightClickedMessageId.current = null;
-            return;
-        }
-        e.preventDefault();
-        e.stopPropagation();
-        setContextMenu({ show: true, x: e.clientX, y: e.clientY, message });
-        lastRightClickedMessageId.current = message.id;
-    };
-
-    const handleCopySelectedMessage = () => {
-        if (contextMenu.message) {
-            navigator.clipboard.writeText(contextMenu.message.text)
-                .then(() => toast.success('Сообщение скопировано!'))
-                .catch(() => toast.error('Не удалось скопировать.'));
-        }
-    };
-
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-        setIsAtBottom(true);
-    };
-
-    return (
-        <>
-            <div className={styles.chatContainer}>
-                <div className={styles.chatMessageContainer} ref={chatContainerRef}>
-                    <div className={styles.messagesWrapper}>
-                        {isLoadingHistory && <div className={styles.centered}><div className={styles.spinner}></div></div>}
-                        {historyError && <div className={styles.errorAlert}>Не удалось загрузить историю сообщений.</div>}
-                        {!isLoadingHistory && messages.map((msg) => (
-                            <ChatMessage
-                                key={msg.id}
-                                message={msg}
-                                onContextMenu={(e) => handleShowContextMenu(e, msg)}
-                            />
-                        ))}
-
-                        {isThinking && statusText && (
-                            <StatusIndicator statusText={statusText} elapsedTime={elapsedTime} />
-                        )}
-
-                        <div ref={messagesEndRef} />
-                    </div>
-                </div>
-                <ChatInput
-                    onSendMessage={handleSendMessage}
-                    onStopGenerating={handleStopGenerating}
-                    isLoading={isStreaming || isThinking}
-                    showScrollButton={!isAtBottom}
-                    onScrollToBottom={scrollToBottom}
-                />
-            </div>
-
-            {contextMenu.show && contextMenu.message && (
-                <div className={styles.messageContextMenu} style={{ top: contextMenu.y, left: contextMenu.x }}>
-                    <button className={styles.contextMenuItem} onClick={handleCopySelectedMessage}>
-                        <Copy size={14} /> Копировать
-                    </button>
-                </div>
-            )}
-        </>
-    );
+          {isThinking && (
+            <StatusIndicator
+              statusText={currentStatusText || "Думаю..."}
+              elapsedTime={elapsedTime}
+            />
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
+      <ChatInput
+        onSendMessage={handleSendMessage}
+        onStopGenerating={stop}
+        isLoading={isThinking}
+        showScrollButton={showScrollButton}
+        onScrollToBottom={() => scrollToBottom('smooth')}
+      />
+    </div>
+  );
 };
 
 export default App;

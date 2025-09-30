@@ -6,7 +6,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -21,6 +20,9 @@ public class TaskStateService {
     // Связь sessionId -> taskId
     private final Cache<UUID, UUID> sessionToTaskCache;
 
+    /**
+     * Конструктор, инициализирующий кэш для хранения связей.
+     */
     public TaskStateService() {
         this.sessionToTaskCache = CacheBuilder.newBuilder()
                 .expireAfterWrite(Duration.ofMinutes(15)) // Задачи не должны висеть вечно
@@ -29,8 +31,9 @@ public class TaskStateService {
 
     /**
      * Регистрирует, что для данной сессии запущена задача.
+     *
      * @param sessionId ID сессии
-     * @param taskId ID задачи
+     * @param taskId    ID задачи
      */
     public void registerSessionTask(UUID sessionId, UUID taskId) {
         sessionToTaskCache.put(sessionId, taskId);
@@ -39,6 +42,7 @@ public class TaskStateService {
 
     /**
      * Удаляет связь сессии с задачей (когда задача завершена).
+     *
      * @param sessionId ID сессии
      */
     public void clearSessionTask(UUID sessionId) {
@@ -48,6 +52,7 @@ public class TaskStateService {
 
     /**
      * Находит активную задачу для сессии.
+     *
      * @param sessionId ID сессии
      * @return Optional с ID задачи, если она есть
      */

@@ -35,13 +35,16 @@
     width: 100%;
     padding: 0.5rem 0.75rem 0.5rem 2.25rem;
     border-radius: var(--radius);
-    border: none;
-    background-color: transparent;
-    font-size: 0.875rem;
+    border: 1px solid hsl(var(--border));
+    background-color: hsl(var(--secondary));
+    color: hsl(var(--foreground));
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-sm);
 }
 
 .searchInput:focus {
     outline: none;
+    border-color: hsl(var(--ring));
 }
 
 .searchInput::placeholder {
@@ -73,11 +76,12 @@
     border-radius: var(--radius);
     cursor: pointer;
     text-align: center;
-    font-weight: 500;
-    font-size: 0.875rem;
-    transition: background-color 0.15s ease-in-out;
     white-space: nowrap;
     overflow: hidden;
+    transition: background-color 0.15s ease-in-out;
+    font-family: var(--font-family-sans);
+    font-weight: var(--font-weight-medium);
+    font-size: var(--font-size-sm);
 }
 
 .newChatButton:hover {
@@ -122,14 +126,18 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    width: 100%;
     padding: 0.5rem 0.75rem;
     border-radius: var(--radius);
     color: hsl(var(--foreground));
-    border: 1px solid transparent;
+    background: none;
+    border: none;
+    cursor: pointer;
     text-decoration: none;
     white-space: nowrap;
     overflow: hidden;
-    font-size: 0.875rem;
+    text-align: left;
+    font-size: var(--font-size-sm);
 }
 
 .navLink:hover {
@@ -140,27 +148,28 @@
 .navLink.active {
     background-color: hsl(var(--accent));
     color: hsl(var(--accent-foreground));
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
 }
 
 .renameForm { width: 100%; }
 .renameInput {
     width: 100%;
-    font-size: 0.875rem;
     padding: 0.25rem 0.5rem;
     border-radius: 0.25rem;
     border: 1px solid hsl(var(--ring));
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family-sans);
 }
 
 .chatTitle {
-    font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     flex-grow: 1;
     min-width: 0;
+    font-weight: var(--font-weight-medium);
 }
 
 .contextMenu {
@@ -173,11 +182,11 @@
     padding: 0.25rem;
     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 }
+
 .contextMenuItem {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.875rem;
     padding: 0.5rem;
     border-radius: 0.25rem;
     cursor: pointer;
@@ -186,6 +195,8 @@
     width: 100%;
     text-align: left;
     color: hsl(var(--popover-foreground));
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family-sans);
 }
 .contextMenuItem:hover { background-color: hsl(var(--accent)); }
 .contextMenuItem.danger { color: hsl(var(--destructive)); }

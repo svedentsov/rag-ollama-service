@@ -1,6 +1,7 @@
 package com.example.ragollama.chat.mappers;
 
 import com.example.ragollama.chat.domain.model.ChatMessage;
+import com.example.ragollama.chat.domain.model.ChatSession;
 import com.example.ragollama.chat.domain.model.MessageRole;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -8,65 +9,47 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Component;
 
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Компонент-маппер, отвечающий за преобразование данных между доменной
- * моделью истории чата и DTO-объектами библиотеки Spring AI.
- * <p>
- * Изоляция этой логики в отдельном классе повышает тестируемость,
- * соответствует Принципу единственной ответственности и упрощает
- * поддержку кода.
+ * Компонент-маппер для преобразования между доменными моделями чата и
+ * DTO или внешними форматами (например, Spring AI).
  */
 @Component
 public class ChatHistoryMapper {
 
     /**
-     * Преобразует список доменных сущностей {@link ChatMessage} в список
-     * DTO {@link Message} для Spring AI.
-     * <p>
-     * Метод также выполняет реверсирование списка, чтобы сообщения
-     * были упорядочены в правильном хронологическом порядке (от старых к новым)
-     * для корректной передачи в LLM.
+     * Преобразует список сущностей {@link ChatMessage} из БД в список
+     * объектов {@link Message} для Spring AI.
      *
-     * @param recentMessages Список сущностей из БД, обычно отсортированный
-     *                       по убыванию даты создания (от новых к старым).
-     * @return Хронологически упорядоченный список {@link Message}.
+     * @param recentMessages Список сущностей, отсортированный по возрастанию времени.
+     * @return Список сообщений для передачи в LLM.
      */
     public List<Message> toSpringAiMessages(List<ChatMessage> recentMessages) {
         if (recentMessages == null || recentMessages.isEmpty()) {
             return Collections.emptyList();
         }
-
-        List<Message> springAiMessages = recentMessages.stream()
+        return recentMessages.stream()
                 .map(this::toSpringAiMessage)
-                .collect(Collectors.toCollection(ArrayList::new));
-
-        Collections.reverse(springAiMessages);
-        return springAiMessages;
+                .collect(Collectors.toList());
     }
 
     /**
-     * Создает новую, не сохраненную в БД, сущность {@link ChatMessage}
-     * из "сырых" данных.
-     * <p>
-     * Этот метод инкапсулирует логику создания доменного объекта,
-     * освобождая от этой ответственности сервисный слой. Он использует
-     * {@link OffsetDateTime#now()} для обеспечения корректности
-     * временных меток с учетом часовых поясов.
+     * Фабричный метод для создания новой, не сохраненной сущности {@link ChatMessage}.
      *
-     * @param sessionId ID сессии чата.
-     * @param role      Роль отправителя сообщения.
-     * @param content   Текст сообщения.
-     * @return Готовый к сохранению объект {@link ChatMessage}.
+     * @param session  Родительская сессия.
+     * @param role     Роль отправителя.
+     * @param content  Текст сообщения.
+     * @param parentId ID родительского сообщения.
+     * @return Новая сущность {@link ChatMessage}.
      */
-    public ChatMessage toChatMessageEntity(UUID sessionId, MessageRole role, String content) {
+    public ChatMessage toChatMessageEntity(ChatSession session, MessageRole role, String content, UUID parentId) {
         return ChatMessage.builder()
-                .sessionId(sessionId)
+                .session(session)
+                .parentId(parentId)
                 .role(role)
                 .content(content)
                 .createdAt(OffsetDateTime.now())

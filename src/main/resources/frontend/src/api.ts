@@ -29,10 +29,10 @@ export const updateChatName = ({ sessionId, newName }: { sessionId: string; newN
 
 export const fetchMessages = (sessionId: string): Promise<Message[]> =>
     fetch(`${API_BASE_URL}/chats/${sessionId}/messages`)
-        .then(handleResponse<{ role: 'USER' | 'ASSISTANT', content: string }[]>)
+        .then(handleResponse<{ id: string, role: 'USER' | 'ASSISTANT', content: string }[]>)
         .then(messages =>
-            messages.map((msg, index) => ({
-                id: `${sessionId}-${index}`, // Генерируем стабильный ID для истории
+            messages.map(msg => ({
+                id: msg.id,
                 type: msg.role === 'USER' ? 'user' : 'assistant',
                 text: msg.content,
                 sources: [],
@@ -42,12 +42,16 @@ export const fetchMessages = (sessionId: string): Promise<Message[]> =>
 export const deleteChatSession = (sessionId: string): Promise<void> =>
     fetch(`${API_BASE_URL}/chats/${sessionId}`, { method: 'DELETE' }).then(handleResponse);
 
-/**
- * Отправляет оценку (фидбэк) для конкретного RAG-ответа.
- * @param requestId - ID запроса, на который дается оценка.
- * @param isHelpful - Была ли информация полезной.
- * @returns Промис, который разрешается после успешной отправки.
- */
+export const updateMessage = ({ messageId, newContent }: { messageId: string; newContent: string }): Promise<void> =>
+    fetch(`${API_BASE_URL}/messages/${messageId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newContent }),
+    }).then(handleResponse);
+
+export const deleteMessage = (messageId: string): Promise<void> =>
+    fetch(`${API_BASE_URL}/messages/${messageId}`, { method: 'DELETE' }).then(handleResponse);
+
 export const sendFeedback = ({ requestId, isHelpful }: { requestId: string; isHelpful: boolean }): Promise<void> =>
     fetch(`${API_BASE_URL}/feedback`, {
         method: 'POST',

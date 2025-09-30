@@ -70,7 +70,8 @@ public class ContextAssemblerService {
         final int perDocumentOverheadTokens = 20;
 
         for (Document doc : arrangedDocs) {
-            String textToUse = (String) doc.getMetadata().getOrDefault("summary", doc.getText());
+            // Используем полный текст родительского чанка для сборки контекста
+            String textToUse = (String) doc.getMetadata().getOrDefault("parentChunkText", doc.getText());
             int documentTokens = tokenizationService.countTokens(textToUse);
             int requiredTokens = documentTokens + perDocumentOverheadTokens;
 

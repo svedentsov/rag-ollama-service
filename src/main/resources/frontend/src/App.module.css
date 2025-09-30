@@ -70,41 +70,6 @@
     color: hsl(var(--muted-foreground));
 }
 
-.messageContextMenu {
-    position: fixed;
-    z-index: 1056;
-    width: 180px;
-    background-color: hsl(var(--popover));
-    border: 1px solid hsl(var(--border));
-    border-radius: var(--radius);
-    padding: 0.25rem;
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-}
-
-.contextMenuItem {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.875rem;
-    padding: 0.5rem;
-    border-radius: 0.25rem;
-    cursor: pointer;
-    background-color: transparent;
-    border: none;
-    width: 100%;
-    text-align: left;
-}
-
-.contextMenuItem:hover {
-    background-color: hsl(var(--accent));
-}
-
-.contextMenuItem svg {
-    width: 14px;
-    height: 14px;
-    color: hsl(var(--muted-foreground));
-}
-
 .centered {
     display: flex;
     justify-content: center;

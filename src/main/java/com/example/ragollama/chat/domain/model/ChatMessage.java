@@ -8,59 +8,57 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * Сущность JPA, представляющая одно сообщение в истории чата.
- * <p> Каждая запись в таблице {@code chat_messages} соответствует одному
- * сообщению от пользователя или ассистента в рамках определенной сессии.
- * Эта сущность является ключевым элементом для обеспечения stateful-взаимодействия.
+ * Сущность JPA, представляющая одно сообщение в диалоге.
+ * <p>
+ * В этой версии поле `sessionId` заменено на полноценную связь `@ManyToOne`
+ * с сущностью `ChatSession`, что обеспечивает целостность данных на уровне ORM.
  */
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@ToString(exclude = "content")
+@ToString(exclude = {"content", "session"})
 @EqualsAndHashCode(of = "id")
 @Entity
 @Table(name = "chat_messages")
 public class ChatMessage {
 
-    /**
-     * Уникальный идентификатор сообщения. Является основой для equals и hashCode.
-     */
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     /**
-     * Идентификатор сессии чата. Неизменяем после создания.
+     * Связь "многие-к-одному" с родительской сессией.
+     * `JoinColumn` указывает на колонку `session_id`, которая будет внешним ключом.
+     * `nullable = false` гарантирует, что сообщение не может существовать без сессии.
      */
-    @NotNull
-    @Column(name = "session_id", nullable = false, updatable = false)
-    private UUID sessionId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "session_id", nullable = false)
+    private ChatSession session;
 
-    /**
-     * Роль отправителя сообщения. Неизменяема после создания.
-     *
-     * @see MessageRole
-     */
+    @Column(name = "parent_id", updatable = false)
+    private UUID parentId;
+
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false, updatable = false)
     private MessageRole role;
 
-    /**
-     * Текстовое содержимое сообщения. Неизменяемо после создания.
-     */
     @NotNull
-    @Lob
-    @Column(name = "content", nullable = false, updatable = false, columnDefinition = "TEXT")
+    @Column(name = "content", columnDefinition = "TEXT")
     private String content;
 
-    /**
-     * Временная метка создания сообщения с информацией о часовом поясе.
-     * Неизменяема после создания.
-     */
     @NotNull
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
+
+    /**
+     * Вспомогательный метод для получения ID сессии без загрузки всей сущности.
+     *
+     * @return UUID сессии.
+     */
+    public UUID getSessionId() {
+        return (session != null) ? session.getSessionId() : null;
+    }
 }

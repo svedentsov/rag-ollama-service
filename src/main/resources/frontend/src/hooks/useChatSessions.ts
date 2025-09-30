@@ -1,48 +1,48 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as api from '../api';
 import { ChatSession } from '../types';
+import { useRouter } from './useRouter';
 
-const CHAT_SESSIONS_QUERY_KEY = 'chatSessions';
+const CHAT_SESSIONS_QUERY_KEY = ['chatSessions'];
 
 /**
  * Хук для управления сессиями чата.
  * Инкапсулирует логику запроса списка сессий, создания, переименования и удаления,
  * используя TanStack Query для управления кэшем и состоянием сервера.
+ * Использует `useRouter` для навигации без перезагрузки страницы.
  */
 export function useChatSessions() {
     const queryClient = useQueryClient();
+    const { navigate, sessionId: currentSessionId } = useRouter();
 
     /**
      * Запрос на получение списка всех сессий чата.
      */
-    const { data: sessions = [], isLoading } = useQuery<ChatSession[]>({
-        queryKey: [CHAT_SESSIONS_QUERY_KEY],
+    const { data: sessions = [], ...queryInfo } = useQuery<ChatSession[]>({
+        queryKey: CHAT_SESSIONS_QUERY_KEY,
         queryFn: api.fetchChatSessions,
     });
 
     /**
      * Мутация для создания новой сессии чата.
      */
-    const { mutate: createChat } = useMutation({
+    const createChatMutation = useMutation({
         mutationFn: api.createNewChat,
         onSuccess: (newChat) => {
-            // Перенаправляем пользователя на страницу нового чата
-            window.location.href = `/chat?sessionId=${newChat.sessionId}`;
-            // Инвалидируем кэш, чтобы список чатов обновился
-            queryClient.invalidateQueries({ queryKey: [CHAT_SESSIONS_QUERY_KEY] });
+            queryClient.invalidateQueries({ queryKey: CHAT_SESSIONS_QUERY_KEY });
+            navigate(newChat.sessionId);
         },
     });
 
     /**
      * Мутация для удаления сессии чата.
      */
-    const { mutate: deleteChat } = useMutation({
+    const deleteChatMutation = useMutation({
         mutationFn: api.deleteChatSession,
         onSuccess: (_, sessionIdToDelete) => {
-            queryClient.invalidateQueries({ queryKey: [CHAT_SESSIONS_QUERY_KEY] });
-            const params = new URLSearchParams(window.location.search);
-            if (params.get('sessionId') === sessionIdToDelete) {
-                window.location.href = '/';
+            queryClient.invalidateQueries({ queryKey: CHAT_SESSIONS_QUERY_KEY });
+            if (currentSessionId === sessionIdToDelete) {
+                navigate(null); // Переход на главную страницу, если удален текущий чат
             }
         },
     });
@@ -50,17 +50,15 @@ export function useChatSessions() {
     /**
      * Мутация для переименования сессии чата.
      */
-    const { mutate: renameChat } = useMutation({
+    const renameChatMutation = useMutation({
         mutationFn: api.updateChatName,
         onSuccess: (_, { sessionId, newName }) => {
-            // Оптимистично обновляем кэш для мгновенного отклика UI
-            queryClient.setQueryData<ChatSession[]>([CHAT_SESSIONS_QUERY_KEY], (oldData) =>
+            queryClient.setQueryData<ChatSession[]>(CHAT_SESSIONS_QUERY_KEY, (oldData) =>
                 oldData?.map(session =>
                     session.sessionId === sessionId ? { ...session, chatName: newName } : session
                 ) ?? []
             );
         },
-        // При ошибке откатываем изменения
         onError: (_, { sessionId }) => {
             queryClient.invalidateQueries({ queryKey: [CHAT_SESSIONS_QUERY_KEY, sessionId] });
         }
@@ -68,9 +66,9 @@ export function useChatSessions() {
 
     return {
         sessions,
-        isLoading,
-        createChat,
-        deleteChat,
-        renameChat,
+        ...queryInfo,
+        createChat: createChatMutation.mutateAsync,
+        deleteChat: deleteChatMutation.mutateAsync,
+        renameChat: renameChatMutation.mutateAsync,
     };
 }

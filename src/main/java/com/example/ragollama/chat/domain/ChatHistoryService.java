@@ -1,12 +1,14 @@
 package com.example.ragollama.chat.domain;
 
 import com.example.ragollama.chat.domain.model.ChatMessage;
+import com.example.ragollama.chat.domain.model.ChatSession;
 import com.example.ragollama.chat.domain.model.MessageRole;
 import com.example.ragollama.chat.mappers.ChatHistoryMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -17,11 +19,11 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Сервис для управления историей сообщений чата в асинхронном режиме.
- * <p> Этот сервис инкапсулирует всю логику взаимодействия с базой данных для
- * сохранения и извлечения истории диалогов. Все операции выполняются
- * асинхронно в выделенном пуле потоков и являются транзакционными,
- * что обеспечивает высокую производительность и консистентность данных.
+ * Сервис-адаптер для персистентности истории чата.
+ * <p>
+ * Отвечает за асинхронное сохранение и извлечение сообщений.
+ * Метод `saveMessageAsync` теперь принимает сущность `ChatSession` для
+ * корректной синхронизации двунаправленной связи.
  */
 @Service
 @RequiredArgsConstructor
@@ -30,46 +32,42 @@ public class ChatHistoryService {
 
     private final ChatMessageRepository chatMessageRepository;
     private final ChatHistoryMapper chatHistoryMapper;
+    private final ChatSessionRepository chatSessionRepository; // Добавлена зависимость
 
     /**
-     * Асинхронно и транзакционно сохраняет одно сообщение в базу данных.
-     * <p>Аннотация {@code @Async} указывает Spring выполнить этот метод в отдельном
-     * потоке из указанного пула. Аннотация {@code @Transactional} гарантирует,
-     * что выполнение будет обернуто в транзакцию.
+     * Асинхронно сохраняет одно сообщение в базу данных.
      *
-     * @param sessionId ID сессии чата.
-     * @param role      Роль отправителя сообщения.
-     * @param content   Текст сообщения.
-     * @return {@link CompletableFuture}, который завершается после успешного сохранения сообщения.
+     * @param session  Сущность сессии, к которой относится сообщение.
+     * @param role     Роль отправителя (USER или ASSISTANT).
+     * @param content  Текст сообщения.
+     * @param parentId Опциональный ID родительского сообщения.
+     * @return {@link CompletableFuture} с сохраненной сущностью {@link ChatMessage}.
      */
-    @Async("applicationTaskExecutor")
+    @Async("databaseTaskExecutor")
     @Transactional
-    public CompletableFuture<Void> saveMessageAsync(UUID sessionId, MessageRole role, String content) {
-        ChatMessage message = chatHistoryMapper.toChatMessageEntity(sessionId, role, content);
-        chatMessageRepository.save(message);
-        log.debug("Сохранено сообщение для сессии {}: Role={}", sessionId, role);
-        return CompletableFuture.completedFuture(null);
+    public CompletableFuture<ChatMessage> saveMessageAsync(ChatSession session, MessageRole role, String content, UUID parentId) {
+        // Важно: сначала получаем управляемую (managed) сущность сессии
+        ChatSession managedSession = chatSessionRepository.findById(session.getSessionId())
+                .orElseThrow(() -> new IllegalStateException("Session not found for saving message"));
+        ChatMessage message = chatHistoryMapper.toChatMessageEntity(managedSession, role, content, parentId);
+        // Используем helper-метод для синхронизации связи
+        managedSession.addMessage(message);
+        // Сохраняем сессию, `cascade` позаботится о сообщении
+        chatSessionRepository.save(managedSession);
+        log.debug("Сохранено сообщение для сессии {}: Role={}, ParentId={}", session.getSessionId(), role, parentId);
+        // Ищем сохраненное сообщение, чтобы вернуть его с ID
+        ChatMessage savedMessage = managedSession.getMessages().get(managedSession.getMessages().size() - 1);
+        return CompletableFuture.completedFuture(savedMessage);
     }
 
-    /**
-     * Асинхронно и транзакционно загружает N последних сообщений для указанной сессии.
-     * <p>  возвращается в хронологическом порядке (от старых к новым),
-     * что является корректным форматом для передачи в Spring AI Prompt.
-     * Операция выполняется в отдельном потоке с активной транзакцией.
-     *
-     * @param sessionId ID сессии чата.
-     * @param lastN     Количество последних сообщений для загрузки.
-     * @return {@link CompletableFuture}, который по завершении будет содержать
-     * список сообщений {@link Message}, готовый к использованию в промпте.
-     */
-    @Async("applicationTaskExecutor")
+    @Async("databaseTaskExecutor")
     @Transactional(readOnly = true)
     public CompletableFuture<List<Message>> getLastNMessagesAsync(UUID sessionId, int lastN) {
         if (lastN <= 0) {
             return CompletableFuture.completedFuture(List.of());
         }
-        PageRequest pageRequest = PageRequest.of(0, lastN, Sort.by(Sort.Direction.DESC, "createdAt"));
-        List<ChatMessage> recentMessages = chatMessageRepository.findBySessionId(sessionId, pageRequest);
+        Pageable pageable = PageRequest.of(0, lastN, Sort.by(Sort.Direction.DESC, "createdAt"));
+        List<ChatMessage> recentMessages = chatMessageRepository.findBySessionId(sessionId, pageable);
         log.debug("Загружено {} сообщений для сессии {}", recentMessages.size(), sessionId);
 
         List<Message> springAiMessages = chatHistoryMapper.toSpringAiMessages(recentMessages);

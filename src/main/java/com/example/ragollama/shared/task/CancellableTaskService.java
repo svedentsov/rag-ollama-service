@@ -16,18 +16,37 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * Сервис-реестр для управления жизненным циклом асинхронных, отменяемых задач.
+ * <p>
+ * Этот сервис является ядром системы управления фоновыми операциями. Он позволяет:
+ * <ul>
+ *     <li>Регистрировать долгоживущие задачи и получать на них уникальный ID.</li>
+ *     <li>Отменять выполнение задач по их ID.</li>
+ *     <li>Отслеживать статус выполнения.</li>
+ *     <li>Подписываться на поток событий (SSE) от задачи, в том числе повторно.</li>
+ * </ul>
+ * Для хранения активных задач используется {@link Cache} от Guava, который
+ * автоматически удаляет "зависшие" или завершенные задачи по истечении времени.
+ */
 @Slf4j
 @Service
 public class CancellableTaskService {
 
     private final Cache<UUID, TaskRecord> runningTasks;
 
+    /**
+     * Конструктор, инициализирующий кэш для хранения активных задач.
+     */
     public CancellableTaskService() {
         this.runningTasks = CacheBuilder.newBuilder()
                 .expireAfterWrite(Duration.ofMinutes(15))
                 .build();
     }
 
+    /**
+     * Внутренний record для хранения всей информации о задаче.
+     */
     @Getter
     private static class TaskRecord {
         private final CompletableFuture<?> future;
@@ -41,6 +60,13 @@ public class CancellableTaskService {
         }
     }
 
+    /**
+     * Регистрирует новую асинхронную задачу для отслеживания.
+     *
+     * @param taskFuture `CompletableFuture`, представляющий выполнение задачи.
+     * @param <T>        Тип результата задачи.
+     * @return Уникальный UUID, присвоенный задаче.
+     */
     public <T> UUID register(CompletableFuture<T> taskFuture) {
         final UUID taskId = UUID.randomUUID();
         final TaskRecord taskRecord = new TaskRecord(taskFuture);
@@ -68,11 +94,24 @@ public class CancellableTaskService {
         return taskId;
     }
 
+    /**
+     * Возвращает `Flux` событий для указанной задачи, позволяя клиентам
+     * подписываться на ее обновления.
+     *
+     * @param taskId ID задачи.
+     * @return {@link Optional} с {@link Flux} событий.
+     */
     public Optional<Flux<UniversalResponse>> getTaskStream(UUID taskId) {
         return Optional.ofNullable(runningTasks.getIfPresent(taskId))
                 .map(record -> record.getSink().asFlux());
     }
 
+    /**
+     * Отправляет событие в поток указанной задачи.
+     *
+     * @param taskId ID задачи.
+     * @param event  Событие для отправки.
+     */
     public void emitEvent(UUID taskId, UniversalResponse event) {
         Optional.ofNullable(runningTasks.getIfPresent(taskId))
                 .ifPresent(record -> {
@@ -81,6 +120,12 @@ public class CancellableTaskService {
                 });
     }
 
+    /**
+     * Отменяет выполнение задачи.
+     *
+     * @param taskId ID задачи для отмены.
+     * @return `true`, если запрос на отмену был успешно отправлен, иначе `false`.
+     */
     public boolean cancel(UUID taskId) {
         TaskRecord taskRecord = runningTasks.getIfPresent(taskId);
         if (taskRecord == null) {
@@ -99,11 +144,23 @@ public class CancellableTaskService {
         }
     }
 
+    /**
+     * Возвращает `CompletableFuture`, связанный с задачей.
+     *
+     * @param taskId ID задачи.
+     * @return {@link Optional} с {@link CompletableFuture}.
+     */
     public Optional<CompletableFuture<?>> getTask(UUID taskId) {
         return Optional.ofNullable(runningTasks.getIfPresent(taskId))
                 .map(TaskRecord::getFuture);
     }
 
+    /**
+     * Возвращает текущий статус задачи.
+     *
+     * @param taskId ID задачи.
+     * @return {@link Optional} с {@link TaskStatus}.
+     */
     public Optional<TaskStatus> getStatus(UUID taskId) {
         return Optional.ofNullable(runningTasks.getIfPresent(taskId))
                 .map(record -> record.getStatus().get());

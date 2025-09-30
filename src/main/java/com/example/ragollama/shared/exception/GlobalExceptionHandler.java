@@ -1,6 +1,8 @@
 package com.example.ragollama.shared.exception;
 
 import com.example.ragollama.shared.metrics.MetricService;
+import com.example.ragollama.shared.task.TaskNotFoundException;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -16,6 +18,13 @@ import java.util.stream.Collectors;
 /**
  * Глобальный обработчик исключений, реализующий централизованную и
  * унифицированную логику обработки ошибок для всего приложения.
+ * <p>
+ * Этот компонент перехватывает все исключения, возникающие в контроллерах,
+ * и преобразует их в стандартизированные ответы в формате {@link ProblemDetail}
+ * (RFC 7807), что соответствует лучшим практикам построения REST API.
+ * <p>
+ * Каждый обработчик также инкрементирует соответствующую метрику Micrometer,
+ * обеспечивая наблюдаемость за состоянием ошибок в системе.
  */
 @RestControllerAdvice
 @Slf4j
@@ -42,10 +51,11 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Обрабатывает исключения валидации DTO.
+     * Обрабатывает исключения валидации DTO (аннотации @Valid).
+     * Собирает все ошибки валидации в одно читаемое сообщение.
      *
-     * @param e Исключение.
-     * @return ProblemDetail с кодом 400.
+     * @param e Исключение MethodArgumentNotValidException.
+     * @return ProblemDetail с кодом 400 Bad Request.
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleMethodArgumentNotValid(MethodArgumentNotValidException e) {
@@ -58,6 +68,22 @@ public class GlobalExceptionHandler {
         problemDetail.setProperty("timestamp", Instant.now());
         metricService.incrementApiError(HttpStatus.BAD_REQUEST.value());
         log.warn("Ошибка валидации: {}", errors);
+        return problemDetail;
+    }
+
+    /**
+     * Обрабатывает наше кастомное исключение AccessDeniedException.
+     *
+     * @param e Исключение.
+     * @return ProblemDetail с кодом 403 Forbidden.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ProblemDetail handleAccessDeniedException(AccessDeniedException e) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, e.getMessage());
+        problemDetail.setTitle("Access Denied");
+        problemDetail.setProperty("timestamp", Instant.now());
+        metricService.incrementApiError(HttpStatus.FORBIDDEN.value());
+        log.warn("Отказано в доступе: {}", e.getMessage());
         return problemDetail;
     }
 
@@ -138,6 +164,38 @@ public class GlobalExceptionHandler {
         problemDetail.setProperty("timestamp", Instant.now());
         metricService.incrementApiError(HttpStatus.BAD_GATEWAY.value());
         log.error("Ошибка обработки: {}", e.getMessage(), e.getCause());
+        return problemDetail;
+    }
+
+    /**
+     * Обрабатывает стандартное исключение EntityNotFoundException.
+     *
+     * @param e Исключение.
+     * @return ProblemDetail с кодом 404.
+     */
+    @ExceptionHandler(EntityNotFoundException.class)
+    public ProblemDetail handleEntityNotFoundException(EntityNotFoundException e) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+        problemDetail.setTitle("Entity Not Found");
+        problemDetail.setProperty("timestamp", Instant.now());
+        metricService.incrementApiError(HttpStatus.NOT_FOUND.value());
+        log.warn("Запрошена несуществующая сущность: {}", e.getMessage());
+        return problemDetail;
+    }
+
+    /**
+     * Обрабатывает ошибку, когда асинхронная задача не найдена.
+     *
+     * @param e Исключение TaskNotFoundException.
+     * @return ProblemDetail с кодом 404.
+     */
+    @ExceptionHandler(TaskNotFoundException.class)
+    public ProblemDetail handleTaskNotFoundException(TaskNotFoundException e) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+        problemDetail.setTitle("Task Not Found");
+        problemDetail.setProperty("timestamp", Instant.now());
+        metricService.incrementApiError(HttpStatus.NOT_FOUND.value());
+        log.warn("Запрошена несуществующая задача: {}", e.getMessage());
         return problemDetail;
     }
 

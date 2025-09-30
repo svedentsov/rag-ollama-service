@@ -126,8 +126,6 @@ dependencies {
     testImplementation "org.awaitility:awaitility:${awaitilityVersion}"
 }
 
-
-// --- ИНТЕГРАЦИЯ СБОРКИ ФРОНТЕНДА (ЭТАЛОННАЯ РЕАЛИЗАЦИЯ) ---
 node {
     version = '20.11.1'
     npmVersion = '10.2.4'

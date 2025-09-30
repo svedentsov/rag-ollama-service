@@ -4,30 +4,31 @@ import com.example.ragollama.chat.domain.model.ChatMessage;
 import com.example.ragollama.shared.aop.ResilientDatabaseOperation;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Репозиторий для управления сущностями {@link ChatMessage}.
+ * <p>
+ * Кастомный метод `deleteBySessionId` был удален, так как каскадное удаление
+ * теперь управляется через JPA-связь в `ChatSession`.
+ */
 @Repository
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> {
 
     @ResilientDatabaseOperation
+    @Query("SELECT m FROM ChatMessage m WHERE m.session.sessionId = :sessionId")
     List<ChatMessage> findBySessionId(UUID sessionId, Pageable pageable);
 
-    @ResilientDatabaseOperation
     @Override
+    @ResilientDatabaseOperation
     <S extends ChatMessage> S save(S entity);
 
-    /**
-     * Удаляет все сообщения, принадлежащие одной сессии.
-     * Этот метод необходим для каскадного удаления: перед тем как удалить
-     * сессию чата, нужно удалить все связанные с ней сообщения.
-     *
-     * @param sessionId ID сессии, сообщения которой нужно удалить.
-     */
-    @Modifying
+    @Override
     @ResilientDatabaseOperation
-    void deleteBySessionId(UUID sessionId);
+    Optional<ChatMessage> findById(UUID uuid);
 }

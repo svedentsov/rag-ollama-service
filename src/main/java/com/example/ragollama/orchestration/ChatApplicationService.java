@@ -14,16 +14,18 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Сервис прикладного уровня (Application Service), оркестрирующий бизнес-логику чата.
- * <p> Эта версия была отрефакторена для следования принципам Clean Architecture и SRP.
- * Вся логика управления сессиями и историей была делегирована в специализированный
- * сервис {@link DialogManager}. Ответственность этого класса теперь сфокусирована
- * исключительно на оркестрации простого чат-взаимодействия:
- * <ol>
- *     <li>Начать или продолжить диалог через {@link DialogManager}.</li>
- *     <li>Вызвать "чистый" доменный сервис {@link ChatService} для генерации ответа.</li>
- *     <li>Завершить диалог, сохранив ответ ассистента.</li>
- * </ol>
- * <p> Этот подход значительно повышает тестируемость и читаемость кода.
+ * <p>
+ * Эта версия была отрефакторена для использования централизованного {@link DialogManager},
+ * что устраняет дублирование кода и соответствует принципам Clean Architecture.
+ * Она также реализует настоящую сквозную потоковую передачу данных.
+ * <p>
+ * <b>Ответственности:</b>
+ * <ul>
+ *     <li>Принимать DTO из слоя контроллеров.</li>
+ *     <li>Использовать {@link DialogManager} для управления состоянием диалога.</li>
+ *     <li>Делегировать основную бизнес-логику (вызов LLM) доменному сервису {@link ChatService}.</li>
+ *     <li>Формировать DTO ответа для контроллера.</li>
+ * </ul>
  */
 @Service
 @Slf4j
@@ -54,7 +56,7 @@ public class ChatApplicationService {
                         chatService.processChatRequestAsync(turnContext.history())
                                 // Шаг 3: Завершаем диалог, сохраняя ответ
                                 .thenCompose(llmAnswer ->
-                                        dialogManager.endTurn(turnContext.sessionId(), llmAnswer, MessageRole.ASSISTANT)
+                                        dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), llmAnswer, MessageRole.ASSISTANT)
                                                 .thenApply(v -> new ChatResponse(llmAnswer, turnContext.sessionId()))
                                 )
                 );
@@ -75,7 +77,7 @@ public class ChatApplicationService {
                             .doOnComplete(() -> {
                                 String fullResponse = fullResponseBuilder.toString();
                                 if (!fullResponse.isBlank()) {
-                                    dialogManager.endTurn(turnContext.sessionId(), fullResponse, MessageRole.ASSISTANT);
+                                    dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), fullResponse, MessageRole.ASSISTANT);
                                 }
                             });
                 });

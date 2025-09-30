@@ -51,7 +51,7 @@ public class RagApplicationService {
                                         turnContext.sessionId()
                                 )
                                 .thenCompose(ragAnswer ->
-                                        dialogManager.endTurn(turnContext.sessionId(), ragAnswer.answer(), MessageRole.ASSISTANT)
+                                        dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), ragAnswer.answer(), MessageRole.ASSISTANT)
                                                 .thenApply(v -> new RagQueryResponse(
                                                         ragAnswer.answer(),
                                                         ragAnswer.sourceCitations(),
@@ -95,7 +95,7 @@ public class RagApplicationService {
                             .doOnComplete(() -> {
                                 String fullResponse = fullResponseBuilder.toString();
                                 if (!fullResponse.isBlank()) {
-                                    dialogManager.endTurn(turnContext.sessionId(), fullResponse, MessageRole.ASSISTANT);
+                                    dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), fullResponse, MessageRole.ASSISTANT);
                                 }
                             });
                 });

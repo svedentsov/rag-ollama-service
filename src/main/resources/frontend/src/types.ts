@@ -1,3 +1,6 @@
+/**
+ * Представляет одну цитату источника, использованного в RAG-ответе.
+ */
 export interface SourceCitation {
     sourceName: string;
     textSnippet: string;
@@ -6,15 +9,29 @@ export interface SourceCitation {
     metadata: Record<string, any>;
 }
 
+/**
+ * Представляет одно сообщение в чате.
+ */
 export interface Message {
+    /** Уникальный идентификатор сообщения (клиентский). */
     id: string;
+    /** Роль отправителя. */
     type: 'user' | 'assistant';
+    /** Текстовое содержимое сообщения. */
     text: string;
+    /** ID родительского (пользовательского) сообщения для ответов ассистента. */
+    parentId?: string;
+    /** Список источников, подтверждающих ответ ассистента. */
     sources?: SourceCitation[];
+    /** Текст ошибки, если она произошла при генерации. */
     error?: string;
-    rating?: 'up' | 'down';
+    /** Флаг, указывающий, что сообщение находится в процессе генерации (стриминга). */
+    isStreaming?: boolean;
 }
 
+/**
+ * Представляет одну сессию чата.
+ */
 export interface ChatSession {
     sessionId: string;
     chatName: string;
@@ -22,8 +39,12 @@ export interface ChatSession {
     lastMessageTimestamp?: string;
 }
 
+/**
+ * Представляет один из возможных типов событий в потоке SSE от бэкенда.
+ */
 export type UniversalStreamResponse =
     | { type: 'task_started', taskId: string }
+    | { type: 'status_update', text: string }
     | { type: 'content', text: string }
     | { type: 'sources', sources: SourceCitation[] }
     | { type: 'done', message: string }
