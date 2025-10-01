@@ -20,10 +20,6 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Сервис-адаптер для персистентности истории чата.
- * <p>
- * Отвечает за асинхронное сохранение и извлечение сообщений.
- * Метод `saveMessageAsync` теперь принимает сущность `ChatSession` для
- * корректной синхронизации двунаправленной связи.
  */
 @Service
 @RequiredArgsConstructor
@@ -32,7 +28,7 @@ public class ChatHistoryService {
 
     private final ChatMessageRepository chatMessageRepository;
     private final ChatHistoryMapper chatHistoryMapper;
-    private final ChatSessionRepository chatSessionRepository; // Добавлена зависимость
+    private final ChatSessionRepository chatSessionRepository;
 
     /**
      * Асинхронно сохраняет одно сообщение в базу данных.
@@ -46,7 +42,6 @@ public class ChatHistoryService {
     @Async("databaseTaskExecutor")
     @Transactional
     public CompletableFuture<ChatMessage> saveMessageAsync(ChatSession session, MessageRole role, String content, UUID parentId) {
-        // Важно: сначала получаем управляемую (managed) сущность сессии
         ChatSession managedSession = chatSessionRepository.findById(session.getSessionId())
                 .orElseThrow(() -> new IllegalStateException("Session not found for saving message"));
         ChatMessage message = chatHistoryMapper.toChatMessageEntity(managedSession, role, content, parentId);

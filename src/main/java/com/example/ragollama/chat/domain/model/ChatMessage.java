@@ -9,9 +9,6 @@ import java.util.UUID;
 
 /**
  * Сущность JPA, представляющая одно сообщение в диалоге.
- * <p>
- * В этой версии поле `sessionId` заменено на полноценную связь `@ManyToOne`
- * с сущностью `ChatSession`, что обеспечивает целостность данных на уровне ORM.
  */
 @Getter
 @Setter
@@ -28,17 +25,19 @@ public class ChatMessage {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    /**
-     * Связь "многие-к-одному" с родительской сессией.
-     * `JoinColumn` указывает на колонку `session_id`, которая будет внешним ключом.
-     * `nullable = false` гарантирует, что сообщение не может существовать без сессии.
-     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "session_id", nullable = false)
     private ChatSession session;
 
     @Column(name = "parent_id", updatable = false)
     private UUID parentId;
+
+    /**
+     * ID асинхронной задачи, которая сгенерировала это сообщение.
+     * Позволяет связать ответ с операцией для сбора фидбэка.
+     */
+    @Column(name = "task_id")
+    private UUID taskId;
 
     @NotNull
     @Enumerated(EnumType.STRING)
@@ -53,11 +52,6 @@ public class ChatMessage {
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
-    /**
-     * Вспомогательный метод для получения ID сессии без загрузки всей сущности.
-     *
-     * @return UUID сессии.
-     */
     public UUID getSessionId() {
         return (session != null) ? session.getSessionId() : null;
     }

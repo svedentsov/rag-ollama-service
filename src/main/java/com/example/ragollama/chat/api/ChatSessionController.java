@@ -17,11 +17,6 @@ import java.util.stream.Collectors;
 
 /**
  * Контроллер для управления жизненным циклом сессий чата.
- * <p>
- * Предоставляет REST API для создания, получения списка, переименования
- * и удаления чат-сессий, а также для получения сообщений в рамках
- * конкретной сессии. Вся бизнес-логика делегируется
- * специализированному сервису {@link ChatSessionService}.
  */
 @RestController
 @RequestMapping("/api/v1/chats")
@@ -31,11 +26,6 @@ public class ChatSessionController {
 
     private final ChatSessionService chatSessionService;
 
-    /**
-     * Возвращает список всех чат-сессий для текущего пользователя.
-     *
-     * @return Список DTO {@link ChatSessionDto}.
-     */
     @GetMapping
     @Operation(summary = "Получить список всех чатов пользователя")
     public List<ChatSessionDto> getUserChats() {
@@ -44,11 +34,6 @@ public class ChatSessionController {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Создает новую, пустую сессию чата.
-     *
-     * @return DTO {@link ChatSessionDto} для созданной сессии.
-     */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Создать новую сессию чата")
@@ -56,13 +41,6 @@ public class ChatSessionController {
         return ChatSessionDto.fromEntity(chatSessionService.createNewChat());
     }
 
-    /**
-     * Обновляет имя существующей сессии чата.
-     *
-     * @param sessionId ID сессии для переименования.
-     * @param request   DTO с новым именем.
-     * @return {@link ResponseEntity} со статусом 200 OK.
-     */
     @PutMapping("/{sessionId}")
     @Operation(summary = "Переименовать сессию чата")
     public ResponseEntity<Void> updateChatName(@PathVariable UUID sessionId, @Valid @RequestBody ChatSessionDto.UpdateRequest request) {
@@ -70,12 +48,6 @@ public class ChatSessionController {
         return ResponseEntity.ok().build();
     }
 
-    /**
-     * Удаляет сессию чата и все связанные с ней сообщения.
-     *
-     * @param sessionId ID сессии для удаления.
-     * @return {@link ResponseEntity} со статусом 204 No Content.
-     */
     @DeleteMapping("/{sessionId}")
     @Operation(summary = "Удалить сессию чата")
     public ResponseEntity<Void> deleteChat(@PathVariable UUID sessionId) {
@@ -85,6 +57,7 @@ public class ChatSessionController {
 
     /**
      * Возвращает историю сообщений для указанной сессии.
+     * Теперь использует обновленный ChatMessageDto, включающий parentId.
      *
      * @param sessionId ID сессии.
      * @return Список DTO {@link ChatMessageDto}.

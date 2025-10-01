@@ -2,6 +2,13 @@
     display: flex;
     margin-bottom: 1rem;
     max-width: 90%;
+    outline: none;
+    border-radius: var(--radius); /* Добавим радиус для красоты фокуса */
+}
+
+/* Применяем стили фокуса, когда сам элемент или его дочерние элементы в фокусе */
+.messageWrapper:focus-within {
+    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.5);
 }
 
 .user {
@@ -151,7 +158,14 @@
     transition: opacity 0.2s ease-in-out;
 }
 
-.messageWrapper:hover .messageActions {
+/*
+ * УЛУЧШЕНИЕ ДОСТУПНОСТИ:
+ * Кнопки действий теперь становятся видимыми не только при наведении (:hover),
+ * но и когда сам контейнер сообщения получает фокус (например, через Tab).
+ * Это делает их доступными для пользователей с клавиатуры.
+ */
+.messageWrapper:hover .messageActions,
+.messageWrapper:focus-within .messageActions {
     opacity: 1;
 }
 
@@ -219,4 +233,13 @@
 .cancelButton {
     background-color: hsl(var(--secondary));
     color: hsl(var(--secondary-foreground));
+}
+
+.feedbackActions {
+    border-top: 1px solid hsl(var(--border));
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
 }

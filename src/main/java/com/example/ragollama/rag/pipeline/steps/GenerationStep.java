@@ -13,8 +13,7 @@ import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.processing.PiiRedactionService;
-import com.example.ragollama.shared.task.CancellableTaskService;
-import com.example.ragollama.shared.task.TaskStateService;
+import com.example.ragollama.shared.task.TaskLifecycleService;
 import com.example.ragollama.shared.util.JsonExtractorUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,13 +38,6 @@ import java.util.stream.Collectors;
 
 /**
  * Шаг RAG-конвейера, отвечающий за финальную генерацию ответа с использованием LLM.
- * <p>
- * Этот шаг является терминальным для основного конвейера. Он принимает подготовленный
- * промпт, выполняет вызов к LLM и формирует финальный, структурированный
- * объект ответа {@link RagAnswer}.
- * <p>
- * Перед вызовом LLM он отправляет статусное событие в UI, информируя пользователя
- * о начале самого длительного этапа.
  */
 @Component
 @Order(40)
@@ -57,23 +49,14 @@ public class GenerationStep implements RagPipelineStep {
     private final NoContextStrategy noContextStrategy;
     private final ObjectMapper objectMapper;
     private final PiiRedactionService piiRedactionService;
-    private final TaskStateService taskStateService;
-    private final CancellableTaskService taskService;
+    private final TaskLifecycleService taskLifecycleService;
     private static final Pattern CITATION_PATTERN = Pattern.compile("\\[([\\w\\-.:]+)]");
 
-    /**
-     * {@inheritDoc}
-     * <p>
-     * Выполняет вызов LLM для генерации полного ответа.
-     *
-     * @param context Контекст, содержащий финальный промпт и документы.
-     * @return {@link Mono} с обновленным контекстом, содержащим финальный {@link RagAnswer}.
-     */
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
         log.info("Шаг [40] Generation: вызов LLM с Chain-of-Thought для полного ответа...");
-        taskStateService.getActiveTaskIdForSession(context.sessionId()).ifPresent(taskId ->
-                taskService.emitEvent(taskId, new UniversalResponse.StatusUpdate("Формулирую ответ...")));
+        taskLifecycleService.getActiveTaskForSession(context.sessionId()).ifPresent(task ->
+                taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Формулирую ответ...")));
         if (context.rerankedDocuments().isEmpty()) {
             return noContextStrategy.handle(context.finalPrompt()).map(context::withFinalAnswer);
         }
@@ -90,13 +73,6 @@ public class GenerationStep implements RagPipelineStep {
                 .onErrorMap(ex -> new GenerationException("Не удалось сгенерировать ответ от LLM.", ex));
     }
 
-    /**
-     * Выполняет потоковую генерацию ответа.
-     *
-     * @param prompt    Промпт для LLM.
-     * @param documents Документы, использованные в контексте.
-     * @return {@link Flux} со структурированными частями ответа.
-     */
     public Flux<StreamingResponsePart> generateStructuredStream(Prompt prompt, List<Document> documents) {
         if (documents == null || documents.isEmpty()) {
             log.warn("В потоковом запросе на этап Generation не передано документов.");

@@ -21,6 +21,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "com.example.ragollama.agent.metrics.domain",
         "com.example.ragollama.agent.dynamic",
         "com.example.ragollama.agent.finops.domain",
-        "com.example.ragollama.evaluation.domain"})
+        "com.example.ragollama.evaluation.domain",
+        "com.example.ragollama.shared.task"})
 public class JpaPersistenceConfig {
 }

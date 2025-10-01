@@ -1,15 +1,22 @@
 import React from 'react';
 import { useMutation, QueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Message, SourceCitation, UniversalStreamResponse } from '../types';
+import { Message, UniversalStreamResponse } from '../types';
 
 /**
  * Параметры для хука useChatStream.
  */
 interface UseChatStreamProps {
+  /** @param sessionId - ID текущей сессии чата. */
   sessionId: string;
+  /** @param queryClient - Экземпляр клиента TanStack Query. */
   queryClient: QueryClient;
+  /** @param onStreamEnd - Колбэк, вызываемый при завершении потока. */
   onStreamEnd?: () => void;
+  /** @param onTaskStart - Колбэк, вызываемый при получении ID задачи. */
+  onTaskStart?: (assistantMessageId: string, taskId: string) => void;
+  /** @param onStatusUpdate - Колбэк для обновления текста статуса. */
+  onStatusUpdate?: (text: string) => void;
 }
 
 /**
@@ -18,7 +25,13 @@ interface UseChatStreamProps {
  * прямого обновления кэша React Query и управления отменой.
  * @param {UseChatStreamProps} props - Параметры хука.
  */
-export function useChatStream({ sessionId, queryClient, onStreamEnd }: UseChatStreamProps) {
+export function useChatStream({
+  sessionId,
+  queryClient,
+  onStreamEnd,
+  onTaskStart,
+  onStatusUpdate,
+}: UseChatStreamProps) {
   const abortControllerRef = React.useRef<AbortController | null>(null);
 
   const mutation = useMutation({
@@ -46,7 +59,7 @@ export function useChatStream({ sessionId, queryClient, onStreamEnd }: UseChatSt
 
         buffer += value;
         const lines = buffer.split('\n\n');
-        buffer = lines.pop() || ''; // Последняя (возможно неполная) часть остается в буфере
+        buffer = lines.pop() || '';
 
         for (const line of lines) {
           if (line.startsWith('data:')) {
@@ -54,8 +67,16 @@ export function useChatStream({ sessionId, queryClient, onStreamEnd }: UseChatSt
             if (!jsonData) continue;
             try {
               const eventData = JSON.parse(jsonData) as UniversalStreamResponse;
-              // Обновляем кэш React Query напрямую
               updateQueryCache(assistantMessageId, eventData);
+
+              // Вызываем колбэки для уведомления родительского компонента
+              if (eventData.type === 'task_started' && onTaskStart) {
+                onTaskStart(assistantMessageId, eventData.taskId);
+              }
+              if (eventData.type === 'status_update' && onStatusUpdate) {
+                onStatusUpdate(eventData.text);
+              }
+
             } catch (e) {
               console.error('Failed to parse SSE data:', jsonData, e);
             }
@@ -80,13 +101,16 @@ export function useChatStream({ sessionId, queryClient, onStreamEnd }: UseChatSt
   const updateQueryCache = (assistantMessageId: string, event: UniversalStreamResponse) => {
     const queryKey = ['messages', sessionId];
 
-    queryClient.setQueryData<Message[]>(queryKey, (oldData) => {
+    queryClient.setQueryData<Message[]>(queryKey, (oldData = []) => {
       if (!oldData) return [];
       return oldData.map(msg => {
         if (msg.id !== assistantMessageId) return msg;
 
         const updatedMsg = { ...msg };
         switch (event.type) {
+          case 'task_started':
+            updatedMsg.taskId = event.taskId;
+            break;
           case 'content':
             updatedMsg.text += event.text;
             break;

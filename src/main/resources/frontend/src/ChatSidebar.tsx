@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { ChatSession } from './types';
 import { useChatSessions } from './hooks/useChatSessions';
+import { useDebounce } from './hooks/useDebounce';
 import { useRouter } from './hooks/useRouter';
-import { Trash, Edit, Plus, Search } from 'lucide-react';
+import { SearchInput } from './components/SearchInput';
+import { Trash, Edit, Plus } from 'lucide-react';
 import styles from './ChatSidebar.module.css';
 
 interface ContextMenuState {
@@ -29,14 +31,15 @@ export function ChatSidebar({ currentSessionId }: ChatSidebarProps) {
   const [editingName, setEditingName] = useState('');
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({ show: false, x: 0, y: 0, session: null });
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const editInputRef = useRef<HTMLInputElement>(null);
 
   const filteredSessions = useMemo(() => {
-    if (!searchTerm) return sessions;
+    if (!debouncedSearchTerm) return sessions;
     return sessions.filter(session =>
-      session.chatName.toLowerCase().includes(searchTerm.toLowerCase())
+      session.chatName.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
     );
-  }, [sessions, searchTerm]);
+  }, [sessions, debouncedSearchTerm]);
 
   useEffect(() => {
     const handleClick = () => setContextMenu(prev => ({ ...prev, show: false }));
@@ -102,17 +105,12 @@ export function ChatSidebar({ currentSessionId }: ChatSidebarProps) {
     <>
       <nav className={styles.sidebar}>
         <div className={styles.sidebarHeader}>
-          <div className={styles.searchWrapper}>
-            <Search className={styles.searchIcon} size={16} aria-hidden="true" />
-            <input
-              type="text"
-              placeholder="Поиск..."
-              className={styles.searchInput}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              aria-label="Поиск по чатам"
-            />
-          </div>
+          <SearchInput
+            value={searchTerm}
+            onChange={setSearchTerm}
+            placeholder="Поиск по чатам..."
+            ariaLabel="Поиск по чатам"
+          />
         </div>
         <div className={styles.sidebarContent}>
           {isLoading && <div className={styles.centered}><div className={styles.spinner} role="status" aria-label="Загрузка чатов"></div></div>}

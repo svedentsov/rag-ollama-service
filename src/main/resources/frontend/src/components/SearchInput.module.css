@@ -1,0 +1,60 @@
+.searchWrapper {
+    position: relative;
+    flex-grow: 1;
+}
+
+.searchIcon {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: hsl(var(--muted-foreground));
+    pointer-events: none;
+    transition: color 0.2s ease-in-out;
+}
+
+.searchWrapper:focus-within .searchIcon {
+    color: hsl(var(--ring));
+}
+
+.searchInput {
+    width: 100%;
+    padding: 0.5rem 2.25rem; /* Оставляем место для иконок с обеих сторон */
+    border-radius: var(--radius);
+    border: 1px solid hsl(var(--border));
+    background-color: hsl(var(--secondary));
+    color: hsl(var(--foreground));
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-sm);
+    box-sizing: border-box; /* Гарантирует правильный рендеринг padding */
+}
+
+.searchInput:focus {
+    outline: none;
+    border-color: hsl(var(--ring));
+}
+
+.searchInput::placeholder {
+    color: hsl(var(--muted-foreground));
+}
+
+.clearButton {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 0.25rem;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: hsl(var(--muted-foreground));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.clearButton:hover {
+    color: hsl(var(--foreground));
+    background-color: hsl(var(--accent));
+}

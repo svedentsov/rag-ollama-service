@@ -12,10 +12,6 @@ import java.util.UUID;
 
 /**
  * Сущность JPA, представляющая одну сессию чата.
- * <p>
- * В этой версии связь с сообщениями настроена так, чтобы делегировать
- * каскадное удаление на уровень базы данных, устраняя StaleObjectStateException.
- * Hibernate по-прежнему управляет созданием и обновлением сообщений при сохранении сессии.
  */
 @Getter
 @Setter
@@ -38,11 +34,8 @@ public class ChatSession {
 
     /**
      * Связь One-to-Many с сообщениями.
-     * CascadeType.ALL заменен на более гранулярный набор, исключающий REMOVE.
-     * orphanRemoval=true убран.
-     * Теперь удаление сессии приведет к выполнению одного DELETE-запроса,
-     * а PostgreSQL сам позаботится об удалении связанных сообщений благодаря
-     * 'ON DELETE CASCADE' в миграции V21.
+     * orphanRemoval=true убран, каскадное удаление делегировано БД.
+     * CascadeType.REMOVE убран.
      */
     @OneToMany(
             mappedBy = "session",
@@ -66,7 +59,6 @@ public class ChatSession {
     /**
      * Helper-метод для безопасного добавления сообщения в сессию.
      * Гарантирует, что обе стороны двунаправленной связи синхронизированы.
-     *
      * @param message Сообщение для добавления.
      */
     public void addMessage(ChatMessage message) {

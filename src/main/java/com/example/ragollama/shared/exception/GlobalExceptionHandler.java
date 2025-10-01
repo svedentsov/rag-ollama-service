@@ -5,6 +5,7 @@ import com.example.ragollama.shared.task.TaskNotFoundException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.catalina.connector.ClientAbortException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -16,15 +17,7 @@ import java.time.Instant;
 import java.util.stream.Collectors;
 
 /**
- * Глобальный обработчик исключений, реализующий централизованную и
- * унифицированную логику обработки ошибок для всего приложения.
- * <p>
- * Этот компонент перехватывает все исключения, возникающие в контроллерах,
- * и преобразует их в стандартизированные ответы в формате {@link ProblemDetail}
- * (RFC 7807), что соответствует лучшим практикам построения REST API.
- * <p>
- * Каждый обработчик также инкрементирует соответствующую метрику Micrometer,
- * обеспечивая наблюдаемость за состоянием ошибок в системе.
+ * Глобальный обработчик исключений.
  */
 @RestControllerAdvice
 @Slf4j
@@ -34,12 +27,15 @@ public class GlobalExceptionHandler {
     private final MetricService metricService;
 
     /**
-     * Обрабатывает исключения, когда запрашиваемый статический ресурс или API эндпоинт не найден.
-     * Логирует это событие с уровнем WARN, чтобы не засорять логи ошибками ERROR.
-     *
-     * @param e Исключение NoResourceFoundException.
-     * @return ProblemDetail с кодом 404 Not Found.
+     * Обрабатывает исключение, когда клиент разрывает соединение.
+     * Логируется на уровне INFO, так как это штатное событие.
+     * @param e Исключение ClientAbortException.
      */
+    @ExceptionHandler(ClientAbortException.class)
+    public void handleClientAbortException(ClientAbortException e) {
+        log.info("Клиент разорвал соединение: {}", e.getMessage());
+    }
+
     @ExceptionHandler(NoResourceFoundException.class)
     public ProblemDetail handleNoResourceFoundException(NoResourceFoundException e) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
@@ -50,13 +46,6 @@ public class GlobalExceptionHandler {
         return problemDetail;
     }
 
-    /**
-     * Обрабатывает исключения валидации DTO (аннотации @Valid).
-     * Собирает все ошибки валидации в одно читаемое сообщение.
-     *
-     * @param e Исключение MethodArgumentNotValidException.
-     * @return ProblemDetail с кодом 400 Bad Request.
-     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleMethodArgumentNotValid(MethodArgumentNotValidException e) {
         String errors = e.getBindingResult().getFieldErrors().stream()
@@ -71,12 +60,6 @@ public class GlobalExceptionHandler {
         return problemDetail;
     }
 
-    /**
-     * Обрабатывает наше кастомное исключение AccessDeniedException.
-     *
-     * @param e Исключение.
-     * @return ProblemDetail с кодом 403 Forbidden.
-     */
     @ExceptionHandler(AccessDeniedException.class)
     public ProblemDetail handleAccessDeniedException(AccessDeniedException e) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, e.getMessage());
@@ -87,12 +70,6 @@ public class GlobalExceptionHandler {
         return problemDetail;
     }
 
-    /**
-     * Обрабатывает кастомное исключение PromptInjectionException.
-     *
-     * @param e Исключение.
-     * @return ProblemDetail с кодом 422 (Unprocessable Entity).
-     */
     @ExceptionHandler(PromptInjectionException.class)
     public ProblemDetail handlePromptInjectionException(PromptInjectionException e) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage());
@@ -103,12 +80,6 @@ public class GlobalExceptionHandler {
         return problemDetail;
     }
 
-    /**
-     * Обрабатывает исключение при превышении квоты.
-     *
-     * @param e Исключение.
-     * @return ProblemDetail с кодом 429.
-     */
     @ExceptionHandler(QuotaExceededException.class)
     public ProblemDetail handleQuotaExceededException(QuotaExceededException e) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, e.getMessage());
@@ -119,12 +90,6 @@ public class GlobalExceptionHandler {
         return problemDetail;
     }
 
-    /**
-     * Обрабатывает ошибки на этапе извлечения.
-     *
-     * @param e Исключение.
-     * @return ProblemDetail с кодом 503.
-     */
     @ExceptionHandler(RetrievalException.class)
     public ProblemDetail handleRetrievalException(RetrievalException e) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, "Сервис извлечения документов временно недоступен. Попробуйте позже.");
@@ -135,12 +100,6 @@ public class GlobalExceptionHandler {
         return problemDetail;
     }
 
-    /**
-     * Обрабатывает ошибки на этапе генерации.
-     *
-     * @param e Исключение.
-     * @return ProblemDetail с кодом 503.
-     */
     @ExceptionHandler(GenerationException.class)
     public ProblemDetail handleGenerationException(GenerationException e) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, "Сервис генерации ответов временно недоступен. Попробуйте позже.");
@@ -151,12 +110,6 @@ public class GlobalExceptionHandler {
         return problemDetail;
     }
 
-    /**
-     * Обрабатывает ошибки при обработке ответа от LLM.
-     *
-     * @param e Исключение.
-     * @return ProblemDetail с кодом 502.
-     */
     @ExceptionHandler(ProcessingException.class)
     public ProblemDetail handleProcessingException(ProcessingException e) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, "Ошибка при обработке ответа от нижестоящего AI-сервиса.");
@@ -167,12 +120,6 @@ public class GlobalExceptionHandler {
         return problemDetail;
     }
 
-    /**
-     * Обрабатывает стандартное исключение EntityNotFoundException.
-     *
-     * @param e Исключение.
-     * @return ProblemDetail с кодом 404.
-     */
     @ExceptionHandler(EntityNotFoundException.class)
     public ProblemDetail handleEntityNotFoundException(EntityNotFoundException e) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
@@ -183,12 +130,6 @@ public class GlobalExceptionHandler {
         return problemDetail;
     }
 
-    /**
-     * Обрабатывает ошибку, когда асинхронная задача не найдена.
-     *
-     * @param e Исключение TaskNotFoundException.
-     * @return ProblemDetail с кодом 404.
-     */
     @ExceptionHandler(TaskNotFoundException.class)
     public ProblemDetail handleTaskNotFoundException(TaskNotFoundException e) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
@@ -199,12 +140,6 @@ public class GlobalExceptionHandler {
         return problemDetail;
     }
 
-    /**
-     * Обрабатывает все остальные непредвиденные исключения.
-     *
-     * @param e Исключение.
-     * @return ProblemDetail с кодом 500.
-     */
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleGenericException(Exception e) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Произошла внутренняя ошибка сервера.");

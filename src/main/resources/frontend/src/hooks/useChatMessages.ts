@@ -4,6 +4,9 @@ import { Message } from '../types';
 
 /**
  * Хук для управления сообщениями в конкретной сессии чата.
+ * Эта версия очищена от любой логики отображения и отвечает только за
+ * взаимодействие с API и управление состоянием сервера через React Query.
+ * @param sessionId - ID сессии чата.
  */
 export function useChatMessages(sessionId: string) {
     const queryClient = useQueryClient();
@@ -15,6 +18,10 @@ export function useChatMessages(sessionId: string) {
         enabled: !!sessionId,
     });
 
+    /**
+     * Мутация для обновления одного сообщения.
+     * Реализует оптимистичное обновление для мгновенной обратной связи.
+     */
     const updateMessageMutation = useMutation({
         mutationFn: api.updateMessage,
         onMutate: async ({ messageId, newContent }) => {
@@ -35,6 +42,10 @@ export function useChatMessages(sessionId: string) {
         },
     });
 
+    /**
+     * Мутация для удаления одного сообщения.
+     * Реализует оптимистичное обновление.
+     */
     const deleteMessageMutation = useMutation({
         mutationFn: api.deleteMessage,
         onMutate: async (messageId) => {

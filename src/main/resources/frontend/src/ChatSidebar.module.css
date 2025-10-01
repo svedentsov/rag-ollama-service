@@ -17,40 +17,6 @@
     border-bottom: 1px solid hsl(var(--border));
 }
 
-.searchWrapper {
-    position: relative;
-    flex-grow: 1;
-}
-
-.searchIcon {
-    position: absolute;
-    left: 0.75rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: hsl(var(--muted-foreground));
-    pointer-events: none;
-}
-
-.searchInput {
-    width: 100%;
-    padding: 0.5rem 0.75rem 0.5rem 2.25rem;
-    border-radius: var(--radius);
-    border: 1px solid hsl(var(--border));
-    background-color: hsl(var(--secondary));
-    color: hsl(var(--foreground));
-    font-family: var(--font-family-sans);
-    font-size: var(--font-size-sm);
-}
-
-.searchInput:focus {
-    outline: none;
-    border-color: hsl(var(--ring));
-}
-
-.searchInput::placeholder {
-    color: hsl(var(--muted-foreground));
-}
-
 .sidebarContent {
     flex-grow: 1;
     overflow-y: auto;
