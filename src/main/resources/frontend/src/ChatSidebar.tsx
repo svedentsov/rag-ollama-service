@@ -4,10 +4,16 @@ import { ChatSession } from './types';
 import { useChatSessions } from './hooks/useChatSessions';
 import { useDebounce } from './hooks/useDebounce';
 import { useRouter } from './hooks/useRouter';
+import { useNotifications, useClearNotification } from './state/notificationStore';
 import { SearchInput } from './components/SearchInput';
+import { NotificationDot } from './components/NotificationDot';
 import { Trash, Edit, Plus } from 'lucide-react';
 import styles from './ChatSidebar.module.css';
 
+/**
+ * @internal
+ * Состояние для контекстного меню.
+ */
 interface ContextMenuState {
   show: boolean;
   x: number;
@@ -15,17 +21,25 @@ interface ContextMenuState {
   session: ChatSession | null;
 }
 
+/**
+ * Пропсы для компонента ChatSidebar.
+ */
 interface ChatSidebarProps {
+  /** @param currentSessionId - ID активной в данный момент сессии чата. */
   currentSessionId: string | null;
 }
 
 /**
- * Компонент боковой панели, отображающий список сессий чата.
+ * Компонент боковой панели, отображающий список сессий чата,
+ * управляющий поиском, созданием, удалением и переименованием чатов,
+ * а также отображающий уведомления о новых сообщениях.
  * @param {ChatSidebarProps} props - Пропсы компонента.
  */
 export function ChatSidebar({ currentSessionId }: ChatSidebarProps) {
   const { sessions, isLoading, createChat, deleteChat, renameChat } = useChatSessions();
   const { navigate } = useRouter();
+  const { notifications } = useNotifications();
+  const clearNotification = useClearNotification();
 
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -41,12 +55,14 @@ export function ChatSidebar({ currentSessionId }: ChatSidebarProps) {
     );
   }, [sessions, debouncedSearchTerm]);
 
+  // Закрывает контекстное меню при клике в любом месте
   useEffect(() => {
     const handleClick = () => setContextMenu(prev => ({ ...prev, show: false }));
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, []);
 
+  // Фокусируется на поле ввода при начале редактирования
   useEffect(() => {
     if (editingSessionId && editInputRef.current) {
       editInputRef.current.focus();
@@ -98,6 +114,9 @@ export function ChatSidebar({ currentSessionId }: ChatSidebarProps) {
 
   const handleNavigation = (e: React.MouseEvent, sessionId: string) => {
     e.preventDefault();
+    if (notifications.has(sessionId)) {
+      clearNotification(sessionId);
+    }
     navigate(sessionId);
   };
 
@@ -142,7 +161,10 @@ export function ChatSidebar({ currentSessionId }: ChatSidebarProps) {
                         />
                       </form>
                     ) : (
-                      <span className={styles.chatTitle}>{session.chatName}</span>
+                      <>
+                        <span className={styles.chatTitle}>{session.chatName}</span>
+                        {notifications.has(session.sessionId) && <NotificationDot />}
+                      </>
                     )}
                   </button>
                 </li>

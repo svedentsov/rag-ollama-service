@@ -10,11 +10,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Обработчик, реализующий логику для намерения {@link QueryIntent#SUMMARIZATION}.
- */
 @Service
 @RequiredArgsConstructor
 public class SummarizationIntentHandler implements IntentHandler {
@@ -28,9 +26,9 @@ public class SummarizationIntentHandler implements IntentHandler {
     }
 
     @Override
-    public CompletableFuture<UniversalSyncResponse> handleSync(UniversalRequest request) {
+    public CompletableFuture<UniversalSyncResponse> handleSync(UniversalRequest request, UUID taskId) {
         if (request.context() == null || request.context().isBlank()) {
-            return chatIntentHandler.handleSync(request);
+            return chatIntentHandler.handleSync(request, taskId);
         }
         return summarizationService.summarizeAsync(request.context(), null)
                 .map(summary -> UniversalSyncResponse.from(summary, canHandle()))
@@ -38,9 +36,9 @@ public class SummarizationIntentHandler implements IntentHandler {
     }
 
     @Override
-    public Flux<UniversalResponse> handleStream(UniversalRequest request) {
+    public Flux<UniversalResponse> handleStream(UniversalRequest request, UUID taskId) {
         if (request.context() == null || request.context().isBlank()) {
-            return chatIntentHandler.handleStream(request);
+            return chatIntentHandler.handleStream(request, taskId);
         }
         return summarizationService.summarizeAsync(request.context(), null)
                 .map(UniversalResponse::from)

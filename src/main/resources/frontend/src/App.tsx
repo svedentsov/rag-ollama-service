@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { v4 as uuidv4 } from 'uuid';
 import { ChatMessage, ChatMessageProps } from './components/ChatMessage';
@@ -8,6 +8,7 @@ import { useChatMessages } from './hooks/useChatMessages';
 import { useStreamManager } from './hooks/useStreamManager';
 import { useScrollManager } from './hooks/useScrollManager';
 import styles from './App.module.css';
+import toast from "react-hot-toast";
 
 interface AppProps {
   /** @param sessionId - ID текущей сессии чата. */
@@ -15,74 +16,114 @@ interface AppProps {
 }
 
 /**
- * Главный компонент-контейнер для чата.
+ * Главный компонент-контейнер для чата с полноценной логикой ветвления и удаления.
  * @param {AppProps} props - Пропсы компонента.
  */
 const App: React.FC<AppProps> = ({ sessionId }) => {
   const queryClient = useQueryClient();
   const { messages, isLoading: isLoadingHistory, error: historyError, updateMessage, deleteMessage } = useChatMessages(sessionId);
   const { startStream, stopStream } = useStreamManager();
-  const { containerRef, messagesEndRef, showScrollButton, scrollToBottom } = useScrollManager([messages]);
+  const [branchSelections, setBranchSelections] = useState<Record<string, string>>({});
 
   const isAnyMessageStreaming = messages.some(m => m.isStreaming);
 
+  const { visibleMessages, messageBranchInfo } = useMemo(() => {
+    if (!messages.length) return { visibleMessages: [], messageBranchInfo: new Map() };
+    const childrenMap = new Map<string, Message[]>();
+    messages.forEach(m => {
+      if (m.parentId) {
+        if (!childrenMap.has(m.parentId)) childrenMap.set(m.parentId, []);
+        childrenMap.get(m.parentId)!.push(m);
+      }
+    });
+    const hiddenIds = new Set<string>();
+    childrenMap.forEach((children, parentId) => {
+      if (children.length > 1) {
+        let selectedId = branchSelections[parentId];
+        if (!selectedId || !children.some(c => c.id === selectedId)) {
+          selectedId = children[children.length - 1].id;
+        }
+        children.forEach(child => {
+          if (child.id !== selectedId) hiddenIds.add(child.id);
+        });
+      }
+    });
+    const branchInfo = new Map<string, { total: number; current: number; siblings: Message[] }>();
+    messages.forEach(msg => {
+      if (msg.type === 'assistant' && msg.parentId) {
+        const siblings = childrenMap.get(msg.parentId) || [];
+        if (siblings.length > 1) {
+          const currentIndex = siblings.findIndex(s => s.id === msg.id);
+          branchInfo.set(msg.id, { total: siblings.length, current: currentIndex + 1, siblings });
+        }
+      }
+    });
+    return { visibleMessages: messages.filter(m => !hiddenIds.has(m.id)), messageBranchInfo: branchInfo };
+  }, [messages, branchSelections]);
+
+  const { containerRef, messagesEndRef, showScrollButton, scrollToBottom } = useScrollManager([visibleMessages]);
+
   const handleSendMessage = (inputText: string) => {
     if (!inputText.trim() || isAnyMessageStreaming) return;
-
     const userMessage: Message = { id: uuidv4(), type: 'user', text: inputText };
     const assistantMessage: Message = { id: uuidv4(), type: 'assistant', text: '', parentId: userMessage.id, isStreaming: true };
-
-    const queryKey = ['messages', sessionId];
-    queryClient.setQueryData<Message[]>(queryKey, (oldData = []) => [...oldData, userMessage, assistantMessage]);
-
+    queryClient.setQueryData<Message[]>(['messages', sessionId], (old = []) => [...old, userMessage, assistantMessage]);
     startStream(sessionId, inputText, assistantMessage.id);
   };
 
+  /**
+   * Обрабатывает запрос на повторную генерацию ответа, реализуя
+   * корректное, неразрушающее оптимистичное обновление.
+   * @param assistantMessage - Сообщение ассистента, которое нужно перегенерировать.
+   */
   const handleRegenerate = (assistantMessage: Message) => {
     if (!assistantMessage.parentId || isAnyMessageStreaming) return;
     const parentMessage = messages.find(m => m.id === assistantMessage.parentId);
     if (parentMessage) {
       const newAssistantMessage: Message = { id: uuidv4(), type: 'assistant', text: '', parentId: parentMessage.id, isStreaming: true };
-      
-      const queryKey = ['messages', sessionId];
-      queryClient.setQueryData<Message[]>(queryKey, (oldData = []) =>
-        [...oldData.filter(m => m.id !== assistantMessage.id), newAssistantMessage]
-      );
+
+      // Атомарное оптимистичное обновление: добавляем новое сообщение
+      // и сразу же обновляем состояние выбора, чтобы UI показал новую ветку.
+      queryClient.setQueryData<Message[]>(['messages', sessionId], (old = []) => [...old, newAssistantMessage]);
+      setBranchSelections(prev => ({ ...prev, [parentMessage.id]: newAssistantMessage.id }));
+
       startStream(sessionId, parentMessage.text, newAssistantMessage.id);
     }
   };
 
-  const handleUpdateAndFork = (messageId: string, newContent: string) => {
-    if (isAnyMessageStreaming) return;
+  const handleUpdateMessage = (messageId: string, newContent: string) => {
+      updateMessage({ messageId, newContent });
+      toast.success('Сообщение обновлено.');
+  };
 
+  const handleDelete = (messageId: string) => {
     const queryKey = ['messages', sessionId];
-    const messageIndex = messages.findIndex(m => m.id === messageId);
-    if (messageIndex === -1) return;
+    const idsToDelete = new Set<string>([messageId]);
 
-    updateMessage({ messageId, newContent });
-
-    const newAssistantMessage: Message = { id: uuidv4(), type: 'assistant', text: '', parentId: messageId, isStreaming: true };
-
-    queryClient.setQueryData<Message[]>(queryKey, (oldData = []) => {
-        const updatedMessages = oldData.slice(0, messageIndex + 1);
-        updatedMessages[messageIndex] = { ...updatedMessages[messageIndex], text: newContent };
-        return [...updatedMessages, newAssistantMessage];
-    });
-
-    startStream(sessionId, newContent, newAssistantMessage.id);
-  };
-  
-  const findLastTurnMessages = (): { lastUser?: Message, lastAssistant?: Message } => {
-    if (!messages || messages.length === 0) return {};
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage.type === 'assistant') {
-      const parent = messages.find(m => m.id === lastMessage.parentId);
-      return { lastUser: parent, lastAssistant: lastMessage };
+    let newChildrenFound = true;
+    while(newChildrenFound) {
+        newChildrenFound = false;
+        messages.forEach(msg => {
+            if (msg.parentId && idsToDelete.has(msg.parentId) && !idsToDelete.has(msg.id)) {
+                idsToDelete.add(msg.id);
+                newChildrenFound = true;
+            }
+        });
     }
-    return { lastUser: lastMessage };
+
+    queryClient.setQueryData<Message[]>(queryKey, (old = []) =>
+        old.filter(msg => !idsToDelete.has(msg.id))
+    );
+
+    deleteMessage(messageId);
+    toast.success('Сообщение удалено.');
   };
 
-  const { lastUser, lastAssistant } = findLastTurnMessages();
+  const handleBranchChange = (parentId: string, newActiveChildId: string) => {
+    setBranchSelections(prev => ({ ...prev, [parentId]: newActiveChildId }));
+  };
+
+  const isLastMessage = (msgId: string) => visibleMessages.length > 0 && visibleMessages[visibleMessages.length - 1].id === msgId;
 
   return (
     <div className={styles.chatContainer}>
@@ -91,20 +132,21 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
           {isLoadingHistory && <div className={styles.centered}><div className={styles.spinner} role="status" aria-label="Загрузка истории"></div></div>}
           {historyError && <div className={styles.errorAlert}>Не удалось загрузить историю: {(historyError as Error).message}</div>}
 
-          {messages.map((msg) => {
-            const isLastInTurn = msg.id === lastUser?.id || msg.id === lastAssistant?.id;
-            return (
-              <ChatMessage
-                key={msg.id}
-                message={msg}
-                isLastInTurn={isLastInTurn}
-                onRegenerate={() => handleRegenerate(msg)}
-                onUpdateAndFork={handleUpdateAndFork}
-                onDelete={deleteMessage}
-                onStop={() => stopStream(msg.id)}
-              />
-            );
-          })}
+          {visibleMessages.map((msg) => (
+            <ChatMessage
+              key={msg.id}
+              message={msg}
+              isLastInTurn={isLastMessage(msg.id)}
+              branchInfo={messageBranchInfo.get(msg.id)}
+              onRegenerate={() => handleRegenerate(msg)}
+              onUpdateContent={handleUpdateMessage}
+              onDelete={() => handleDelete(msg.id)}
+              onStop={() => stopStream(msg.id)}
+              onBranchChange={handleBranchChange}
+              // Передаем неиспользуемый проп, чтобы удовлетворить интерфейс, но он не будет вызван
+              onUpdateAndFork={() => {}}
+            />
+          ))}
           <div ref={messagesEndRef} />
         </div>
       </div>
@@ -112,11 +154,8 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
         onSendMessage={handleSendMessage}
         isLoading={isAnyMessageStreaming}
         onStopGenerating={() => {
-            // Улучшенная логика: находим самое последнее стримящееся сообщение и останавливаем его.
-            const streamingMessage = [...messages].reverse().find(m => m.isStreaming);
-            if (streamingMessage) {
-                stopStream(streamingMessage.id);
-            }
+            const streamingMessage = messages.find(m => m.isStreaming);
+            if (streamingMessage) stopStream(streamingMessage.id);
         }}
         showScrollButton={showScrollButton}
         onScrollToBottom={() => scrollToBottom('smooth')}

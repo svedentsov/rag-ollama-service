@@ -18,9 +18,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Сервис-адаптер для персистентности истории чата.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -30,27 +27,19 @@ public class ChatHistoryService {
     private final ChatHistoryMapper chatHistoryMapper;
     private final ChatSessionRepository chatSessionRepository;
 
-    /**
-     * Асинхронно сохраняет одно сообщение в базу данных.
-     *
-     * @param session  Сущность сессии, к которой относится сообщение.
-     * @param role     Роль отправителя (USER или ASSISTANT).
-     * @param content  Текст сообщения.
-     * @param parentId Опциональный ID родительского сообщения.
-     * @return {@link CompletableFuture} с сохраненной сущностью {@link ChatMessage}.
-     */
     @Async("databaseTaskExecutor")
     @Transactional
-    public CompletableFuture<ChatMessage> saveMessageAsync(ChatSession session, MessageRole role, String content, UUID parentId) {
+    public CompletableFuture<ChatMessage> saveMessageAsync(ChatSession session, MessageRole role, String content, UUID parentId, UUID taskId) {
         ChatSession managedSession = chatSessionRepository.findById(session.getSessionId())
                 .orElseThrow(() -> new IllegalStateException("Session not found for saving message"));
-        ChatMessage message = chatHistoryMapper.toChatMessageEntity(managedSession, role, content, parentId);
-        // Используем helper-метод для синхронизации связи
+
+        ChatMessage message = chatHistoryMapper.toChatMessageEntity(managedSession, role, content, parentId, taskId);
+
         managedSession.addMessage(message);
-        // Сохраняем сессию, `cascade` позаботится о сообщении
         chatSessionRepository.save(managedSession);
-        log.debug("Сохранено сообщение для сессии {}: Role={}, ParentId={}", session.getSessionId(), role, parentId);
-        // Ищем сохраненное сообщение, чтобы вернуть его с ID
+
+        log.debug("Сохранено сообщение для сессии {}: Role={}, ParentId={}, TaskId={}", session.getSessionId(), role, parentId, taskId);
+
         ChatMessage savedMessage = managedSession.getMessages().get(managedSession.getMessages().size() - 1);
         return CompletableFuture.completedFuture(savedMessage);
     }

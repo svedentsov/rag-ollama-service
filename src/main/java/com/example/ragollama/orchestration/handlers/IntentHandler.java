@@ -6,47 +6,30 @@ import com.example.ragollama.orchestration.dto.UniversalResponse;
 import com.example.ragollama.orchestration.dto.UniversalSyncResponse;
 import reactor.core.publisher.Flux;
 
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Определяет контракт для обработчика одного конкретного намерения пользователя (Intent).
- * <p>
- * Эта версия интерфейса разделяет обработку на два явных метода:
- * один для синхронных (полных) ответов и другой для потоковых.
- * Это делает архитектуру более строгой, предсказуемой и устраняет
- * проблемы с преобразованием типов.
- */
 public interface IntentHandler {
 
-    /**
-     * Возвращает основное намерение, которое может обрабатывать данный компонент.
-     *
-     * @return {@link QueryIntent}, за который отвечает этот обработчик.
-     */
     QueryIntent canHandle();
 
-    /**
-     * Возвращает резервное (fallback) намерение, которое также может быть обработано этим компонентом.
-     *
-     * @return Резервный {@link QueryIntent} или {@code null}, если его нет.
-     */
     default QueryIntent fallbackIntent() {
         return null;
     }
 
     /**
      * Асинхронно обрабатывает запрос и возвращает полный, агрегированный ответ.
-     *
      * @param request Универсальный запрос от пользователя.
-     * @return {@link CompletableFuture} с полным ответом {@link UniversalSyncResponse}.
+     * @param taskId ID асинхронной задачи.
+     * @return CompletableFuture с полным ответом.
      */
-    CompletableFuture<UniversalSyncResponse> handleSync(UniversalRequest request);
+    CompletableFuture<UniversalSyncResponse> handleSync(UniversalRequest request, UUID taskId);
 
     /**
-     * Асинхронно обрабатывает запрос и возвращает реактивный поток частей ответа.
-     *
+     * Асинхронно обрабатывает запрос и возвращает реактивный поток.
      * @param request Универсальный запрос от пользователя.
-     * @return {@link Flux} с частями ответа в формате {@link UniversalResponse}.
+     * @param taskId ID асинхронной задачи.
+     * @return Flux с частями ответа.
      */
-    Flux<UniversalResponse> handleStream(UniversalRequest request);
+    Flux<UniversalResponse> handleStream(UniversalRequest request, UUID taskId);
 }

@@ -1,0 +1,20 @@
+.notificationDot {
+    width: 8px;
+    height: 8px;
+    background-color: hsl(var(--destructive));
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-left: 0.5rem;
+
+    /* Анимация для привлечения внимания */
+    animation: pulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: .5;
+    }
+}

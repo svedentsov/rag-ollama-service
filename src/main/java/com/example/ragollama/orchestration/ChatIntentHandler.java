@@ -9,52 +9,34 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Обработчик, реализующий логику для намерения {@link QueryIntent#CHITCHAT} и {@link QueryIntent#UNKNOWN}.
- * <p>
- * Этот компонент является частью паттерна "Стратегия". Он инкапсулирует
- * вызов {@link ChatApplicationService} и преобразование его результата в
- * унифицированный формат ответа.
- */
 @Service
 @RequiredArgsConstructor
 public class ChatIntentHandler implements IntentHandler {
 
     private final ChatApplicationService chatApplicationService;
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public QueryIntent canHandle() {
         return QueryIntent.CHITCHAT;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public QueryIntent fallbackIntent() {
         return QueryIntent.UNKNOWN;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
-    public CompletableFuture<UniversalSyncResponse> handleSync(UniversalRequest request) {
-        return chatApplicationService.processChatRequestAsync(request.toChatRequest())
+    public CompletableFuture<UniversalSyncResponse> handleSync(UniversalRequest request, UUID taskId) {
+        return chatApplicationService.processChatRequestAsync(request.toChatRequest(), taskId)
                 .thenApply(response -> UniversalSyncResponse.from(response, canHandle()));
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
-    public Flux<UniversalResponse> handleStream(UniversalRequest request) {
-        return chatApplicationService.processChatRequestStream(request.toChatRequest())
+    public Flux<UniversalResponse> handleStream(UniversalRequest request, UUID taskId) {
+        return chatApplicationService.processChatRequestStream(request.toChatRequest(), taskId)
                 .map(UniversalResponse::from);
     }
 }

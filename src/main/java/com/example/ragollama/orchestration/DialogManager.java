@@ -17,16 +17,12 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Сервис-оркестратор, инкапсулирующий логику управления одним "ходом" в диалоге.
- */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class DialogManager {
 
-    public record TurnContext(UUID sessionId, UUID userMessageId, List<Message> history) {
-    }
+    public record TurnContext(UUID sessionId, UUID userMessageId, List<Message> history) {}
 
     private final ChatHistoryService chatHistoryService;
     private final ChatSessionService chatSessionService;
@@ -36,7 +32,7 @@ public class DialogManager {
         final ChatSession session = chatSessionService.findOrCreateSession(sessionId);
         final UUID finalSessionId = session.getSessionId();
         final UserMessage currentMessage = new UserMessage(userMessage);
-        CompletableFuture<ChatMessage> saveFuture = saveMessageAsync(session, role, userMessage, null);
+        CompletableFuture<ChatMessage> saveFuture = saveMessageAsync(session, role, userMessage, null, null);
         CompletableFuture<List<Message>> historyFuture = getHistoryAsync(finalSessionId);
         return saveFuture.thenCombine(historyFuture, (savedUserMessage, history) -> {
             List<Message> fullHistory = new ArrayList<>(history);
@@ -45,31 +41,19 @@ public class DialogManager {
         });
     }
 
-    public CompletableFuture<TurnContext> startRegenerationTurn(UUID sessionId, UUID parentMessageId) {
-        final ChatSession session = chatSessionService.findAndVerifyOwnership(sessionId);
-        CompletableFuture<List<Message>> historyFuture = getHistoryAsync(sessionId);
-        return historyFuture.thenApply(history -> new TurnContext(sessionId, parentMessageId, history));
-    }
-
-    public CompletableFuture<Void> endTurn(UUID sessionId, UUID parentMessageId, String content, MessageRole role) {
+    public CompletableFuture<Void> endTurn(UUID sessionId, UUID parentMessageId, String content, MessageRole role, UUID taskId) {
         ChatSession session = chatSessionService.findAndVerifyOwnership(sessionId);
-        return saveMessageAsync(session, role, content, parentMessageId).thenApply(v -> null);
+        return saveMessageAsync(session, role, content, parentMessageId, taskId).thenApply(v -> null);
     }
 
-    private CompletableFuture<ChatMessage> saveMessageAsync(ChatSession session, MessageRole role, String content, UUID parentId) {
-        return chatHistoryService.saveMessageAsync(session, role, content, parentId)
+    private CompletableFuture<ChatMessage> saveMessageAsync(ChatSession session, MessageRole role, String content, UUID parentId, UUID taskId) {
+        return chatHistoryService.saveMessageAsync(session, role, content, parentId, taskId)
                 .exceptionally(ex -> {
                     log.error("Не удалось сохранить сообщение для сессии {}. Роль: {}", session.getSessionId(), role, ex);
                     throw new RuntimeException("Ошибка сохранения сообщения", ex);
                 });
     }
 
-    /**
-     * Асинхронно загружает историю чата на основе настроек.
-     *
-     * @param sessionId ID сессии.
-     * @return {@link CompletableFuture} со списком сообщений.
-     */
     private CompletableFuture<List<Message>> getHistoryAsync(UUID sessionId) {
         int maxHistory = appProperties.chat().history().maxMessages();
         return chatHistoryService.getLastNMessagesAsync(sessionId, maxHistory - 1);

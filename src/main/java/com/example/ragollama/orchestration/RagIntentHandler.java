@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.io.IOException;
+import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 
@@ -27,14 +28,14 @@ public class RagIntentHandler implements IntentHandler {
     }
 
     @Override
-    public CompletableFuture<UniversalSyncResponse> handleSync(UniversalRequest request) {
-        return ragApplicationService.processRagRequestAsync(request.toRagQueryRequest())
+    public CompletableFuture<UniversalSyncResponse> handleSync(UniversalRequest request, UUID taskId) {
+        return ragApplicationService.processRagRequestAsync(request.toRagQueryRequest(), taskId)
                 .thenApply(response -> UniversalSyncResponse.from(response, canHandle()));
     }
 
     @Override
-    public Flux<UniversalResponse> handleStream(UniversalRequest request) {
-        return ragApplicationService.processRagRequestStream(request.toRagQueryRequest())
+    public Flux<UniversalResponse> handleStream(UniversalRequest request, UUID taskId) {
+        return ragApplicationService.processRagRequestStream(request.toRagQueryRequest(), taskId)
                 .map(UniversalResponse::from)
                 .onErrorResume(e -> {
                     Throwable cause = (e.getCause() != null) ? e.getCause() : e;

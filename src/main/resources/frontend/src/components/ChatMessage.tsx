@@ -1,49 +1,55 @@
-import React, { useState, useMemo, FC } from 'react';
+import React, { useState, useMemo, FC, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import toast from 'react-hot-toast';
 import { Message } from '../types';
-import { RefreshCw, Edit, Trash, ThumbsUp, ThumbsDown, Square } from 'lucide-react';
+import { RefreshCw, Edit, Trash, ThumbsUp, ThumbsDown, Square, ChevronLeft, ChevronRight } from 'lucide-react';
 import { CodeBlock } from './CodeBlock';
 import { MessageEditor } from './MessageEditor';
 import { useFeedback } from '../hooks/useFeedback';
+import { useClickOutside } from '../hooks/useClickOutside';
 import styles from './ChatMessage.module.css';
 
 export interface ChatMessageProps {
-  /** @param message - Объект сообщения для отображения. */
   message: Message;
-  /** @param isLastInTurn - Является ли это сообщение последним в паре "вопрос-ответ". */
   isLastInTurn: boolean;
-  /** @param onRegenerate - Обработчик для запроса на повторную генерацию ответа. */
+  branchInfo?: { total: number; current: number; siblings: Message[] };
   onRegenerate: () => void;
-  /** @param onUpdateAndFork - Обработчик для обновления сообщения с созданием новой ветки диалога. */
-  onUpdateAndFork: (messageId: string, newContent: string) => void;
-  /** @param onDelete - Обработчик для удаления сообщения. */
+  onUpdateContent: (messageId: string, newContent: string) => void;
   onDelete: (messageId: string) => void;
-  /** @param onStop - Обработчик для остановки генерации этого сообщения. */
   onStop: () => void;
+  onBranchChange: (parentId: string, newActiveChildId: string) => void;
 }
 
 /**
- * Отображает одно сообщение в чате.
+ * Отображает одно сообщение в чате с элегантным встроенным редактированием.
  * @param {ChatMessageProps} props - Пропсы компонента.
  */
 export const ChatMessage: FC<ChatMessageProps> = React.memo(({
   message,
   isLastInTurn,
+  branchInfo,
   onRegenerate,
-  onUpdateAndFork,
+  onUpdateContent,
   onDelete,
-  onStop
+  onStop,
+  onBranchChange
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const { mutate: sendFeedback, isPending: isFeedbackSending } = useFeedback();
   const isUser = message.type === 'user';
 
-  const handleUpdate = (newContent: string) => {
-    onUpdateAndFork(message.id, newContent);
+  const editWrapperRef = useRef<HTMLDivElement>(null);
+  useClickOutside(editWrapperRef, () => {
+    if (isEditing) {
+      setIsEditing(false);
+    }
+  });
+
+  const handleSave = (newContent: string) => {
+    onUpdateContent(message.id, newContent);
     setIsEditing(false);
-    toast.success('Запрос обновлен. Генерируется новый ответ...');
+    toast.success('Сообщение обновлено.');
   };
 
   const handleFeedback = (isHelpful: boolean) => {
@@ -54,7 +60,6 @@ export const ChatMessage: FC<ChatMessageProps> = React.memo(({
     }
   };
 
-  // Логика рендеринга Markdown возвращена в компонент, которому она принадлежит.
   const markdownComponents = useMemo(() => ({
       code: ({ node, className, children, ...props }: any) => {
         const match = /language-(\w+)/.exec(className || '');
@@ -63,7 +68,7 @@ export const ChatMessage: FC<ChatMessageProps> = React.memo(({
       table: ({ node, ...props }: any) => <table className={styles.markdownTable} {...props} />,
   }), []);
 
-  const thinkingIndicator = message.isStreaming && message.text === '' && !message.error;
+  const thinkingIndicator = message.isStreaming && message.text === '';
 
   if (thinkingIndicator) {
     return (
@@ -75,45 +80,50 @@ export const ChatMessage: FC<ChatMessageProps> = React.memo(({
 
   return (
     <div className={`${styles.messageWrapper} ${isUser ? styles.user : styles.assistant}`} tabIndex={-1}>
-      <div className={styles.contentWrapper}>
-        <div className={`${styles.bubble} ${isUser ? styles.userBubble : styles.assistantBubble} ${message.error ? styles.isError : ''}`}>
-          {isEditing ? (
-            <MessageEditor
-              initialText={message.text}
-              onSave={handleUpdate}
-              onCancel={() => setIsEditing(false)}
-            />
-          ) : (
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-              {message.text || (message.error ? `**Ошибка:** ${message.error}` : '')}
-            </ReactMarkdown>
-          )}
-        </div>
-
-        {!isUser && !message.isStreaming && !message.error && (
-            <div className={styles.feedbackActions}>
-                <button className={styles.actionButton} onClick={() => handleFeedback(true)} disabled={isFeedbackSending} title="Полезный ответ"><ThumbsUp size={14} /></button>
-                <button className={styles.actionButton} onClick={() => handleFeedback(false)} disabled={isFeedbackSending} title="Бесполезный ответ"><ThumbsDown size={14} /></button>
+      <div ref={editWrapperRef} className={styles.contentWrapper}>
+        {isEditing ? (
+          <MessageEditor
+            initialText={message.text}
+            onSave={handleSave}
+            onCancel={() => setIsEditing(false)}
+            saveButtonText="Сохранить"
+          />
+        ) : (
+          <>
+            <div className={`${styles.bubble} ${isUser ? styles.userBubble : styles.assistantBubble} ${message.error ? styles.isError : ''}`}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                {message.text || (message.error ? `**Ошибка:** ${message.error}` : '')}
+              </ReactMarkdown>
             </div>
-        )}
-
-        <div className={styles.messageActions}>
-          {isUser && isLastInTurn && !message.isStreaming && !isEditing && (
-            <>
-              <button className={styles.actionButton} onClick={() => setIsEditing(true)} title="Редактировать и отправить заново"><Edit size={14} /></button>
-              <button className={styles.actionButton} onClick={() => onDelete(message.id)} title="Удалить"><Trash size={14} /></button>
-            </>
-          )}
-          {!isUser && !isEditing && (
-            <>
-              {message.isStreaming ? (
-                <button className={styles.actionButton} onClick={onStop} title="Остановить генерацию"><Square size={14} /></button>
-              ) : (
-                isLastInTurn && <button className={styles.actionButton} onClick={onRegenerate} title="Повторить генерацию"><RefreshCw size={14} /></button>
+            {!isUser && !message.isStreaming && !message.error && (
+                <div className={styles.feedbackActions}>
+                    <button className={styles.actionButton} onClick={() => sendFeedback({ taskId: message.taskId!, isHelpful: true })} disabled={isFeedbackSending} title="Полезный ответ"><ThumbsUp size={14} /></button>
+                    <button className={styles.actionButton} onClick={() => sendFeedback({ taskId: message.taskId!, isHelpful: false })} disabled={isFeedbackSending} title="Бесполезный ответ"><ThumbsDown size={14} /></button>
+                </div>
+            )}
+            <div className={styles.messageActions}>
+              {branchInfo && (
+                <div className={styles.branchControls}>
+                 <button onClick={() => { if (branchInfo && branchInfo.current > 1 && message.parentId) onBranchChange(message.parentId, branchInfo.siblings[branchInfo.current - 2].id) }} disabled={branchInfo.current <= 1} className={styles.branchButton} aria-label="Предыдущий ответ"><ChevronLeft size={16} /></button>
+                 <span className={styles.branchIndicator}>{branchInfo.current} / {branchInfo.total}</span>
+                 <button onClick={() => { if (branchInfo && branchInfo.current < branchInfo.total && message.parentId) onBranchChange(message.parentId, branchInfo.siblings[branchInfo.current].id) }} disabled={branchInfo.current >= branchInfo.total} className={styles.branchButton} aria-label="Следующий ответ"><ChevronRight size={16} /></button>
+                </div>
               )}
-            </>
-          )}
-        </div>
+              {!message.isStreaming && (
+                <>
+                  <button className={styles.actionButton} onClick={() => setIsEditing(true)} title="Редактировать"><Edit size={14} /></button>
+                  <button className={styles.actionButton} onClick={() => onDelete(message.id)} title="Удалить"><Trash size={14} /></button>
+                </>
+              )}
+              {!isUser && !message.isStreaming && isLastInTurn && (
+                <button className={styles.actionButton} onClick={onRegenerate} title="Повторить генерацию"><RefreshCw size={14} /></button>
+              )}
+              {message.isStreaming && (
+                <button className={styles.actionButton} onClick={onStop} title="Остановить генерацию"><Square size={14} /></button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

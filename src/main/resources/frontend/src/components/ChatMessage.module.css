@@ -3,12 +3,7 @@
     margin-bottom: 1rem;
     max-width: 90%;
     outline: none;
-    border-radius: var(--radius); /* Добавим радиус для красоты фокуса */
-}
-
-/* Применяем стили фокуса, когда сам элемент или его дочерние элементы в фокусе */
-.messageWrapper:focus-within {
-    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.5);
+    border-radius: var(--radius);
 }
 
 .user {
@@ -25,15 +20,22 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+    width: 100%; /* Заставляем wrapper занимать всю ширину */
+    box-sizing: border-box;
 }
 
-.user .contentWrapper {
-    align-items: flex-end;
+/* В режиме просмотра ширина пузыря определяется контентом */
+.messageWrapper:not(.isEditing) .contentWrapper {
+    width: auto;
+    max-width: 90%;
+}
+.messageWrapper:not(.isEditing).user .contentWrapper {
+    align-self: flex-end;
+}
+.messageWrapper:not(.isEditing).assistant .contentWrapper {
+    align-self: flex-start;
 }
 
-.assistant .contentWrapper {
-    align-items: flex-start;
-}
 
 .bubble {
     padding: 0.75rem 1rem;
@@ -41,6 +43,7 @@
     word-wrap: break-word;
     overflow-wrap: break-word;
     line-height: var(--line-height-normal);
+    box-sizing: border-box;
 }
 
 .bubble > :first-child { margin-top: 0; }
@@ -51,16 +54,16 @@
     color: hsl(var(--primary-foreground));
     border-radius: 1rem 0.25rem 1rem 1rem;
     box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-    transition: box-shadow 0.2s ease-in-out;
 }
 
 .assistantBubble {
-    background-color: hsl(var(--background));
-    color: hsl(var(--secondary-foreground));
+    /* Убираем фон и рамку для сообщений AI в режиме просмотра */
+    background-color: transparent;
+    color: hsl(var(--foreground));
+    border-radius: 0;
     border: none;
-    border-radius: 0.25rem 1rem 1rem 1rem;
-    box-shadow: none;
-    padding: 0;
+    padding-left: 0;
+    padding-right: 0;
 }
 
 .isError {
@@ -156,16 +159,12 @@
     margin-top: 0.5rem;
     opacity: 0;
     transition: opacity 0.2s ease-in-out;
+    justify-content: flex-end;
+    width: 100%;
+    box-sizing: border-box;
 }
 
-/*
- * УЛУЧШЕНИЕ ДОСТУПНОСТИ:
- * Кнопки действий теперь становятся видимыми не только при наведении (:hover),
- * но и когда сам контейнер сообщения получает фокус (например, через Tab).
- * Это делает их доступными для пользователей с клавиатуры.
- */
-.messageWrapper:hover .messageActions,
-.messageWrapper:focus-within .messageActions {
+.messageWrapper:hover .messageActions {
     opacity: 1;
 }
 
@@ -187,33 +186,63 @@
     color: hsl(var(--accent-foreground));
 }
 
+.actionButton:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px hsl(var(--ring));
+}
+
 .editContainer {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
     width: 100%;
 }
 
+.bubbleContent {
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
+    border: 1px solid hsl(var(--border));
+}
+.user .bubbleContent {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border-color: hsl(var(--primary));
+}
+.assistant .bubbleContent {
+    background-color: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
+}
+
+.bubbleContent:focus-within {
+    border-color: hsl(var(--ring));
+    box-shadow: 0 0 0 1px hsl(var(--ring));
+}
+
 .editTextarea {
+    background-color: transparent;
+    color: inherit;
+    border: none;
+    padding: 0;
+    margin: 0;
     width: 100%;
-    padding: 0.6rem 0.75rem;
-    border-radius: 0.5rem;
-    border: 1px solid hsl(var(--ring));
-    background-color: hsl(var(--background));
     resize: none;
-    min-height: 44px;
+    min-height: 1.5rem;
     max-height: 20rem;
     overflow-y: auto;
     box-sizing: border-box;
-    color: hsl(var(--foreground));
     font-family: var(--font-family-sans);
     font-size: var(--font-size-base);
+    line-height: var(--line-height-normal);
+}
+
+.editTextarea:focus {
+    outline: none;
 }
 
 .editActions {
     display: flex;
     gap: 0.5rem;
     justify-content: flex-end;
+    width: 100%;
+    margin-top: 0.75rem;
+    box-sizing: border-box;
 }
 
 .saveButton, .cancelButton {
@@ -223,6 +252,10 @@
     cursor: pointer;
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
+}
+.saveButton:focus-visible, .cancelButton:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px hsl(var(--ring));
 }
 
 .saveButton {
@@ -236,10 +269,48 @@
 }
 
 .feedbackActions {
-    border-top: 1px solid hsl(var(--border));
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
     display: flex;
     justify-content: flex-end;
     gap: 0.5rem;
+    margin-top: 0.5rem;
+    width: 100%;
+}
+
+.branchControls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.branchIndicator {
+    font-size: var(--font-size-xs);
+    color: hsl(var(--muted-foreground));
+    font-variant-numeric: tabular-nums;
+}
+
+.branchButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.125rem;
+    border-radius: 50%;
+    border: 1px solid hsl(var(--border));
+    background-color: hsl(var(--background));
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+.branchButton:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px hsl(var(--ring));
+}
+
+.branchButton:hover:not(:disabled) {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+}
+
+.branchButton:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }

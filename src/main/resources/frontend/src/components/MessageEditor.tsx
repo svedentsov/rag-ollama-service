@@ -1,10 +1,7 @@
 import React, { useState, useRef, useEffect, FC } from 'react';
+import { useClickOutside } from '../hooks/useClickOutside';
 import styles from './ChatMessage.module.css';
 
-/**
- * Пропсы для компонента MessageEditor.
- * @internal
- */
 export interface MessageEditorProps {
   /** @param initialText - Начальный текст для редактирования. */
   initialText: string;
@@ -15,13 +12,17 @@ export interface MessageEditorProps {
 }
 
 /**
- * Суб-компонент, инкапсулирующий форму и логику редактирования сообщения.
+ * Компонент для встроенного редактирования текста сообщения, включающий поле ввода и кнопки управления.
  * @param {MessageEditorProps} props - Пропсы компонента.
  * @internal
  */
 export const MessageEditor: FC<MessageEditorProps> = ({ initialText, onSave, onCancel }) => {
   const [editText, setEditText] = useState(initialText);
+  const editorRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Отслеживаем клики за пределами всего блока редактора (textarea + кнопки)
+  useClickOutside(editorRef, onCancel);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -52,19 +53,21 @@ export const MessageEditor: FC<MessageEditorProps> = ({ initialText, onSave, onC
   };
 
   return (
-    <div className={styles.editContainer}>
-      <textarea
-        ref={textareaRef}
-        value={editText}
-        onChange={(e) => setEditText(e.target.value)}
-        onKeyDown={handleKeyDown}
-        className={styles.editTextarea}
-        aria-label="Редактирование сообщения"
-      />
-      <div className={styles.editActions}>
-        <button onClick={handleSave} className={styles.saveButton}>Сохранить и отправить</button>
-        <button onClick={onCancel} className={styles.cancelButton}>Отмена</button>
-      </div>
+    <div ref={editorRef} className={styles.editContainer}>
+        <div className={styles.bubbleContent}>
+            <textarea
+                ref={textareaRef}
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className={styles.editTextarea}
+                aria-label="Редактирование сообщения"
+            />
+        </div>
+        <div className={styles.editActions}>
+            <button onClick={handleSave} className={styles.saveButton}>Сохранить</button>
+            <button onClick={onCancel} className={styles.cancelButton}>Отмена</button>
+        </div>
     </div>
   );
 };

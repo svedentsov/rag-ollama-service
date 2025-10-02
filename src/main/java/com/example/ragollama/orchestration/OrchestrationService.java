@@ -4,6 +4,7 @@ import com.example.ragollama.agent.routing.QueryIntent;
 import com.example.ragollama.agent.routing.RouterAgentService;
 import com.example.ragollama.orchestration.dto.UniversalRequest;
 import com.example.ragollama.orchestration.dto.UniversalResponse;
+import com.example.ragollama.orchestration.dto.UniversalSyncResponse;
 import com.example.ragollama.orchestration.handlers.IntentHandler;
 import com.example.ragollama.shared.task.TaskLifecycleService;
 import com.example.ragollama.shared.task.TaskSubmissionResponse;
@@ -22,9 +23,6 @@ import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Главный сервис-оркестратор.
- */
 @Slf4j
 @Service
 public class OrchestrationService {
@@ -52,16 +50,22 @@ public class OrchestrationService {
     }
 
     public TaskSubmissionResponse processAsync(UniversalRequest request) {
-        CompletableFuture<?> taskFuture = router.route(request.query())
-                .flatMap(intent -> {
-                    log.info("Маршрутизация запроса с намерением: {}. SessionID: {}", intent, request.sessionId());
-                    IntentHandler handler = findHandler(intent);
-                    return Mono.fromFuture(handler.handleSync(request));
-                }).toFuture();
-
+        CompletableFuture<UniversalSyncResponse> taskFuture = new CompletableFuture<>();
         UUID taskId = taskService.register(taskFuture, request.sessionId());
+
+        router.route(request.query())
+                .flatMap(intent -> {
+                    log.info("Маршрутизация запроса с намерением: {}. TaskID: {}", intent, taskId);
+                    IntentHandler handler = findHandler(intent);
+                    return Mono.fromFuture(handler.handleSync(request, taskId));
+                })
+                .doOnSuccess(taskFuture::complete)
+                .doOnError(taskFuture::completeExceptionally)
+                .subscribe();
+
         return new TaskSubmissionResponse(taskId);
     }
+
 
     public Flux<UniversalResponse> processStream(UniversalRequest request) {
         return router.route(request.query())
@@ -71,7 +75,7 @@ public class OrchestrationService {
                     log.info("Маршрутизация потокового запроса с намерением: {}. TaskID: {}", intent, taskId);
 
                     IntentHandler handler = findHandler(intent);
-                    Flux<UniversalResponse> responseStream = handler.handleStream(request);
+                    Flux<UniversalResponse> responseStream = handler.handleStream(request, taskId);
 
                     responseStream
                             .doOnTerminate(() -> {
@@ -80,10 +84,8 @@ public class OrchestrationService {
                             .doOnError(streamCompletionFuture::completeExceptionally)
                             .subscribe(
                                     event -> taskService.emitEvent(taskId, event),
-                                    error -> {
-                                    },
-                                    () -> {
-                                    }
+                                    error -> {},
+                                    () -> {}
                             );
 
                     return Flux.concat(
@@ -92,14 +94,12 @@ public class OrchestrationService {
                     );
                 })
                 .onErrorResume(e -> {
-                    // Эталонная обработка ошибок в реактивном потоке
                     Throwable cause = (e.getCause() != null) ? e.getCause() : e;
                     if (cause instanceof ClientAbortException || cause instanceof CancellationException) {
                         log.warn("Соединение было разорвано клиентом. Чисто завершаем поток.");
-                        return Flux.empty(); // Просто завершаем поток без ошибки
+                        return Flux.empty();
                     }
                     log.error("Непредвиденная ошибка в потоке: {}", e.getMessage(), cause);
-                    // Отправляем событие ошибки клиенту
                     return Flux.just(new UniversalResponse.Error("Произошла внутренняя ошибка: " + e.getMessage()));
                 });
     }

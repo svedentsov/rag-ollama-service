@@ -14,13 +14,10 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.io.IOException;
+import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Обработчик, реализующий логику для намерения {@link QueryIntent#CODE_GENERATION}.
- * Эта версия исправлена для корректной потоковой передачи данных.
- */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -35,19 +32,19 @@ public class CodeGenerationIntentHandler implements IntentHandler {
     }
 
     @Override
-    public CompletableFuture<UniversalSyncResponse> handleSync(UniversalRequest request) {
+    public CompletableFuture<UniversalSyncResponse> handleSync(UniversalRequest request, UUID taskId) {
         return dialogManager.startTurn(request.sessionId(), request.query(), MessageRole.USER)
                 .thenCompose(turnContext ->
                         codeGenerationService.generateCode(request.toCodeGenerationRequest())
                                 .flatMap(response -> Mono.fromFuture(
-                                        dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), response.generatedCode(), MessageRole.ASSISTANT)
+                                        dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), response.generatedCode(), MessageRole.ASSISTANT, taskId)
                                                 .thenApply(v -> UniversalSyncResponse.from(response, canHandle()))
                                 )).toFuture()
                 );
     }
 
     @Override
-    public Flux<UniversalResponse> handleStream(UniversalRequest request) {
+    public Flux<UniversalResponse> handleStream(UniversalRequest request, UUID taskId) {
         return Mono.fromFuture(() -> dialogManager.startTurn(request.sessionId(), request.query(), MessageRole.USER))
                 .flatMapMany(turnContext -> {
                     final StringBuilder fullResponseBuilder = new StringBuilder();
@@ -56,7 +53,7 @@ public class CodeGenerationIntentHandler implements IntentHandler {
                             .doOnComplete(() -> {
                                 String fullResponse = fullResponseBuilder.toString();
                                 if (!fullResponse.isBlank()) {
-                                    dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), fullResponse, MessageRole.ASSISTANT);
+                                    dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), fullResponse, MessageRole.ASSISTANT, taskId);
                                 }
                             })
                             .map(UniversalResponse::from)
