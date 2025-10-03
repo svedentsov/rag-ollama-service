@@ -22,37 +22,58 @@ import java.util.UUID;
 @Table(name = "chat_sessions")
 public class ChatSession {
 
+    /**
+     * Уникальный идентификатор сессии.
+     * Теперь генерируется автоматически на уровне JPA.
+     */
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "session_id")
     private UUID sessionId;
 
+    /**
+     * Имя пользователя, которому принадлежит сессия.
+     */
     @Column(name = "user_name", nullable = false)
     private String userName;
 
+    /**
+     * Название чата, видимое пользователю.
+     */
     @Column(name = "chat_name", nullable = false)
     private String chatName;
 
     /**
      * Связь One-to-Many с сообщениями.
-     * orphanRemoval=true убран, каскадное удаление делегировано БД.
-     * CascadeType.REMOVE убран.
+     * `cascade = CascadeType.ALL` и `orphanRemoval = true` обеспечивают полный
+     * контроль жизненного цикла сообщений через сессию.
      */
     @OneToMany(
             mappedBy = "session",
-            cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REFRESH},
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
             fetch = FetchType.LAZY
     )
     @Builder.Default
     private List<ChatMessage> messages = new ArrayList<>();
 
+    /**
+     * Временная метка создания сессии.
+     */
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
+    /**
+     * Временная метка последнего обновления сессии.
+     */
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
+    /**
+     * Транзиентное поле для хранения последнего сообщения (не сохраняется в БД).
+     */
     @Transient
     private ChatMessage lastMessage;
 

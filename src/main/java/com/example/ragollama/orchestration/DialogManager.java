@@ -1,5 +1,6 @@
 package com.example.ragollama.orchestration;
 
+import com.example.ragollama.chat.domain.ChatMessageRepository;
 import com.example.ragollama.chat.domain.ChatHistoryService;
 import com.example.ragollama.chat.domain.ChatSessionService;
 import com.example.ragollama.chat.domain.model.ChatMessage;
@@ -14,33 +15,74 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Сервис-оркестратор, управляющий жизненным циклом одного "хода" в диалоге.
+ * Отвечает за получение истории, сохранение сообщений и поддержание контекста сессии.
+ */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class DialogManager {
 
+    /**
+     * Контекстный объект, передаваемый между этапами обработки одного "хода".
+     * @param sessionId ID текущей сессии.
+     * @param userMessageId ID только что сохраненного или переиспользованного сообщения пользователя.
+     * @param history Список сообщений для передачи в LLM.
+     */
     public record TurnContext(UUID sessionId, UUID userMessageId, List<Message> history) {}
 
     private final ChatHistoryService chatHistoryService;
     private final ChatSessionService chatSessionService;
+    private final ChatMessageRepository chatMessageRepository;
     private final AppProperties appProperties;
 
+    /**
+     * Начинает новый "ход" диалога: сохраняет сообщение пользователя (или переиспользует существующее) и загружает историю.
+     * @param sessionId ID сессии (может быть null для новой).
+     * @param userMessage Текст сообщения от пользователя.
+     * @param role Роль (всегда USER).
+     * @return CompletableFuture с TurnContext, содержащим все необходимое для следующего шага.
+     */
     public CompletableFuture<TurnContext> startTurn(UUID sessionId, String userMessage, MessageRole role) {
         final ChatSession session = chatSessionService.findOrCreateSession(sessionId);
         final UUID finalSessionId = session.getSessionId();
         final UserMessage currentMessage = new UserMessage(userMessage);
-        CompletableFuture<ChatMessage> saveFuture = saveMessageAsync(session, role, userMessage, null, null);
+
+        // Проверяем, не является ли этот запрос дублем последнего
+        Optional<ChatMessage> lastMessageOpt = chatMessageRepository.findTopBySessionSessionIdOrderByCreatedAtDesc(finalSessionId);
+
+        CompletableFuture<ChatMessage> userMessageFuture;
+        if (lastMessageOpt.isPresent() && lastMessageOpt.get().getRole() == MessageRole.USER && lastMessageOpt.get().getContent().equals(userMessage)) {
+            log.debug("Переиспользование существующего сообщения пользователя (ID: {}) для сессии {}", lastMessageOpt.get().getId(), finalSessionId);
+            userMessageFuture = CompletableFuture.completedFuture(lastMessageOpt.get());
+        } else {
+            // Сохраняем новое сообщение пользователя (у него нет родителя)
+            userMessageFuture = saveMessageAsync(session, role, userMessage, null, null);
+        }
+
         CompletableFuture<List<Message>> historyFuture = getHistoryAsync(finalSessionId);
-        return saveFuture.thenCombine(historyFuture, (savedUserMessage, history) -> {
+
+        return userMessageFuture.thenCombine(historyFuture, (userMessageEntity, history) -> {
             List<Message> fullHistory = new ArrayList<>(history);
             fullHistory.add(currentMessage);
-            return new TurnContext(finalSessionId, savedUserMessage.getId(), fullHistory);
+            return new TurnContext(finalSessionId, userMessageEntity.getId(), fullHistory);
         });
     }
 
+    /**
+     * Завершает "ход" диалога: сохраняет ответ ассистента.
+     * @param sessionId ID сессии.
+     * @param parentMessageId ID сообщения пользователя, на которое дается ответ.
+     * @param content Текст ответа ассистента.
+     * @param role Роль (всегда ASSISTANT).
+     * @param taskId ID асинхронной задачи, сгенерировавшей ответ.
+     * @return CompletableFuture, завершающийся после сохранения.
+     */
     public CompletableFuture<Void> endTurn(UUID sessionId, UUID parentMessageId, String content, MessageRole role, UUID taskId) {
         ChatSession session = chatSessionService.findAndVerifyOwnership(sessionId);
         return saveMessageAsync(session, role, content, parentMessageId, taskId).thenApply(v -> null);

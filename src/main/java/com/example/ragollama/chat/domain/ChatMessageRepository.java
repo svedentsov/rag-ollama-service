@@ -20,9 +20,23 @@ import java.util.UUID;
 @Repository
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> {
 
+    /**
+     * Находит последние N сообщений в сессии.
+     * @param sessionId ID сессии.
+     * @param pageable Объект пагинации для ограничения.
+     * @return Список сообщений.
+     */
     @ResilientDatabaseOperation
     @Query("SELECT m FROM ChatMessage m WHERE m.session.sessionId = :sessionId")
     List<ChatMessage> findBySessionId(UUID sessionId, Pageable pageable);
+
+    /**
+     * Находит самое последнее сообщение в сессии.
+     * @param sessionId ID сессии.
+     * @return Optional с последним сообщением.
+     */
+    @ResilientDatabaseOperation
+    Optional<ChatMessage> findTopBySessionSessionIdOrderByCreatedAtDesc(UUID sessionId);
 
     @Override
     @ResilientDatabaseOperation

@@ -6,28 +6,28 @@ import { streamChatResponse } from '../api';
 import { useAddNotification } from '../state/notificationStore';
 
 /**
- * Вспомогательная функция для получения текущего sessionId напрямую из URL.
- * Это позволяет избежать проблемы "устаревшего замыкания" (stale closure).
- * @returns ID активной сессии или null.
- */
-const getActiveSessionIdFromURL = (): string | null => {
-  const params = new URLSearchParams(window.location.search);
-  return params.get('sessionId');
-};
-
-/**
- * Хук для управления множественными, параллельными потоками ответов.
+ * Хук для управления множественными, параллельными потоками ответов чата.
+ * Инкапсулирует логику запуска, обработки событий (SSE), обновления кэша
+ * React Query в реальном времени и отмены запросов.
  */
 export function useStreamManager() {
   const queryClient = useQueryClient();
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const addNotification = useAddNotification();
 
+  /**
+   * Обновляет кэш сообщений React Query на основе входящего события из потока.
+   * Эта функция обернута в useCallback для стабильности ссылок.
+   * @param sessionId ID сессии, для которой пришло обновление.
+   * @param assistantMessageId ID сообщения-плейсхолдера ассистента, которое нужно обновить.
+   * @param event Событие из потока SSE.
+   */
   const updateQueryCache = useCallback((sessionId: string, assistantMessageId: string, event: UniversalStreamResponse) => {
     const queryKey = ['messages', sessionId];
     queryClient.setQueryData<Message[]>(queryKey, (oldData = []) =>
       oldData.map(msg => {
         if (msg.id !== assistantMessageId) return msg;
+
         const updatedMsg = { ...msg };
         switch (event.type) {
           case 'task_started':
@@ -48,10 +48,18 @@ export function useStreamManager() {
     );
   }, [queryClient]);
 
+  /**
+   * Запускает новый поток для генерации ответа.
+   * @param sessionId ID сессии чата.
+   * @param query Текст запроса пользователя.
+   * @param assistantMessageId Клиентский ID для сообщения-плейсхолдера ассистента.
+   * @param currentSessionId ID текущей активной сессии в UI.
+   */
   const startStream = useCallback(async (
     sessionId: string,
     query: string,
-    assistantMessageId: string
+    assistantMessageId: string,
+    currentSessionId: string | null
   ) => {
     const abortController = new AbortController();
     abortControllersRef.current.set(assistantMessageId, abortController);
@@ -66,24 +74,27 @@ export function useStreamManager() {
         updateQueryCache(sessionId, assistantMessageId, { type: 'error', message: (error as Error).message });
       }
     } finally {
+      // Финальное обновление статуса сообщения и инвалидация запросов
       queryClient.setQueryData<Message[]>(['messages', sessionId], (oldData = []) =>
         oldData.map(msg =>
           msg.id === assistantMessageId ? { ...msg, isStreaming: false } : msg
         )
       );
       abortControllersRef.current.delete(assistantMessageId);
-      
-      // ИЗМЕНЕНИЕ ЗДЕСЬ: Получаем актуальный ID сессии из URL в момент завершения
-      const activeSessionId = getActiveSessionIdFromURL();
-      if (sessionId !== activeSessionId) {
+      // Если ответ пришел для неактивного чата, показать уведомление
+      if (sessionId !== currentSessionId) {
         addNotification(sessionId);
       }
-      
+      // Инвалидируем запросы, чтобы забрать финальные данные (например, trust score)
       await queryClient.invalidateQueries({ queryKey: ['messages', sessionId], exact: true });
       await queryClient.invalidateQueries({ queryKey: ['chatSessions'] });
     }
   }, [queryClient, updateQueryCache, addNotification]);
 
+  /**
+   * Отменяет активный поток генерации по ID сообщения ассистента.
+   * @param assistantMessageId ID сообщения, генерацию которого нужно остановить.
+   */
   const stopStream = useCallback((assistantMessageId: string) => {
     const controller = abortControllersRef.current.get(assistantMessageId);
     if (controller) {

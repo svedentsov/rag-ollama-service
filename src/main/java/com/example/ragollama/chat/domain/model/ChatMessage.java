@@ -9,7 +9,7 @@ import java.util.UUID;
 
 /**
  * Сущность JPA, представляющая одно сообщение в диалоге.
- * Добавлено поле taskId для связи с асинхронной операцией.
+ * Добавлены поля parentId и taskId для поддержки ветвления и асинхронных операций.
  */
 @Getter
 @Setter
@@ -30,6 +30,11 @@ public class ChatMessage {
     @JoinColumn(name = "session_id", nullable = false)
     private ChatSession session;
 
+    /**
+     * ID родительского сообщения. Для сообщения пользователя это null.
+     * Для ответа ассистента это ID сообщения пользователя.
+     * Позволяет создавать древовидные структуры и ветвление.
+     */
     @Column(name = "parent_id", updatable = false)
     private UUID parentId;
 
@@ -53,6 +58,10 @@ public class ChatMessage {
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
+    /**
+     * Вспомогательный метод для получения ID сессии без загрузки ленивой сущности.
+     * @return ID сессии.
+     */
     public UUID getSessionId() {
         return (session != null) ? session.getSessionId() : null;
     }
