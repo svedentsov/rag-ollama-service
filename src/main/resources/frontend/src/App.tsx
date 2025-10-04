@@ -8,7 +8,6 @@ import { useChatMessages } from './hooks/useChatMessages';
 import { useStreamManager } from './hooks/useStreamManager';
 import { useScrollManager } from './hooks/useScrollManager';
 import { useVisibleMessages } from './hooks/useVisibleMessages';
-import { useBranchSelectionStore } from './state/branchSelectionStore';
 import styles from './App.module.css';
 
 /**
@@ -29,11 +28,7 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
   const { startStream, stopStream } = useStreamManager();
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
-  // Получаем действие для изменения состояния веток из стора
-  const selectBranch = useBranchSelectionStore((state) => state.selectBranch);
-  
-  // `handleBranchChange` больше не нужен, хук `useVisibleMessages` теперь автономен.
-  const { visibleMessages, messageBranchInfo } = useVisibleMessages(messages);
+  const { visibleMessages, messageBranchInfo } = useVisibleMessages(sessionId, messages);
 
   const { containerRef, messagesEndRef, showScrollButton, scrollToBottom } = useScrollManager([visibleMessages]);
   const isAnyMessageStreaming = messages.some(m => m.isStreaming);
@@ -55,12 +50,13 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
       const newAssistantMessage: Message = { id: uuidv4(), type: 'assistant', text: '', parentId: parentMessage.id, isStreaming: true };
       
       queryClient.setQueryData<Message[]>(['messages', sessionId], (old = []) => [...old, newAssistantMessage]);
-      // Немедленно переключаемся на новую ветку через стор
-      selectBranch(parentMessage.id, newAssistantMessage.id);
+      // Здесь больше не нужно вызывать `selectBranch`, так как `useVisibleMessages` 
+      // автоматически подхватит новое сообщение как последнее и сделает его видимым.
+      // Сохранение выбора произойдет в ChatMessage при явном клике пользователя.
 
       startStream(sessionId, parentMessage.text, newAssistantMessage.id, sessionId);
     }
-  }, [isAnyMessageStreaming, messages, queryClient, sessionId, startStream, selectBranch]);
+  }, [isAnyMessageStreaming, messages, queryClient, sessionId, startStream]);
 
   const handleUpdateMessage = useCallback((messageId: string, newContent: string) => {
     updateMessage({ messageId, newContent });
@@ -97,6 +93,7 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
           {visibleMessages.map((msg) => (
             <ChatMessage
               key={msg.id}
+              sessionId={sessionId}
               message={msg}
               isLastInTurn={isLastMessage(msg.id)}
               branchInfo={messageBranchInfo.get(msg.id)}

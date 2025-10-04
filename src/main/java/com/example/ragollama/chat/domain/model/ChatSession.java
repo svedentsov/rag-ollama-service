@@ -1,13 +1,17 @@
 package com.example.ragollama.chat.domain.model;
 
+import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.Type;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -44,14 +48,18 @@ public class ChatSession {
     private String chatName;
 
     /**
-     * Связь One-to-Many с сообщениями.
-     * `cascade = CascadeType.ALL` и `orphanRemoval = true` обеспечивают полный
-     * контроль жизненного цикла сообщений через сессию.
+     * Хранит выбор активных веток для каждого родительского сообщения.
+     * Ключ - parent_message_id, Значение - active_child_message_id.
+     * Хранится в формате JSONB для гибкости.
      */
+    @Type(JsonType.class)
+    @Column(name = "active_branches", columnDefinition = "jsonb")
+    @Builder.Default
+    private Map<String, String> activeBranches = new HashMap<>();
+
     @OneToMany(
             mappedBy = "session",
-            cascade = CascadeType.ALL,
-            orphanRemoval = true,
+            cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REFRESH},
             fetch = FetchType.LAZY
     )
     @Builder.Default

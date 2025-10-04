@@ -2,30 +2,19 @@ package com.example.ragollama.web;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.servlet.ModelAndView;
+import reactor.core.publisher.Mono;
 
 import java.util.Arrays;
 
 /**
- * Контроллер для отображения веб-интерфейса чата.
+ * Контроллер для отображения веб-интерфейса чата, адаптированный для WebFlux.
  * <p>
- * Этот контроллер является единой точкой входа для фронтенд-приложения,
- * написанного на React. Он использует FreeMarker для рендеринга
- * базовой HTML-страницы ("скелета"), которая затем "оживляется"
- * с помощью JavaScript.
- * <p>
- * <b>Архитектурное решение:</b> Вместо того, чтобы рендерить разные
- * HTML-страницы, этот контроллер всегда рендерит один и тот же шаблон-обертку,
- * который содержит единую точку монтирования для React (`<div id="app-root">`).
- * React-приложение само отвечает за всю маршрутизацию на стороне клиента
- * на основе URL, что соответствует подходу Single-Page Application (SPA).
- * Это упрощает бэкенд и переносит всю логику отображения на фронтенд.
- * <p>
- * Контроллер также передает в шаблон флаг `isDevelopmentMode`, который
- * позволяет шаблону подключать скрипты либо с Vite Dev Server (для
- * Hot Module Replacement), либо скомпилированные production-ассеты.
+ * Эта версия использует идиоматичный для WebFlux подход: принимает объект
+ * {@link Model} и возвращает {@code Mono<String>}, где строка — это имя шаблона.
+ * Такой подход полностью неблокирующий и соответствует парадигме реактивного программирования.
  */
 @Controller
 public class WebUIController {
@@ -54,14 +43,13 @@ public class WebUIController {
      * Этот метод обрабатывает все основные URL (`/`, `/chat`), так как
      * реальная маршрутизация происходит на клиенте.
      *
-     * @param sessionIdAsString Опциональный ID сессии чата (игнорируется на бэкенде,
-     *                          обрабатывается React).
-     * @return ModelAndView для корневого шаблона `_layout`, который загружает React.
+     * @param sessionIdAsString Опциональный ID сессии чата (игнорируется на бэкенде).
+     * @param model             Объект модели для передачи данных в шаблон FreeMarker.
+     * @return {@link Mono}, содержащий имя шаблона для рендеринга.
      */
     @GetMapping({"/", "/chat"})
-    public ModelAndView getIndexPage(@RequestParam(required = false) String sessionIdAsString) {
-        ModelAndView mav = new ModelAndView("index_spa");
-        mav.addObject("isDevelopmentMode", isDevelopmentMode());
-        return mav;
+    public Mono<String> getIndexPage(@RequestParam(required = false) String sessionIdAsString, Model model) {
+        model.addAttribute("isDevelopmentMode", isDevelopmentMode());
+        return Mono.just("index_spa");
     }
 }

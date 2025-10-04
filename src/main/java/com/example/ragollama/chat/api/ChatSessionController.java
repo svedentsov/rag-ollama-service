@@ -48,6 +48,19 @@ public class ChatSessionController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * Устанавливает активную ветку для конкретного вопроса в чате.
+     * @param sessionId ID сессии.
+     * @param request DTO с ID родительского и дочернего сообщений.
+     * @return {@link ResponseEntity} со статусом 200 OK.
+     */
+    @PutMapping("/{sessionId}/active-branch")
+    @Operation(summary = "Выбрать активную ветку для ответа")
+    public ResponseEntity<Void> setActiveBranch(@PathVariable UUID sessionId, @Valid @RequestBody ChatSessionDto.UpdateActiveBranchRequest request) {
+        chatSessionService.setActiveBranch(sessionId, request.parentMessageId(), request.activeChildId());
+        return ResponseEntity.ok().build();
+    }
+
     @DeleteMapping("/{sessionId}")
     @Operation(summary = "Удалить сессию чата")
     public ResponseEntity<Void> deleteChat(@PathVariable UUID sessionId) {

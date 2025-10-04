@@ -43,12 +43,12 @@ public class LlmAccessibilityAnalyzer {
 
     /**
      * Асинхронно анализирует список технических нарушений доступности с помощью LLM.
-     *
-     * <p>Процесс включает в себя следующие асинхронные шаги:
+     * <p>
+     * Процесс включает в себя следующие асинхронные шаги:
      * <ol>
-     *     <li>Сериализация списка нарушений в JSON в выделенном пуле потоков.</li>
+     *     <li>Сериализация списка нарушений в JSON (быстрая, синхронная операция).</li>
      *     <li>Формирование промпта для LLM с использованием шаблонизатора.</li>
-     *     <li>Вызов LLM для анализа JSON и генерации резюме и рекомендаций.</li>
+     *     <li>Асинхронный вызов LLM для анализа JSON и генерации резюме и рекомендаций.</li>
      *     <li>Парсинг ответа LLM и его объединение с исходными данными для формирования финального отчета.</li>
      * </ol>
      *
@@ -58,20 +58,21 @@ public class LlmAccessibilityAnalyzer {
      * @throws ProcessingException если происходит критическая ошибка при сериализации данных в JSON.
      */
     public CompletableFuture<AccessibilityReport> analyze(List<AccessibilityViolation> violations) {
-        // Асинхронно сериализуем JSON, чтобы не блокировать вызывающий поток
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(violations);
-            } catch (JsonProcessingException e) {
-                log.error("Критическая ошибка: не удалось сериализовать список нарушений a11y в JSON.", e);
-                // Оборачиваем в CompletionException, чтобы пробросить по цепочке
-                throw new ProcessingException("Ошибка сериализации нарушений a11y", e);
-            }
-        }, applicationTaskExecutor).thenComposeAsync(violationsJson -> {
+        try {
+            // Шаг 1: Сериализация JSON. Это быстрая, CPU-bound операция, нет нужды в supplyAsync.
+            String violationsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(violations);
             String promptString = promptService.render("accessibilityAudit", Map.of("violationsJson", violationsJson));
             log.debug("Отправка запроса к LLM для анализа {} нарушений доступности.", violations.size());
+
+            // Шаг 2: Асинхронный вызов LLM и последующая обработка.
+            // thenApplyAsync гарантирует, что парсинг будет выполнен в том же пуле потоков.
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(llmResponse -> reportParser.parse(llmResponse, violations));
-        }, applicationTaskExecutor);
+                    .thenApplyAsync(llmResponse -> reportParser.parse(llmResponse, violations), applicationTaskExecutor);
+
+        } catch (JsonProcessingException e) {
+            log.error("Критическая ошибка: не удалось сериализовать список нарушений a11y в JSON.", e);
+            // Возвращаем "проваленный" CompletableFuture
+            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации нарушений a11y", e));
+        }
     }
 }

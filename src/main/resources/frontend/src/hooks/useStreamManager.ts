@@ -74,19 +74,15 @@ export function useStreamManager() {
         updateQueryCache(sessionId, assistantMessageId, { type: 'error', message: (error as Error).message });
       }
     } finally {
-      // Финальное обновление статуса сообщения и инвалидация запросов
       queryClient.setQueryData<Message[]>(['messages', sessionId], (oldData = []) =>
         oldData.map(msg =>
           msg.id === assistantMessageId ? { ...msg, isStreaming: false } : msg
         )
       );
       abortControllersRef.current.delete(assistantMessageId);
-      // Если ответ пришел для неактивного чата, показать уведомление
       if (sessionId !== currentSessionId) {
         addNotification(sessionId);
       }
-      // Инвалидируем запросы, чтобы забрать финальные данные (например, trust score)
-      await queryClient.invalidateQueries({ queryKey: ['messages', sessionId], exact: true });
       await queryClient.invalidateQueries({ queryKey: ['chatSessions'] });
     }
   }, [queryClient, updateQueryCache, addNotification]);

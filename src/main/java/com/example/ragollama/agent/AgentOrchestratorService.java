@@ -14,23 +14,20 @@ import java.util.stream.Collectors;
 
 /**
  * Сервис-оркестратор, который управляет выполнением конвейеров AI-агентов.
- *
- * <p>Эталонная реализация, следующая принципам Clean Architecture и потокобезопасности.
+ * <p>
+ * Эталонная реализация, следующая принципам Clean Architecture и потокобезопасности.
  * Оркестратор реализует модель "Staged Execution" (поэтапное выполнение):
  * <ul>
- *     <li>Агенты внутри одного этапа выполняются **параллельно**.</li>
- *     <li>Этапы выполняются строго **последовательно**.</li>
+ *     <li>Агенты внутри одного этапа выполняются <b>параллельно</b>.</li>
+ *     <li>Этапы выполняются строго <b>последовательно</b>.</li>
  * </ul>
  * Это позволяет значительно повысить производительность за счет распараллеливания
  * независимых I/O-bound задач (например, одновременный запрос к Git и базе данных).
- *
- * <p><b>Архитектурное решение:</b> Контекст {@link AgentContext} является
- * **неизменяемым (immutable)** на протяжении всего жизненного цикла конвейера.
- * Оркестратор не модифицирует и не обогащает контекст результатами предыдущих
- * шагов. Он лишь передает исходный контекст каждому агенту и собирает все
- * {@link AgentResult} в единый список. Ответственность за извлечение и
- * интерпретацию нужных результатов из этого списка ложится на потребителя
- * (например, на маппер в слое контроллеров), что делает поток данных явным,
+ * <p>
+ * <b>Архитектурное решение:</b> Оркестратор использует паттерн
+ * "Эволюционирующий Контекст" (Evolving Context). После выполнения каждого этапа,
+ * результаты всех его агентов объединяются и добавляются в {@link AgentContext}
+ * для следующего этапа. Это делает поток данных внутри конвейера явным,
  * предсказуемым и легко тестируемым.
  *
  * @see AgentPipeline
@@ -76,15 +73,16 @@ public class AgentOrchestratorService {
     }
 
     /**
-     * Асинхронно запускает конвейер по его имени, используя модель поэтапного выполнения.
+     * Асинхронно запускает конвейер по его имени, используя модель поэтапного выполнения
+     * и эволюционирующий контекст.
      *
      * <p>Метод находит соответствующую стратегию {@link AgentPipeline}, получает от нее
      * список этапов и последовательно выполняет каждый из них. Агенты внутри одного
-     * этапа запускаются параллельно.
+     * этапа запускаются параллельно. Результаты каждого этапа обогащают контекст
+     * для следующего.
      *
      * @param pipelineName   Уникальное имя конвейера.
-     * @param initialContext Начальный контекст с входными данными. Этот контекст
-     *                       останется неизменным на протяжении всего выполнения.
+     * @param initialContext Начальный контекст с входными данными.
      * @return {@link CompletableFuture} с полным списком результатов от всех
      * агентов, выполненных в конвейере.
      * @throws ProcessingException если конвейер с указанным именем не найден.
@@ -101,25 +99,54 @@ public class AgentOrchestratorService {
 
         List<List<QaAgent>> stages = pipeline.getStages();
         log.info("Запуск конвейера '{}' с {} этапами.", pipelineName, stages.size());
-        CompletableFuture<List<AgentResult>> executionChain = CompletableFuture.completedFuture(new ArrayList<>());
+
+        // Начальное состояние для цепочки: кортеж из начального контекста и пустого списка результатов
+        var initialState = new StageExecutionState(initialContext, new ArrayList<>());
+
+        // Последовательно выполняем этапы, передавая и обогащая состояние (контекст и результаты)
+        CompletableFuture<StageExecutionState> executionChain = CompletableFuture.completedFuture(initialState);
         for (List<QaAgent> stageAgents : stages) {
             executionChain = executionChain.thenComposeAsync(
-                    accumulatedResults -> executeStage(stageAgents, initialContext, pipelineName)
-                            .thenApply(stageResults -> {
-                                accumulatedResults.addAll(stageResults);
-                                return accumulatedResults;
-                            }),
+                    currentState -> executeStageAndUpdateState(stageAgents, currentState, pipelineName),
                     applicationTaskExecutor
             );
         }
-        return executionChain;
+
+        // В конце извлекаем только список всех результатов
+        return executionChain.thenApply(StageExecutionState::accumulatedResults);
     }
+
+    /**
+     * Выполняет один этап и обновляет общее состояние конвейера.
+     *
+     * @param agentsInStage Список агентов для параллельного запуска.
+     * @param currentState  Текущее состояние выполнения (контекст и результаты).
+     * @param pipelineName  Имя конвейера (для логирования).
+     * @return {@link CompletableFuture} с новым, обновленным состоянием.
+     */
+    private CompletableFuture<StageExecutionState> executeStageAndUpdateState(List<QaAgent> agentsInStage, StageExecutionState currentState, String pipelineName) {
+        return executeStage(agentsInStage, currentState.currentContext(), pipelineName)
+                .thenApply(stageResults -> {
+                    // Создаем новый, обогащенный контекст для следующего этапа
+                    Map<String, Object> newPayload = new HashMap<>(currentState.currentContext().payload());
+                    stageResults.forEach(result -> newPayload.putAll(result.details()));
+                    AgentContext newContext = new AgentContext(newPayload);
+
+                    // Добавляем результаты этого этапа в общий список
+                    List<AgentResult> newAccumulatedResults = new ArrayList<>(currentState.accumulatedResults());
+                    newAccumulatedResults.addAll(stageResults);
+
+                    // Возвращаем новое состояние
+                    return new StageExecutionState(newContext, newAccumulatedResults);
+                });
+    }
+
 
     /**
      * Параллельно выполняет всех агентов одного этапа.
      *
      * @param agentsInStage Список агентов для параллельного запуска.
-     * @param context       Неизменяемый контекст для всех агентов этапа.
+     * @param context       Текущий контекст для всех агентов этапа.
      * @param pipelineName  Имя конвейера (для логирования).
      * @return {@link CompletableFuture} со списком результатов работы агентов этого этапа.
      */
@@ -129,10 +156,17 @@ public class AgentOrchestratorService {
                 .filter(agent -> agent.canHandle(context))
                 .map(agent -> agent.execute(context))
                 .toList();
+
         return CompletableFuture.allOf(stageFutures.toArray(new CompletableFuture[0]))
                 .thenApply(v -> stageFutures.stream()
                         .map(CompletableFuture::join)
                         .toList()
                 );
+    }
+
+    /**
+     * Внутренний record для инкапсуляции состояния выполнения между этапами.
+     */
+    private record StageExecutionState(AgentContext currentContext, List<AgentResult> accumulatedResults) {
     }
 }

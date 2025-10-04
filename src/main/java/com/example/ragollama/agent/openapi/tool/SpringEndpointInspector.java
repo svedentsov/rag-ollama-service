@@ -5,17 +5,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
-import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
-import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import org.springframework.web.reactive.result.method.RequestMappingInfo;
+import org.springframework.web.reactive.result.method.annotation.RequestMappingHandlerMapping;
 
 import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * Инфраструктурный сервис для интроспекции рантайм-контекста Spring MVC.
+ * Инфраструктурный сервис для интроспекции рантайм-контекста Spring WebFlux.
  * <p>
  * Предоставляет надежный способ получить список всех HTTP-эндпоинтов,
- * фактически зарегистрированных и работающих в приложении.
+ * фактически зарегистрированных и работающих в приложении. Эта версия
+ * адаптирована для работы с реактивным стеком.
  */
 @Slf4j
 @Service
@@ -24,13 +25,13 @@ public class SpringEndpointInspector {
     private final RequestMappingHandlerMapping handlerMapping;
 
     /**
-     * Конструктор для внедрения зависимости {@link RequestMappingHandlerMapping}.
+     * Конструктор для внедрения зависимости {@link RequestMappingHandlerMapping} из WebFlux.
      * <p>
      * Используется {@code @Qualifier("requestMappingHandlerMapping")}, чтобы явно
      * выбрать бин, отвечающий за маппинг бизнес-контроллеров, и избежать
      * конфликта с бином от Spring Boot Actuator.
      *
-     * @param handlerMapping Основной обработчик маппингов запросов Spring MVC.
+     * @param handlerMapping Основной обработчик маппингов запросов Spring WebFlux.
      */
     public SpringEndpointInspector(@Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping) {
         this.handlerMapping = handlerMapping;
@@ -72,7 +73,7 @@ public class SpringEndpointInspector {
         // Один @RequestMapping может определять несколько путей или методов
         return mappingInfo.getPatternsCondition().getPatterns().stream()
                 .flatMap(path -> mappingInfo.getMethodsCondition().getMethods().stream()
-                        .map(method -> new EndpointInfo(path, HttpMethod.valueOf(method.name())))
+                        .map(method -> new EndpointInfo(path.getPatternString(), HttpMethod.valueOf(method.name())))
                 );
     }
 }

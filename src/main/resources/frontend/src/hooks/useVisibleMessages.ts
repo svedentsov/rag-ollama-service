@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Message } from '../types';
-import { useBranchSelectionStore } from '../state/branchSelectionStore';
+import { useChatSessions } from './useChatSessions';
 
 /**
  * Результат работы хука useVisibleMessages.
@@ -15,12 +15,17 @@ interface UseVisibleMessagesReturn {
 /**
  * Хук для инкапсуляции сложной логики определения видимых сообщений
  * с учетом ветвления ответов ассистента.
- * @param messages - Полный массив всех сообщений в сессии.
+ * @param {string} sessionId - ID текущей сессии.
+ * @param {Message[]} messages - Полный массив всех сообщений в сессии.
  * @returns {UseVisibleMessagesReturn} Объект с отфильтрованными сообщениями и информацией о ветках.
  */
-export const useVisibleMessages = (messages: Message[]): UseVisibleMessagesReturn => {
-  // Хук теперь напрямую подписывается на состояние выбора веток из стора.
-  const selections = useBranchSelectionStore((state) => state.selections);
+export const useVisibleMessages = (sessionId: string, messages: Message[]): UseVisibleMessagesReturn => {
+  // Получаем данные о сессиях, чтобы извлечь сохраненный выбор веток.
+  const { sessions } = useChatSessions();
+  const activeBranches = useMemo(() => {
+      const currentSession = sessions.find(s => s.sessionId === sessionId);
+      return currentSession?.activeBranches ?? {};
+  }, [sessions, sessionId]);
 
   const { visibleMessages, messageBranchInfo } = useMemo(() => {
     if (!messages.length) {
@@ -40,7 +45,7 @@ export const useVisibleMessages = (messages: Message[]): UseVisibleMessagesRetur
     const hiddenIds = new Set<string>();
     childrenMap.forEach((children, parentId) => {
       if (children.length > 1) {
-        let selectedId = selections[parentId];
+        let selectedId = activeBranches[parentId];
         if (!selectedId || !children.some(c => c.id === selectedId)) {
           selectedId = children[children.length - 1].id;
         }
@@ -57,8 +62,7 @@ export const useVisibleMessages = (messages: Message[]): UseVisibleMessagesRetur
       if (msg.type === 'assistant' && msg.parentId) {
         const siblings = childrenMap.get(msg.parentId) || [];
         if (siblings.length > 1) {
-          // Определяем активное сообщение для корректного индекса
-          const activeId = selections[msg.parentId] || siblings[siblings.length - 1].id;
+          const activeId = activeBranches[msg.parentId] || siblings[siblings.length - 1].id;
           const currentIndex = siblings.findIndex(s => s.id === activeId);
           branchInfo.set(msg.id, { total: siblings.length, current: currentIndex + 1, siblings });
         }
@@ -67,8 +71,7 @@ export const useVisibleMessages = (messages: Message[]): UseVisibleMessagesRetur
 
     const visible = messages.filter(m => !hiddenIds.has(m.id));
     return { visibleMessages: visible, messageBranchInfo: branchInfo };
-  }, [messages, selections]);
+  }, [messages, activeBranches]);
 
-  // handleBranchChange больше не нужен, так как управление им происходит в компоненте
   return { visibleMessages, messageBranchInfo };
 };

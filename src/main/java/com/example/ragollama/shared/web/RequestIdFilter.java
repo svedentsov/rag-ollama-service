@@ -1,68 +1,65 @@
 package com.example.ragollama.shared.web;
 
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.MDC;
-import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
+import org.springframework.lang.NonNull;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.server.WebFilter;
+import org.springframework.web.server.WebFilterChain;
+import reactor.core.publisher.Mono;
+import reactor.util.context.Context;
 
-import java.io.IOException;
 import java.util.UUID;
 
 /**
- * Сервлет-фильтр для добавления уникального ID к каждому HTTP-запросу.
+ * Реактивный веб-фильтр для добавления уникального ID к каждому HTTP-запросу.
  * <p>
- * Этот ID используется для сквозной трассировки запросов в логах.
- * Он добавляется в MDC (Mapped Diagnostic Context) Logback и в заголовок ответа.
- * Фильтр гарантирует, что для каждого запроса будет сгенерирован уникальный
- * идентификатор, что критически важно для отладки в распределенных и
- * высоконагруженных системах.
+ * Эта реализация адаптирована для Spring WebFlux и заменяет собой
+ * сервлет-фильтр. Она использует {@link WebFilter} для интеграции в
+ * неблокирующую цепочку обработки запросов.
  * <p>
- * Фильтр выполняется один раз для каждого запроса и имеет наивысший
- * приоритет, чтобы ID был доступен всем последующим компонентам.
+ * Ключевое отличие — для распространения ID запроса в асинхронной среде
+ * используется <b>контекст Reactor</b> (`contextWrite`), который автоматически
+ * пробрасывается в MDC благодаря `Hooks.enableAutomaticContextPropagation()`.
  */
-public class RequestIdFilter extends OncePerRequestFilter {
+@Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
+public class RequestIdFilter implements WebFilter {
+
     /**
      * Имя HTTP-заголовка, в котором передается ID запроса.
      */
     public static final String REQUEST_ID_HEADER = "X-Request-ID";
     /**
-     * Ключ, используемый для сохранения ID запроса в MDC.
+     * Ключ, используемый для сохранения ID запроса в MDC и контексте Reactor.
      */
     private static final String MDC_KEY = "requestId";
 
     /**
-     * Основной метод фильтра, выполняемый для каждого запроса.
+     * Основной метод фильтра, выполняемый для каждого запроса в реактивной цепочке.
      *
-     * <p>Логика работы:
-     * <ol>
-     *     <li>Проверяет наличие заголовка X-Request-ID. Если он есть, используется его значение.</li>
-     *     <li>Если заголовок отсутствует, генерируется новый UUID.</li>
-     *     <li>Сгенерированный ID помещается в MDC для использования в логах.</li>
-     *     <li>Тот же ID добавляется в заголовок HTTP-ответа.</li>
-     *     <li>Контекст MDC очищается после завершения обработки запроса.</li>
-     * </ol>
-     *
-     * @param request     HTTP-запрос.
-     * @param response    HTTP-ответ.
-     * @param filterChain Цепочка фильтров.
-     * @throws ServletException в случае ошибки сервлета.
-     * @throws IOException      в случае ошибки ввода-вывода.
+     * @param exchange Объект, инкапсулирующий HTTP-запрос и ответ.
+     * @param chain    Цепочка фильтров.
+     * @return {@link Mono}, сигнализирующий о завершении обработки.
      */
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-            throws ServletException, IOException {
-        try {
-            String requestId = request.getHeader(REQUEST_ID_HEADER);
-            if (requestId == null || requestId.isBlank()) {
-                requestId = UUID.randomUUID().toString();
-            }
-            MDC.put(MDC_KEY, requestId);
-            response.setHeader(REQUEST_ID_HEADER, requestId);
-            filterChain.doFilter(request, response);
-        } finally {
-            MDC.remove(MDC_KEY);
+    @NonNull
+    public Mono<Void> filter(@NonNull ServerWebExchange exchange, @NonNull WebFilterChain chain) {
+        String requestId = exchange.getRequest().getHeaders().getFirst(REQUEST_ID_HEADER);
+        if (requestId == null || requestId.isBlank()) {
+            requestId = UUID.randomUUID().toString();
         }
+
+        exchange.getResponse().getHeaders().add(REQUEST_ID_HEADER, requestId);
+
+        // Передаем requestId в цепочку через контекст Reactor.
+        // Spring Boot автоматически пробросит его в MDC для логирования.
+        final String finalRequestId = requestId;
+        return chain.filter(exchange)
+                .contextWrite(Context.of(MDC_KEY, finalRequestId))
+                // Очистка MDC после завершения (на всякий случай, хотя Context Propagation должен справляться)
+                .doFinally(signalType -> MDC.remove(MDC_KEY));
     }
 }
