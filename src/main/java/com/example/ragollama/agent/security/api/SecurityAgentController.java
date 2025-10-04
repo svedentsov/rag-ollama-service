@@ -35,7 +35,7 @@ public class SecurityAgentController {
     @PostMapping("/full-scan")
     @Operation(summary = "Провести полный аудит безопасности (SAST, RBAC, PII)")
     public CompletableFuture<List<AgentResult>> runFullSecurityScan(@Valid @RequestBody SecurityScanRequest request) {
-        return orchestratorService.invokePipeline("full-security-audit-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("full-security-audit-pipeline", request.toAgentContext());
     }
 
     /**
@@ -48,6 +48,6 @@ public class SecurityAgentController {
     @Operation(summary = "Сгенерировать Fuzzing-тесты для проверки RBAC",
             description = "Анализирует изменения в коде, извлекает правила RBAC, генерирует атакующие персоны и создает код теста для симуляции IDOR-атаки.")
     public CompletableFuture<List<AgentResult>> generateRbacFuzzTests(@Valid @RequestBody SecurityScanRequest request) {
-        return orchestratorService.invokePipeline("rbac-fuzzing-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("rbac-fuzzing-pipeline", request.toAgentContext());
     }
 }

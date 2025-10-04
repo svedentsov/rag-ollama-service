@@ -76,7 +76,7 @@ public class EventProcessingService {
             gitHubApiClient.getPullRequestDiff(owner, repo, prNumber)
                     .flatMap(diff -> {
                         AgentContext context = new AgentContext(Map.of(TestPrioritizerAgent.GIT_DIFF_CONTENT_KEY, diff));
-                        return Mono.fromFuture(agentOrchestratorService.invokePipeline("github-pr-pipeline", context));
+                        return Mono.fromFuture(agentOrchestratorService.invoke("github-pr-pipeline", context));
                     })
                     .flatMap(results -> {
                         String comment = formatPipelineResultAsGithubComment(results);
@@ -162,7 +162,7 @@ public class EventProcessingService {
         String bugText = payload.issue().fields().summary() + "\n" + payload.issue().fields().description();
         AgentContext context = new AgentContext(Map.of("bugReportText", bugText));
 
-        agentOrchestratorService.invokePipeline("jira-bug-creation-pipeline", context)
+        agentOrchestratorService.invoke("jira-bug-creation-pipeline", context)
                 .thenCompose(results -> postJiraComment(issueKey, results))
                 .whenComplete((result, ex) -> logPipelineCompletion("Jira-задачи " + issueKey, ex));
     }
@@ -174,7 +174,7 @@ public class EventProcessingService {
         log.info("Обработка события обновления задачи: {}", issueKey);
         AgentContext context = new AgentContext(Map.of(JiraFetcherAgent.JIRA_ISSUE_KEY, issueKey));
 
-        agentOrchestratorService.invokePipeline("jira-update-analysis-pipeline", context)
+        agentOrchestratorService.invoke("jira-update-analysis-pipeline", context)
                 .thenCompose(results -> postJiraComment(issueKey, results))
                 .whenComplete((result, ex) -> logPipelineCompletion("Jira-задачи " + issueKey, ex));
     }

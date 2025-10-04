@@ -3,10 +3,7 @@ package com.example.ragollama.agent.buganalysis.api;
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentOrchestratorService;
 import com.example.ragollama.agent.AgentResult;
-import com.example.ragollama.agent.buganalysis.api.dto.BugAnalysisRequest;
-import com.example.ragollama.agent.buganalysis.api.dto.BugAnalysisResponse;
 import com.example.ragollama.agent.buganalysis.api.dto.BugReportSummaryRequest;
-import com.example.ragollama.agent.buganalysis.domain.BugAnalysisService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -28,23 +25,7 @@ import java.util.concurrent.CompletableFuture;
 @Tag(name = "Bug Analysis Agent", description = "API для анализа баг-репортов на дубликаты и улучшения качества")
 public class BugAnalysisController {
 
-    private final BugAnalysisService bugAnalysisService;
     private final AgentOrchestratorService orchestratorService;
-
-    /**
-     * Асинхронно анализирует черновик баг-репорта, ищет дубликаты и предлагает улучшенное описание.
-     *
-     * @param request DTO с текстом черновика отчета.
-     * @return {@link CompletableFuture} со структурированным результатом анализа.
-     * Ответ будет отправлен клиенту после асинхронного завершения операции.
-     */
-    @PostMapping
-    @Operation(summary = "Проанализировать баг-репорт",
-            description = "Принимает черновик описания бага, находит похожие существующие отчеты, " +
-                    "использует LLM для определения дубликатов и улучшения исходного текста.")
-    public CompletableFuture<BugAnalysisResponse> analyzeBugReport(@Valid @RequestBody BugAnalysisRequest request) {
-        return bugAnalysisService.analyzeBugReport(request.draftDescription());
-    }
 
     /**
      * Принимает "сырой" текст баг-репорта, структурирует его и проверяет на дубликаты.
@@ -58,7 +39,7 @@ public class BugAnalysisController {
                     "его структурирования, а затем по улучшенному тексту ищет дубликаты.")
     public CompletableFuture<List<AgentResult>> summarizeAndCheckBugReport(@Valid @RequestBody BugReportSummaryRequest request) {
         AgentContext context = request.toAgentContext();
-        return orchestratorService.invokePipeline("bug-report-analysis-pipeline", context);
+        return orchestratorService.invoke("bug-report-analysis-pipeline", context);
     }
 
     /**
@@ -73,6 +54,6 @@ public class BugAnalysisController {
                     "и генерирует Java/RestAssured тест, который воспроизводит ошибку.")
     public CompletableFuture<List<AgentResult>> generateReproScript(@Valid @RequestBody BugReportSummaryRequest request) {
         AgentContext context = request.toAgentContext();
-        return orchestratorService.invokePipeline("bug-reproduction-pipeline", context);
+        return orchestratorService.invoke("bug-reproduction-pipeline", context);
     }
 }

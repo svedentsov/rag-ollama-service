@@ -36,6 +36,6 @@ public class PolicyGuardianController {
     @PostMapping("/enforce-policies")
     @Operation(summary = "Проверить изменения на соответствие всем политикам (Quality Gate)")
     public CompletableFuture<List<AgentResult>> enforcePolicies(@Valid @RequestBody PolicyGuardianRequest request) {
-        return orchestratorService.invokePipeline("policy-and-safety-governor-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("policy-and-safety-governor-pipeline", request.toAgentContext());
     }
 }

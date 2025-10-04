@@ -35,6 +35,6 @@ public class RagOptimizationController {
                     "анализирует их и генерирует конкретные предложения по тюнингу `application.yml`.")
     public CompletableFuture<List<AgentResult>> suggestRagImprovements() {
         // Начальный контекст пуст, так как агент сам собирает все необходимые данные.
-        return orchestratorService.invokePipeline("rag-optimizer-pipeline", new com.example.ragollama.agent.AgentContext(Map.of()));
+        return orchestratorService.invoke("rag-optimizer-pipeline", new com.example.ragollama.agent.AgentContext(Map.of()));
     }
 }

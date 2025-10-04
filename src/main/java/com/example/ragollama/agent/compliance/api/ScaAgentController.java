@@ -35,6 +35,6 @@ public class ScaAgentController {
     @PostMapping("/scan-licenses")
     @Operation(summary = "Проверить лицензии зависимостей на соответствие политике")
     public CompletableFuture<List<AgentResult>> scanLicenses(@Valid @RequestBody ScaRequest request) {
-        return orchestratorService.invokePipeline("sca-compliance-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("sca-compliance-pipeline", request.toAgentContext());
     }
 }

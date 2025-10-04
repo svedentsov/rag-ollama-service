@@ -33,15 +33,15 @@ public class ExecutiveDashboardService {
 
         // Шаг 1: Асинхронно и параллельно запускаем все губернаторские конвейеры
         CompletableFuture<List<AgentResult>> healthFuture =
-                orchestratorService.invokePipeline("executive-governor-pipeline", context);
+                orchestratorService.invoke("executive-governor-pipeline", context);
         CompletableFuture<List<AgentResult>> velocityFuture =
-                orchestratorService.invokePipeline("engineering-velocity-pipeline", context);
+                orchestratorService.invoke("engineering-velocity-pipeline", context);
         CompletableFuture<List<AgentResult>> productFuture =
-                orchestratorService.invokePipeline("product-strategy-pipeline", context);
+                orchestratorService.invoke("product-strategy-pipeline", context);
         CompletableFuture<List<AgentResult>> financialFuture =
-                orchestratorService.invokePipeline("financial-roi-analysis-pipeline", context);
+                orchestratorService.invoke("financial-roi-analysis-pipeline", context);
         CompletableFuture<List<AgentResult>> architectureFuture =
-                orchestratorService.invokePipeline("architectural-evolution-pipeline", context);
+                orchestratorService.invoke("architectural-evolution-pipeline", context);
 
         // Шаг 2: Дожидаемся завершения всех и собираем результаты в единый DTO
         return CompletableFuture.allOf(healthFuture, velocityFuture, productFuture, financialFuture, architectureFuture)

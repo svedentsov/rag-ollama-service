@@ -35,6 +35,6 @@ public class ArchitectureController {
     @PostMapping("/analyze-health")
     @Operation(summary = "Проанализировать долгосрочное здоровье архитектуры (AI Chief Architect)")
     public CompletableFuture<List<AgentResult>> analyzeArchitecturalHealth(@Valid @RequestBody ArchitecturalHealthRequest request) {
-        return orchestratorService.invokePipeline("architectural-evolution-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("architectural-evolution-pipeline", request.toAgentContext());
     }
 }

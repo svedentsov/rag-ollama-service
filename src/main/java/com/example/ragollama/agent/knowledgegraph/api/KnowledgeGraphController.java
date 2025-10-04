@@ -36,6 +36,6 @@ public class KnowledgeGraphController {
     @PostMapping("/query")
     @Operation(summary = "Задать вопрос к графу знаний проекта")
     public CompletableFuture<List<AgentResult>> queryKnowledgeGraph(@Valid @RequestBody KnowledgeGraphRequest request) {
-        return orchestratorService.invokePipeline("knowledge-aggregator-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("knowledge-aggregator-pipeline", request.toAgentContext());
     }
 }

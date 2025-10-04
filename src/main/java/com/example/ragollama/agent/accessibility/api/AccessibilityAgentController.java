@@ -44,17 +44,17 @@ public class AccessibilityAgentController {
     private final AccessibilityMapper accessibilityMapper;
 
     /**
-     * Запускает асинхронный конвейер для анализа HTML-кода на предмет нарушений доступности.
+     * Запускает асинхронный аудит HTML-кода на предмет нарушений доступности.
      *
      * @param request DTO с HTML-кодом для анализа. Должен быть валидным.
      * @return {@link CompletableFuture}, который по завершении будет содержать
-     * результат работы конвейера, преобразованный в DTO ответа. Spring MVC
+     * результат работы агента, преобразованный в DTO ответа. Spring MVC
      * автоматически обработает асинхронный ответ.
      */
     @PostMapping("/audit")
     @Operation(
             summary = "Провести аудит доступности (a11y) для HTML-кода",
-            description = "Принимает HTML-код страницы и асинхронно запускает конвейер для его анализа. " +
+            description = "Принимает HTML-код страницы и асинхронно запускает агент для его анализа. " +
                     "Возвращает отчет с резюме, рекомендациями и списком технических нарушений."
     )
     @ApiResponse(
@@ -64,7 +64,7 @@ public class AccessibilityAgentController {
     )
     @ApiResponse(responseCode = "400", description = "Некорректный запрос (например, пустой HTML)")
     public CompletableFuture<AccessibilityAuditResponse> auditAccessibility(@Valid @RequestBody AccessibilityAuditRequest request) {
-        return orchestratorService.invokePipeline("accessibility-audit-pipeline", request.toAgentContext())
+        return orchestratorService.invoke("accessibility-auditor", request.toAgentContext())
                 .thenApply(accessibilityMapper::toResponseDto);
     }
 }

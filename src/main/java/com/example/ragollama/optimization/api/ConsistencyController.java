@@ -37,6 +37,6 @@ public class ConsistencyController {
             description = "Запускает 'consistency-check-pipeline', который сначала собирает " +
                     "доказательства из разных источников, а затем сравнивает их на предмет противоречий.")
     public CompletableFuture<List<AgentResult>> checkConsistency(@Valid @RequestBody ConsistencyCheckRequest request) {
-        return orchestratorService.invokePipeline("consistency-check-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("consistency-check-pipeline", request.toAgentContext());
     }
 }

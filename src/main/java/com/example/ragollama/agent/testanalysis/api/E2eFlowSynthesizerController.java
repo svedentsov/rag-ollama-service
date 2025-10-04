@@ -35,6 +35,6 @@ public class E2eFlowSynthesizerController {
     @PostMapping("/synthesize")
     @Operation(summary = "Синтезировать E2E-тест из описания пользовательского сценария")
     public CompletableFuture<List<AgentResult>> synthesizeE2eFlow(@Valid @RequestBody E2eFlowSynthesizerRequest request) {
-        return orchestratorService.invokePipeline("e2e-flow-synthesis-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("e2e-flow-synthesis-pipeline", request.toAgentContext());
     }
 }

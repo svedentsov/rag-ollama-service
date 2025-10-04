@@ -36,6 +36,6 @@ public class TestDataOpsController {
     @PostMapping("/request")
     @Operation(summary = "Запросить тестовые данные на естественном языке")
     public CompletableFuture<List<AgentResult>> requestTestData(@Valid @RequestBody TestDataRequest request) {
-        return orchestratorService.invokePipeline("test-data-ops-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("test-data-ops-pipeline", request.toAgentContext());
     }
 }

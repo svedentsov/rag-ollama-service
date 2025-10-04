@@ -40,7 +40,7 @@ public class MetaAgentController {
     @PostMapping("/plan-refactoring")
     @Operation(summary = "Сформировать стратегию рефакторинга (AI Tech Lead)")
     public CompletableFuture<List<AgentResult>> planRefactoring(@Valid @RequestBody MetaAgentRequest request) {
-        return orchestratorService.invokePipeline("strategic-refactoring-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("strategic-refactoring-pipeline", request.toAgentContext());
     }
 
     /**
@@ -52,6 +52,6 @@ public class MetaAgentController {
     @PostMapping("/plan-sprint")
     @Operation(summary = "Сформировать план на спринт (AI Product Manager)")
     public CompletableFuture<List<AgentResult>> planSprint(@Valid @RequestBody SprintPlanningRequest request) {
-        return orchestratorService.invokePipeline("sprint-planning-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("sprint-planning-pipeline", request.toAgentContext());
     }
 }

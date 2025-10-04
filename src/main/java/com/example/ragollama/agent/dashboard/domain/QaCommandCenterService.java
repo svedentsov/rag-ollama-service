@@ -53,9 +53,9 @@ public class QaCommandCenterService {
         ));
 
         // Запускаем все аналитические конвейеры параллельно
-        CompletableFuture<List<AgentResult>> readinessFuture = orchestratorService.invokePipeline("release-readiness-pipeline", context);
-        CompletableFuture<List<AgentResult>> testDebtFuture = orchestratorService.invokePipeline("test-debt-report-pipeline", context);
-        CompletableFuture<List<AgentResult>> riskMatrixFuture = orchestratorService.invokePipeline("risk-matrix-generation-pipeline", context);
+        CompletableFuture<List<AgentResult>> readinessFuture = orchestratorService.invoke("release-readiness-pipeline", context);
+        CompletableFuture<List<AgentResult>> testDebtFuture = orchestratorService.invoke("test-debt-report-pipeline", context);
+        CompletableFuture<List<AgentResult>> riskMatrixFuture = orchestratorService.invoke("risk-matrix-generation-pipeline", context);
 
         // Когда все они завершатся, агрегируем результаты
         return CompletableFuture.allOf(readinessFuture, testDebtFuture, riskMatrixFuture)

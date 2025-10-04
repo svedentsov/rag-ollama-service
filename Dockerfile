@@ -23,8 +23,17 @@ FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
+# Создаем системного пользователя и группу с ограниченными правами.
+RUN groupadd --system --gid 1000 appgroup && useradd --system --uid 1000 --gid appgroup appuser
+
 # Копируем собранный JAR-файл бэкенда
 COPY --from=builder /app/build/libs/app.jar app.jar
+
+# Устанавливаем владельца для файлов приложения.
+RUN chown appuser:appgroup app.jar
+
+# Переключаемся на пользователя с ограниченными правами.
+USER appuser
 
 EXPOSE 8080
 

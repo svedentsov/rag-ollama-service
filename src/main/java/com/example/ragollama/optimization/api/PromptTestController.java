@@ -35,6 +35,6 @@ public class PromptTestController {
     @PostMapping("/run")
     @Operation(summary = "Запустить A/B-тест для новой версии промпта")
     public CompletableFuture<List<AgentResult>> runPromptTest(@Valid @RequestBody PromptTestRequest request) {
-        return orchestratorService.invokePipeline("prompt-testing-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("prompt-testing-pipeline", request.toAgentContext());
     }
 }

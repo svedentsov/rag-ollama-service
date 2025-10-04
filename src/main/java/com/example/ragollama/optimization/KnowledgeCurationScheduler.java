@@ -20,7 +20,7 @@ public class KnowledgeCurationScheduler {
     @Scheduled(cron = "${app.curation.scheduler.cron}")
     public void runScheduledCuration() {
         log.info("Планировщик запускает фоновую задачу курирования базы знаний...");
-        orchestratorService.invokePipeline("knowledge-curation-pipeline", new AgentContext(Map.of()))
+        orchestratorService.invoke("knowledge-curation-pipeline", new AgentContext(Map.of()))
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
                         log.error("Задача курирования завершилась с ошибкой.", ex);

@@ -35,6 +35,6 @@ public class DataContractAgentController {
     @PostMapping("/enforce")
     @Operation(summary = "Проверить DTO на наличие ломающих изменений")
     public CompletableFuture<List<AgentResult>> enforceDataContract(@Valid @RequestBody DataContractRequest request) {
-        return orchestratorService.invokePipeline("data-contract-enforcement-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("data-contract-enforcement-pipeline", request.toAgentContext());
     }
 }

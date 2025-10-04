@@ -23,6 +23,7 @@ public class RagPostProcessingOrchestrator {
      * @param context Контекст с данными о RAG-взаимодействии.
      */
     public void process(RagProcessingContext context) {
+        if (postProcessors.isEmpty()) return;
         log.info("Запуск асинхронной постобработки RAG-ответа с {} процессорами для requestId: {}", postProcessors.size(), context.requestId());
         postProcessors.forEach(processor ->
                 processor.process(context)

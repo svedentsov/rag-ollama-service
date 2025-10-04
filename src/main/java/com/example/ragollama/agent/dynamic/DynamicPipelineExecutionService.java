@@ -85,16 +85,7 @@ public class DynamicPipelineExecutionService {
         });
     }
 
-    /**
-     * Рекурсивно выполняет шаги плана, начиная с текущего.
-     *
-     * @param state              Текущее состояние выполнения.
-     * @param accumulatedResults Список результатов от предыдущих шагов.
-     * @param recoveryAttempt    Счетчик попыток самовосстановления.
-     * @return {@link Mono} с финальным списком результатов.
-     */
     private Mono<List<AgentResult>> executeSequentially(ExecutionState state, List<AgentResult> accumulatedResults, int recoveryAttempt) {
-        // Базовый случай рекурсии: все шаги выполнены
         if (state.getCurrentStepIndex() >= state.getPlanSteps().size()) {
             state.setStatus(ExecutionState.Status.COMPLETED);
             executionStateRepository.save(state);
@@ -107,7 +98,6 @@ public class DynamicPipelineExecutionService {
         QaAgent agent = toolRegistry.getAgent(currentStep.agentName())
                 .orElseThrow(() -> new IllegalArgumentException("Агент '" + currentStep.agentName() + "' не найден."));
 
-        // Проверка на необходимость утверждения
         if (agent.requiresApproval() && !state.isResumedAfterApproval()) {
             log.info("Шаг {} ('{}') требует утверждения. Приостановка выполнения.", state.getCurrentStepIndex(), agent.getName());
             state.setStatus(ExecutionState.Status.PENDING_APPROVAL);
@@ -122,7 +112,6 @@ public class DynamicPipelineExecutionService {
             return Mono.just(accumulatedResults);
         }
 
-        // Рекурсивный шаг: выполнение текущего шага
         return executeStep(currentStep, new AgentContext(state.getAccumulatedContext()), toolRegistry)
                 .flatMap(result -> {
                     accumulatedResults.add(result);
@@ -131,7 +120,6 @@ public class DynamicPipelineExecutionService {
                     state.setCurrentStepIndex(state.getCurrentStepIndex() + 1);
                     state.setResumedAfterApproval(false);
                     executionStateRepository.save(state);
-                    // Переход к следующему шагу
                     return executeSequentially(state, accumulatedResults, 0);
                 })
                 .onErrorResume(error -> {
@@ -139,7 +127,6 @@ public class DynamicPipelineExecutionService {
                         return Mono.error(new RuntimeException("Превышен лимит попыток самовосстановления.", error));
                     }
                     log.warn("Ошибка на шаге {}: '{}'. Запуск ErrorHandlerAgent...", state.getCurrentStepIndex(), error.getMessage());
-                    // Попытка самовосстановления
                     return handleStepError(error, currentStep, state)
                             .flatMap(newState -> executeSequentially(newState, accumulatedResults, recoveryAttempt + 1));
                 });
@@ -160,7 +147,7 @@ public class DynamicPipelineExecutionService {
                         log.info("План исправления: RETRY_WITH_FIX. Обновление аргументов.");
                         PlanStep fixedStep = new PlanStep(failedStep.agentName(), plan.modifiedArguments());
                         currentState.getPlanSteps().set(currentState.getCurrentStepIndex(), fixedStep);
-                        currentState.setResumedAfterApproval(true); // Разрешаем повторное выполнение
+                        currentState.setResumedAfterApproval(true);
                         executionStateRepository.save(currentState);
                         return Mono.just(currentState);
                     } else {

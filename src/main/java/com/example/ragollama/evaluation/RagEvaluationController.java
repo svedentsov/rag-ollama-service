@@ -68,6 +68,6 @@ public class RagEvaluationController {
     @Operation(summary = "Сгенерировать тест для 'золотого датасета' из фидбэка пользователя",
             description = "Принимает ID негативного фидбэка, анализирует его и автоматически создает новый тест для предотвращения регрессий.")
     public CompletableFuture<List<AgentResult>> generateTestFromFeedback(@Valid @RequestBody FeedbackToTestRequest request) {
-        return orchestratorService.invokePipeline("feedback-to-test-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("feedback-to-test-pipeline", request.toAgentContext());
     }
 }

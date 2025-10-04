@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { useSessionStore } from '../state/sessionStore';
 
 /**
  * Контекст для роутера.
@@ -13,27 +14,28 @@ const RouterContext = createContext<RouterContextType | null>(null);
 /**
  * Провайдер для легковесного роутера.
  * @param {object} props - Пропсы компонента.
- * @param {ReactNode} props.children - Дочерние компоненты.
  */
 export const RouterProvider = ({ children }: { children: ReactNode }) => {
+  const setCurrentSessionId = useSessionStore((state) => state.setCurrentSessionId);
+
   const [sessionId, setSessionId] = useState<string | null>(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('sessionId');
+    const id = params.get('sessionId');
+    setCurrentSessionId(id); // Первичная синхронизация
+    return id;
   });
 
-  // Обрабатывает кнопки "вперед/назад" в браузере
   useEffect(() => {
     const handlePopState = () => {
       const params = new URLSearchParams(window.location.search);
-      setSessionId(params.get('sessionId'));
+      const id = params.get('sessionId');
+      setSessionId(id);
+      setCurrentSessionId(id); // Синхронизация при навигации "вперед/назад"
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [setCurrentSessionId]);
 
-  /**
-   * Функция для программной навигации без перезагрузки страницы.
-   */
   const navigate = useCallback((newSessionId: string | null) => {
     const newUrl = newSessionId ? `/chat?sessionId=${newSessionId}` : '/';
     const currentUrl = window.location.pathname + window.location.search;
@@ -41,8 +43,9 @@ export const RouterProvider = ({ children }: { children: ReactNode }) => {
     if (newUrl !== currentUrl) {
       window.history.pushState({ sessionId: newSessionId }, '', newUrl);
       setSessionId(newSessionId);
+      setCurrentSessionId(newSessionId); // Синхронизация при программной навигации
     }
-  }, []);
+  }, [setCurrentSessionId]);
 
   return (
     <RouterContext.Provider value={{ sessionId, navigate }}>
@@ -53,7 +56,6 @@ export const RouterProvider = ({ children }: { children: ReactNode }) => {
 
 /**
  * Хук для доступа к состоянию и функциям роутера.
- * @returns {RouterContextType} Объект с текущим sessionId и функцией navigate.
  */
 export const useRouter = (): RouterContextType => {
   const context = useContext(RouterContext);

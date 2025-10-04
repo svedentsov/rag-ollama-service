@@ -35,6 +35,6 @@ public class PerformanceAgentController {
     @PostMapping("/predict-impact")
     @Operation(summary = "Спрогнозировать влияние изменений на производительность")
     public CompletableFuture<List<AgentResult>> predictPerformanceImpact(@Valid @RequestBody PerformancePredictionRequest request) {
-        return orchestratorService.invokePipeline("performance-prediction-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("performance-prediction-pipeline", request.toAgentContext());
     }
 }

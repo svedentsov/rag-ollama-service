@@ -45,7 +45,7 @@ public class TestAnalysisController {
                     "для выявления тестов, которые упали сейчас, но проходили ранее.")
     public CompletableFuture<List<AgentResult>> detectFlakyTests(@Valid @RequestBody FlakyTestAnalysisRequest request) {
         AgentContext context = request.toAgentContext();
-        return orchestratorService.invokePipeline("flaky-test-detection-pipeline", context);
+        return orchestratorService.invoke("flaky-test-detection-pipeline", context);
     }
 
     /**
@@ -64,7 +64,7 @@ public class TestAnalysisController {
             description = "Запускает 'root-cause-analysis-pipeline', который находит 'плавающие' тесты, " +
                     "измененный код и анализирует их вместе с логами для поиска первопричины.")
     public CompletableFuture<List<AgentResult>> analyzeRootCause(@Valid @RequestBody RootCauseAnalysisRequest request) {
-        return orchestratorService.invokePipeline("root-cause-analysis-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("root-cause-analysis-pipeline", request.toAgentContext());
     }
 
     /**
@@ -76,7 +76,7 @@ public class TestAnalysisController {
     @PostMapping("/generate-test-cases")
     @Operation(summary = "Сгенерировать тест-кейсы из требований")
     public CompletableFuture<List<AgentResult>> generateTestCases(@Valid @RequestBody TestCaseGenerationRequest request) {
-        return orchestratorService.invokePipeline("test-case-generation-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("test-case-generation-pipeline", request.toAgentContext());
     }
 
     /**
@@ -88,7 +88,7 @@ public class TestAnalysisController {
     @PostMapping("/generate-checklist")
     @Operation(summary = "Сгенерировать чек-лист для ручного тестирования из описания")
     public CompletableFuture<List<AgentResult>> generateChecklist(@Valid @RequestBody ChecklistGenerationRequest request) {
-        return orchestratorService.invokePipeline("checklist-generation-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("checklist-generation-pipeline", request.toAgentContext());
     }
 
     /**
@@ -101,7 +101,7 @@ public class TestAnalysisController {
     @Operation(summary = "Проверить качество существующего автотеста",
             description = "Принимает исходный код Java-теста и использует LLM для его анализа на соответствие лучшим практикам.")
     public CompletableFuture<List<AgentResult>> verifyTestCode(@Valid @RequestBody TestVerificationRequest request) {
-        return orchestratorService.invokePipeline("test-verifier-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("test-verifier-pipeline", request.toAgentContext());
     }
 
     /**
@@ -114,7 +114,7 @@ public class TestAnalysisController {
     @Operation(summary = "Проанализировать и предложить рефакторинг для автотеста",
             description = "Принимает исходный код Java-теста, находит в нем 'запахи' и генерирует улучшенную версию.")
     public CompletableFuture<List<AgentResult>> refactorTestCode(@Valid @RequestBody TestRefactoringRequest request) {
-        return orchestratorService.invokePipeline("test-smell-refactoring-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("test-smell-refactoring-pipeline", request.toAgentContext());
     }
 
     /**
@@ -127,7 +127,7 @@ public class TestAnalysisController {
     @Operation(summary = "Сгенерировать набор тестов с помощью двух AI-агентов (self-play)",
             description = "Один агент генерирует позитивный тест, второй анализирует его и генерирует негативные/граничные тесты для упущенных сценариев.")
     public CompletableFuture<List<AgentResult>> runPairTesting(@Valid @RequestBody PairTestingRequest request) {
-        return orchestratorService.invokePipeline("agentic-pair-testing-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("agentic-pair-testing-pipeline", request.toAgentContext());
     }
 
     /**
@@ -140,7 +140,7 @@ public class TestAnalysisController {
     @Operation(summary = "Проанализировать тестовое покрытие и объяснить сгенерированные тесты (XAI)",
             description = "Принимает требования и набор тестов, строит матрицу трассируемости и находит непокрытые требования.")
     public CompletableFuture<List<AgentResult>> analyzeTestCoverage(@Valid @RequestBody TestOracleRequest request) {
-        return orchestratorService.invokePipeline("xai-test-oracle-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("xai-test-oracle-pipeline", request.toAgentContext());
     }
 
     /**
@@ -152,7 +152,7 @@ public class TestAnalysisController {
     @PostMapping("/mentor-review")
     @Operation(summary = "Получить менторское ревью для автотеста (XAI)")
     public CompletableFuture<List<AgentResult>> getMentorshipReview(@Valid @RequestBody TestMentorshipRequest request) {
-        return orchestratorService.invokePipeline("test-mentor-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("test-mentor-pipeline", request.toAgentContext());
     }
 
     /**
@@ -164,7 +164,7 @@ public class TestAnalysisController {
     @PostMapping("/build-checklist")
     @Operation(summary = "Построить комплексный, иерархический чек-лист")
     public CompletableFuture<List<AgentResult>> buildChecklist(@Valid @RequestBody ChecklistBuilderRequest request) {
-        return orchestratorService.invokePipeline("checklist-building-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("checklist-building-pipeline", request.toAgentContext());
     }
 
     /**
@@ -176,6 +176,6 @@ public class TestAnalysisController {
     @PostMapping("/assist-bug-reporting")
     @Operation(summary = "Получить помощь в создании баг-репорта")
     public CompletableFuture<List<AgentResult>> assistBugReporting(@Valid @RequestBody BugReportAssistanceRequest request) {
-        return orchestratorService.invokePipeline("bug-reporting-assistance-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("bug-reporting-assistance-pipeline", request.toAgentContext());
     }
 }

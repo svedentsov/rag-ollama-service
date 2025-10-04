@@ -35,6 +35,6 @@ public class MLOpsAgentController {
     @PostMapping("/detect-feature-drift")
     @Operation(summary = "Обнаружить дрейф признаков (Feature Drift) между двумя наборами данных")
     public CompletableFuture<List<AgentResult>> detectFeatureDrift(@Valid @RequestBody DriftDetectionRequest request) {
-        return orchestratorService.invokePipeline("ml-feature-drift-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("ml-feature-drift-pipeline", request.toAgentContext());
     }
 }

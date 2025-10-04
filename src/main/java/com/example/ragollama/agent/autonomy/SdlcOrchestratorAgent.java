@@ -3,6 +3,7 @@ package com.example.ragollama.agent.autonomy;
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentOrchestratorService;
 import com.example.ragollama.agent.AgentResult;
+import com.example.ragollama.agent.registry.ToolRegistryService;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
@@ -28,9 +29,9 @@ import java.util.*;
  * высокоуровневым командам на естественном языке.
  * <p>
  * Является высшим уровнем в иерархии агентов, который не выполняет
- * конкретные задачи, а **планирует и оркеструет запуск других конвейеров**.
+ * конкретные задачи, а **планирует и оркеструет запуск других конвейеров и агентов**.
  * Он декомпозирует сложную бизнес-цель в последовательность вызовов
- * предопределенных, надежных {@link com.example.ragollama.agent.AgentPipeline}.
+ * предопределенных, надежных компонентов.
  */
 @Slf4j
 @Service
@@ -38,7 +39,7 @@ import java.util.*;
 public class SdlcOrchestratorAgent {
 
     private final AgentOrchestratorService orchestratorService;
-    private final PipelineRegistryService pipelineRegistry;
+    private final ToolRegistryService toolRegistry;
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
@@ -47,7 +48,7 @@ public class SdlcOrchestratorAgent {
      * DTO для представления одного шага в стратегическом плане,
      * который генерирует LLM.
      *
-     * @param pipeline Имя конвейера для запуска.
+     * @param pipeline Имя компонента (конвейера или агента) для запуска.
      * @param context  Дополнительный контекст для этого шага.
      */
     private record StrategicPlanStep(String pipeline, Map<String, Object> context) implements Serializable {
@@ -55,14 +56,14 @@ public class SdlcOrchestratorAgent {
 
     /**
      * Принимает высокоуровневую задачу, генерирует стратегический план
-     * и выполняет его, оркеструя другие аналитические конвейеры.
+     * и выполняет его, оркеструя другие компоненты.
      *
      * @param highLevelGoal  Задача на естественном языке от пользователя.
      * @param initialContext Начальный контекст с данными (например, Git-ссылки).
-     * @return {@link Mono} со списком результатов всех выполненных конвейеров.
+     * @return {@link Mono} со списком результатов всех выполненных компонентов.
      */
     public Mono<List<AgentResult>> execute(String highLevelGoal, AgentContext initialContext) {
-        String capabilities = pipelineRegistry.getCapabilitiesCatalog();
+        String capabilities = toolRegistry.getToolDescriptionsAsJson();
 
         String promptString = promptService.render("sdlcStrategyPrompt", Map.of(
                 "goal", highLevelGoal,
@@ -70,7 +71,6 @@ public class SdlcOrchestratorAgent {
                 "context", initialContext.payload()
         ));
 
-        // Шаг 1: LLM создает высокоуровневый план
         return Mono.fromFuture(() -> llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
                 .map(this::parseStrategicPlan)
                 .flatMap(plan -> {
@@ -79,57 +79,39 @@ public class SdlcOrchestratorAgent {
                         return Mono.just(List.of(new AgentResult("sdlc-orchestrator", AgentResult.Status.FAILURE, "Не удалось составить план для выполнения задачи.", Map.of())));
                     }
 
-                    // Шаг 2: Последовательно выполняем каждый шаг плана, накапливая контекст
-                    // Используем Flux.reduce для управления состоянием (контекст + результаты)
                     Tuple2<AgentContext, List<AgentResult>> initialState = Tuples.of(initialContext, new ArrayList<>());
 
                     return Flux.fromIterable(plan)
                             .reduce(initialState, (stateTuple, step) ->
-                                    executePipelineStep(step, stateTuple.getT1())
+                                    executeStep(step, stateTuple.getT1())
                                             .map(results -> {
-                                                // Обновляем состояние для следующего шага
                                                 AgentContext currentContext = stateTuple.getT1();
                                                 List<AgentResult> accumulatedResults = stateTuple.getT2();
                                                 accumulatedResults.addAll(results);
-                                                // Мержим результаты последнего шага в контекст для следующего
                                                 Map<String, Object> newPayload = new HashMap<>(currentContext.payload());
-                                                results.getLast().details().forEach(newPayload::putIfAbsent);
+                                                if (!results.isEmpty()) {
+                                                    results.getLast().details().forEach(newPayload::putIfAbsent);
+                                                }
                                                 AgentContext newContext = new AgentContext(newPayload);
                                                 return Tuples.of(newContext, accumulatedResults);
                                             })
-                                            .block() // Блокируем, т.к. reduce ожидает синхронного возврата
+                                            .block()
                             )
-                            .map(Tuple2::getT2); // Возвращаем только список результатов
+                            .map(Tuple2::getT2);
                 });
     }
 
-    /**
-     * Выполняет один шаг плана (один конвейер) и возвращает его результат.
-     *
-     * @param step           Шаг плана.
-     * @param currentContext Текущий накопленный контекст.
-     * @return {@link Mono} с результатом выполнения конвейера.
-     */
-    private Mono<List<AgentResult>> executePipelineStep(StrategicPlanStep step, AgentContext currentContext) {
-        log.info("SDLC Orchestrator: запуск конвейера '{}'", step.pipeline());
-        // Объединяем накопленный контекст с контекстом из шага плана
+    private Mono<List<AgentResult>> executeStep(StrategicPlanStep step, AgentContext currentContext) {
+        log.info("SDLC Orchestrator: запуск компонента '{}'", step.pipeline());
         Map<String, Object> finalPayload = new HashMap<>(currentContext.payload());
         if (step.context() != null) {
             finalPayload.putAll(step.context());
         }
         AgentContext finalContext = new AgentContext(finalPayload);
-
-        return Mono.fromFuture(() -> orchestratorService.invokePipeline(step.pipeline(), finalContext));
+        return Mono.fromFuture(() -> orchestratorService.invoke(step.pipeline(), finalContext));
     }
 
 
-    /**
-     * Безопасно парсит JSON-ответ от LLM в список шагов плана.
-     *
-     * @param llmResponse Сырой ответ от LLM.
-     * @return Список шагов {@link StrategicPlanStep}.
-     * @throws ProcessingException если парсинг JSON не удался.
-     */
     private List<StrategicPlanStep> parseStrategicPlan(String llmResponse) {
         try {
             String json = JsonExtractorUtil.extractJsonBlock(llmResponse);

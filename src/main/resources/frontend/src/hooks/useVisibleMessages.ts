@@ -20,7 +20,6 @@ interface UseVisibleMessagesReturn {
  * @returns {UseVisibleMessagesReturn} Объект с отфильтрованными сообщениями и информацией о ветках.
  */
 export const useVisibleMessages = (sessionId: string, messages: Message[]): UseVisibleMessagesReturn => {
-  // Получаем данные о сессиях, чтобы извлечь сохраненный выбор веток.
   const { sessions } = useChatSessions();
   const activeBranches = useMemo(() => {
       const currentSession = sessions.find(s => s.sessionId === sessionId);

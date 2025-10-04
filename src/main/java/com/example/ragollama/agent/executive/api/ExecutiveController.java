@@ -40,7 +40,7 @@ public class ExecutiveController {
     @Operation(summary = "Сформировать стратегический план по портфелю проектов (AI CTO)",
             description = "Запускает конвейер 'executive-governor-pipeline' для анализа технического здоровья и рисков всех проектов.")
     public CompletableFuture<List<AgentResult>> generatePortfolioStrategy(@Valid @RequestBody PortfolioStrategyRequest request) {
-        return orchestratorService.invokePipeline("executive-governor-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("executive-governor-pipeline", request.toAgentContext());
     }
 
     /**

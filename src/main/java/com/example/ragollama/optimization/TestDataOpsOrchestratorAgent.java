@@ -73,7 +73,6 @@ public class TestDataOpsOrchestratorAgent implements ToolAgent {
     public CompletableFuture<AgentResult> execute(AgentContext context) {
         String goal = (String) context.payload().get("goal");
 
-        // Фильтруем инструменты, оставляя только генераторы данных
         ToolRegistryService toolRegistry = toolRegistryProvider.getObject();
         String availableToolsJson = getFilteredToolDescriptions(toolRegistry);
 
@@ -85,14 +84,12 @@ public class TestDataOpsOrchestratorAgent implements ToolAgent {
                     "tools", availableToolsJson
             ));
 
-            // 1. LLM генерирует план из одного шага
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
                     .thenCompose(llmResponse -> {
                         PlanStep stepToExecute = parseLlmResponse(llmResponse);
-                        // 2. Выполняем сгенерированный шаг
                         return executionService.executePlan(List.of(stepToExecute), context, null)
                                 .toFuture()
-                                .thenApply(results -> results.get(0)); // Возвращаем результат дочернего агента
+                                .thenApply(results -> results.get(0));
                     });
 
         } catch (JsonProcessingException e) {
@@ -101,7 +98,7 @@ public class TestDataOpsOrchestratorAgent implements ToolAgent {
     }
 
     private String getFilteredToolDescriptions(ToolRegistryService toolRegistry) {
-        return toolRegistry.getToolDescriptionsAsJson(); // В реальном проекте здесь была бы фильтрация по аннотации или имени
+        return toolRegistry.getToolDescriptionsAsJson();
     }
 
     private PlanStep parseLlmResponse(String jsonResponse) {

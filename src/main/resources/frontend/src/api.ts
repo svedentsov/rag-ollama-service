@@ -5,7 +5,6 @@ const API_BASE_URL = '/api/v1';
 /**
  * @class ApiError
  * @description Кастомный класс ошибки для API-клиента.
- * Содержит статус ответа и тело ошибки для детальной диагностики.
  */
 class ApiError extends Error {
   constructor(public status: number, public responseBody: any, message?: string) {
@@ -16,12 +15,13 @@ class ApiError extends Error {
 
 /**
  * Централизованный API-клиент.
- * Инкапсулирует логику fetch, обработку ответов и ошибок.
+ * @description Явно обрабатывает успешные ответы без тела (статусы 202 и 204),
+ * возвращая промис, который разрешается в `undefined`. Это устраняет ошибку в `useMutation`.
  * @template T - Ожидаемый тип данных в успешном ответе.
- * @param {string} endpoint - Путь к эндпоинту API (без /api/v1).
+ * @param {string} endpoint - Путь к эндпоинту API.
  * @param {RequestInit} [options] - Опции для fetch.
  * @returns {Promise<T>} Промис с распарсенными данными.
- * @throws {ApiError} В случае ошибки сети или неуспешного статуса ответа.
+ * @throws {ApiError} В случае ошибки.
  */
 async function apiClient<T>(endpoint: string, options?: RequestInit): Promise<T> {
   try {
@@ -44,120 +44,69 @@ async function apiClient<T>(endpoint: string, options?: RequestInit): Promise<T>
       }
       throw new ApiError(response.status, errorJson, `HTTP error on ${endpoint}`);
     }
-
-    // Обрабатываем пустые ответы (например, при статусе 204 No Content)
+    if (response.status === 202 || response.status === 204) {
+      return undefined as T;
+    }
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
         return response.json();
     }
+
     return undefined as T;
 
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;
     }
-    // Оборачиваем сетевые ошибки в наш кастомный класс для унифицированной обработки
     throw new ApiError(503, { message: (error as Error).message }, 'Network or fetch error');
   }
 }
 
 /**
  * Объект, предоставляющий все методы для взаимодействия с API бэкенда.
- * Является единственной точкой входа для всех HTTP-запросов из приложения.
  */
 export const api = {
-  /**
-   * Запрашивает список всех сессий чата для текущего пользователя.
-   * @returns {Promise<ChatSession[]>} Промис со списком сессий.
-   */
   getChatSessions: () => apiClient<ChatSession[]>('/chats'),
-
-  /**
-   * Создает новую сессию чата.
-   * @returns {Promise<ChatSession>} Промис с созданной сессией.
-   */
   createNewChat: () => apiClient<ChatSession>('/chats', { method: 'POST' }),
-
-  /**
-   * Обновляет имя сессии чата.
-   * @param {object} params - Параметры.
-   * @param {string} params.sessionId - ID сессии.
-   * @param {string} params.newName - Новое имя.
-   * @returns {Promise<void>}
-   */
   updateChatName: ({ sessionId, newName }: { sessionId: string; newName: string }) =>
     apiClient<void>(`/chats/${sessionId}`, {
       method: 'PUT',
       body: JSON.stringify({ newName }),
     }),
-
-  /**
-   * Запрашивает историю сообщений для указанной сессии.
-   * @param {string} sessionId - ID сессии.
-   * @returns {Promise<Message[]>} Промис с массивом сообщений, преобразованным в клиентский формат.
-   */
   fetchMessages: (sessionId: string): Promise<Message[]> =>
     apiClient<{ id: string; parentId: string | null; role: 'USER' | 'ASSISTANT'; content: string; taskId?: string }[]>(`/chats/${sessionId}/messages`)
     .then(messages =>
-        // Преобразуем DTO с бэкенда в наш клиентский тип Message
         messages.map(msg => ({
             id: msg.id,
             taskId: msg.taskId,
             parentId: msg.parentId ?? undefined,
             type: msg.role === 'USER' ? 'user' : 'assistant',
             text: msg.content,
-            sources: [], // `sources` приходят только через SSE, при загрузке истории они пусты
+            sources: [],
             isStreaming: false,
         }))
     ),
-
-  /**
-   * Удаляет сессию чата.
-   * @param {string} sessionId - ID сессии для удаления.
-   * @returns {Promise<void>}
-   */
   deleteChatSession: (sessionId: string) => apiClient<void>(`/chats/${sessionId}`, { method: 'DELETE' }),
-
-  /**
-   * Обновляет текст существующего сообщения.
-   * @param {object} params - Параметры.
-   * @param {string} params.messageId - ID сообщения.
-   * @param {string} params.newContent - Новый текст.
-   * @returns {Promise<void>}
-   */
   updateMessage: ({ messageId, newContent }: { messageId: string; newContent: string }) =>
     apiClient<void>(`/messages/${messageId}`, {
       method: 'PUT',
       body: JSON.stringify({ newContent }),
     }),
-
-  /**
-   * Удаляет сообщение.
-   * @param {string} messageId - ID сообщения для удаления.
-   * @returns {Promise<void>}
-   */
   deleteMessage: (messageId: string) => apiClient<void>(`/messages/${messageId}`, { method: 'DELETE' }),
-
-  /**
-   * Отправляет обратную связь по задаче.
-   * @param {object} params - Параметры.
-   * @param {string} params.taskId - ID задачи (полученный из сообщения).
-   * @param {boolean} params.isHelpful - Оценка пользователя.
-   * @returns {Promise<void>}
-   */
   sendFeedback: ({ taskId, isHelpful }: { taskId: string; isHelpful: boolean }) =>
     apiClient<void>('/feedback', {
       method: 'POST',
       body: JSON.stringify({ requestId: taskId, isHelpful }),
     }),
+  setActiveBranch: ({ sessionId, parentId, childId }: { sessionId: string; parentId: string; childId: string }) =>
+    apiClient<void>(`/chats/${sessionId}/active-branch`, {
+        method: 'PUT',
+        body: JSON.stringify({ parentMessageId: parentId, activeChildId: childId }),
+    }),
 };
 
 /**
  * Низкоуровневая сервисная функция для получения потока событий (SSE).
- * @param query - Запрос пользователя.
- * @param sessionId - ID сессии.
- * @param signal - AbortSignal для отмены запроса.
- * @returns Асинхронный итерируемый объект с событиями.
  */
 export async function* streamChatResponse(
     query: string,
@@ -187,7 +136,7 @@ export async function* streamChatResponse(
 
           buffer += value;
           const lines = buffer.split('\n\n');
-          buffer = lines.pop() || ''; // Последняя (возможно, неполная) часть остается в буфере
+          buffer = lines.pop() || '';
 
           for (const line of lines) {
               if (line.startsWith('data:')) {

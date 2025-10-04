@@ -35,6 +35,6 @@ public class FinancialGovernorController {
     @PostMapping("/analyze-roi")
     @Operation(summary = "Проанализировать затраты и ROI инженерных инициатив (AI CFO)")
     public CompletableFuture<List<AgentResult>> analyzeFinancials(@Valid @RequestBody FinancialAnalysisRequest request) {
-        return orchestratorService.invokePipeline("financial-roi-analysis-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("financial-roi-analysis-pipeline", request.toAgentContext());
     }
 }

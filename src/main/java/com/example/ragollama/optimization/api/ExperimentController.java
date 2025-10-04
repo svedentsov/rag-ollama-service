@@ -35,6 +35,6 @@ public class ExperimentController {
     @PostMapping("/run")
     @Operation(summary = "Запустить эксперимент по оценке RAG-конфигураций")
     public CompletableFuture<List<AgentResult>> runExperiment(@Valid @RequestBody ExperimentRequest request) {
-        return orchestratorService.invokePipeline("experiment-execution-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("experiment-execution-pipeline", request.toAgentContext());
     }
 }

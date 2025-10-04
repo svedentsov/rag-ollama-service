@@ -44,7 +44,7 @@ public class DataGenerationController {
             description = "Принимает исходный код Java DTO или Entity и генерирует " +
                     "указанное количество JSON-объектов с реалистичными данными.")
     public CompletableFuture<List<AgentResult>> generateMockData(@Valid @RequestBody SyntheticDataRequest request) {
-        return orchestratorService.invokePipeline(
+        return orchestratorService.invoke(
                 "synthetic-data-generation-pipeline", request.toAgentContext()
         );
     }
@@ -60,7 +60,7 @@ public class DataGenerationController {
             description = "Принимает DDL таблицы и цель на естественном языке. AI генерирует SQL, " +
                     "который выполняется после вашего одобрения, а результат маскируется.")
     public CompletableFuture<List<AgentResult>> createDataSubset(@Valid @RequestBody DataSubsetRequest request) {
-        return orchestratorService.invokePipeline("data-subset-masking-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("data-subset-masking-pipeline", request.toAgentContext());
     }
 
     /**
@@ -72,7 +72,7 @@ public class DataGenerationController {
     @PostMapping("/create-dp-subset")
     @Operation(summary = "Создать синтетические данные с дифференциальной приватностью (DP)")
     public CompletableFuture<List<AgentResult>> createDpDataSubset(@Valid @RequestBody SyntheticDataDpRequest request) {
-        return orchestratorService.invokePipeline("dp-synthetic-data-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("dp-synthetic-data-pipeline", request.toAgentContext());
     }
 
     /**
@@ -84,6 +84,6 @@ public class DataGenerationController {
     @PostMapping("/generate-statistical-data")
     @Operation(summary = "Сгенерировать статистически-релевантные данные")
     public CompletableFuture<List<AgentResult>> generateStatisticalData(@Valid @RequestBody DataGenerationRequest request) {
-        return orchestratorService.invokePipeline("statistical-data-generation-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("statistical-data-generation-pipeline", request.toAgentContext());
     }
 }

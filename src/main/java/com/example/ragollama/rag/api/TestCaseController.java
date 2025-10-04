@@ -69,6 +69,6 @@ public class TestCaseController {
     @Operation(summary = "Найти дубликаты для заданного тест-кейса",
             description = "Выполняет двухступенчатый анализ: сначала быстрый семантический поиск кандидатов, затем точную верификацию каждой пары с помощью LLM.")
     public CompletableFuture<List<AgentResult>> findDuplicates(@Valid @RequestBody DeduplicationRequest request) {
-        return orchestratorService.invokePipeline("test-case-deduplication-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("test-case-deduplication-pipeline", request.toAgentContext());
     }
 }

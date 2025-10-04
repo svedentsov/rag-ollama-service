@@ -37,7 +37,7 @@ public class ArchitectureAgentController {
     @PostMapping("/check-consistency")
     @Operation(summary = "Проверить измененный код на соответствие эталонной архитектуре")
     public CompletableFuture<List<AgentResult>> checkArchitectureConsistency(@Valid @RequestBody ArchConsistencyRequest request) {
-        return orchestratorService.invokePipeline("arch-consistency-mapping-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("arch-consistency-mapping-pipeline", request.toAgentContext());
     }
 
     /**
@@ -49,7 +49,7 @@ public class ArchitectureAgentController {
     @PostMapping("/full-review")
     @Operation(summary = "Получить полное архитектурное ревью для изменений (AI Governor)")
     public CompletableFuture<List<AgentResult>> getFullArchitecturalReview(@Valid @RequestBody ArchitecturalGuidanceRequest request) {
-        return orchestratorService.invokePipeline("architectural-guardian-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("architectural-guardian-pipeline", request.toAgentContext());
     }
 
     /**
@@ -61,6 +61,6 @@ public class ArchitectureAgentController {
     @PostMapping("/visualize")
     @Operation(summary = "Сгенерировать диаграмму зависимостей для изменений")
     public CompletableFuture<List<AgentResult>> visualizeDependencies(@Valid @RequestBody VisualizationRequest request) {
-        return orchestratorService.invokePipeline("architecture-visualization-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("architecture-visualization-pipeline", request.toAgentContext());
     }
 }

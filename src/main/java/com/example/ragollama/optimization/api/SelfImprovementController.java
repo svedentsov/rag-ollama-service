@@ -35,6 +35,6 @@ public class SelfImprovementController {
     @PostMapping("/analyze-and-suggest")
     @Operation(summary = "Проанализировать работу агентов и предложить улучшения промптов")
     public CompletableFuture<List<AgentResult>> analyzeAndSuggest(@Valid @RequestBody SelfImprovementRequest request) {
-        return orchestratorService.invokePipeline("self-improvement-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("self-improvement-pipeline", request.toAgentContext());
     }
 }

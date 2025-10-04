@@ -36,7 +36,7 @@ public class UxAgentController {
     @PostMapping("/evaluate-heuristics")
     @Operation(summary = "Оценить HTML на соответствие эвристикам юзабилити")
     public CompletableFuture<List<AgentResult>> evaluateUxHeuristics(@Valid @RequestBody UxHeuristicsRequest request) {
-        return orchestratorService.invokePipeline("ux-heuristics-evaluation-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("ux-heuristics-evaluation-pipeline", request.toAgentContext());
     }
 
     /**
@@ -48,6 +48,6 @@ public class UxAgentController {
     @PostMapping("/simulate-user-behavior")
     @Operation(summary = "Запустить AI-агента для симуляции E2E-сценария")
     public CompletableFuture<List<AgentResult>> simulateUserBehavior(@Valid @RequestBody UserSimulationRequest request) {
-        return orchestratorService.invokePipeline("user-behavior-simulation-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("user-behavior-simulation-pipeline", request.toAgentContext());
     }
 }

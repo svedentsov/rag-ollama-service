@@ -7,8 +7,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_chat_messages_session') THEN
         ALTER TABLE public.chat_messages
         ADD CONSTRAINT fk_chat_messages_session
-        FOREIGN KEY (session_id) REFERENCES public.chat_sessions(session_id)
-        ON DELETE CASCADE;
+        FOREIGN KEY (session_id) REFERENCES public.chat_sessions(session_id);
     END IF;
 END;
 $$;

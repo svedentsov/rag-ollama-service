@@ -39,6 +39,7 @@ export interface ChatSession {
   chatName: string;
   lastMessageContent?: string;
   lastMessageTimestamp?: string;
+  activeBranches?: Record<string, string>;
 }
 
 /**

@@ -35,6 +35,6 @@ public class EngineeringController {
     @PostMapping("/analyze-velocity")
     @Operation(summary = "Проанализировать производительность SDLC (AI VP of Engineering)")
     public CompletableFuture<List<AgentResult>> analyzeEngineeringVelocity(@Valid @RequestBody EngineeringVelocityRequest request) {
-        return orchestratorService.invokePipeline("engineering-velocity-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("engineering-velocity-pipeline", request.toAgentContext());
     }
 }

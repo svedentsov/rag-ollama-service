@@ -34,6 +34,6 @@ public class KnowledgeGapsController {
     @GetMapping("/analyze")
     @Operation(summary = "Проанализировать и сгруппировать пробелы в базе знаний")
     public CompletableFuture<List<AgentResult>> analyzeKnowledgeGaps(@Valid KnowledgeGapAnalysisRequest request) {
-        return orchestratorService.invokePipeline("knowledge-expansion-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("knowledge-expansion-pipeline", request.toAgentContext());
     }
 }

@@ -68,13 +68,6 @@ public class ChatSessionController {
         return ResponseEntity.noContent().build();
     }
 
-    /**
-     * Возвращает историю сообщений для указанной сессии.
-     * Теперь использует обновленный ChatMessageDto, включающий parentId.
-     *
-     * @param sessionId ID сессии.
-     * @return Список DTO {@link ChatMessageDto}.
-     */
     @GetMapping("/{sessionId}/messages")
     @Operation(summary = "Получить историю сообщений для сессии")
     public List<ChatMessageDto> getChatMessages(@PathVariable UUID sessionId) {

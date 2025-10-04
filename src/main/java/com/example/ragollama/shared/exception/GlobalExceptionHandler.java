@@ -10,6 +10,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.support.WebExchangeBindException;
 import org.springframework.web.server.ResponseStatusException;
@@ -23,14 +24,9 @@ import java.util.stream.Collectors;
 
 /**
  * Глобальный обработчик исключений для Spring WebFlux.
- * <p>
- * Эта реализация заменяет {@code @RestControllerAdvice} и является нативным
- * способом обработки ошибок в реактивном стеке. Она перехватывает все исключения,
- * возникающие в цепочке обработки запроса, и формирует стандартизированный
- * ответ в формате {@link ProblemDetail} (RFC 7807).
  */
 @Component
-@Order(-2) // Высокий приоритет, чтобы перехватывать ошибки раньше стандартных обработчиков
+@Order(-2)
 @Slf4j
 @RequiredArgsConstructor
 public class GlobalExceptionHandler implements ErrorWebExceptionHandler {
@@ -44,11 +40,10 @@ public class GlobalExceptionHandler implements ErrorWebExceptionHandler {
         if (ex instanceof WebExchangeBindException e) {
             problemDetail = handleWebExchangeBindException(e);
         } else if (ex instanceof ResponseStatusException e) {
-            // Включает 404 Not Found и другие HTTP-статусные исключения WebFlux
             problemDetail = handleResponseStatusException(e);
         } else if (isClientAbortException(ex)) {
             log.info("Клиент разорвал соединение: {}", ex.getMessage());
-            return Mono.empty(); // Просто завершаем обработку
+            return Mono.empty();
         } else if (ex instanceof AccessDeniedException e) {
             problemDetail = createProblemDetail(HttpStatus.FORBIDDEN, "Access Denied", e.getMessage());
         } else if (ex instanceof PromptInjectionException e) {
@@ -65,7 +60,10 @@ public class GlobalExceptionHandler implements ErrorWebExceptionHandler {
             problemDetail = createProblemDetail(HttpStatus.NOT_FOUND, "Entity Not Found", e.getMessage());
         } else if (ex instanceof TaskNotFoundException e) {
             problemDetail = createProblemDetail(HttpStatus.NOT_FOUND, "Task Not Found", e.getMessage());
-        } else {
+        } else if (ex instanceof ObjectOptimisticLockingFailureException e) {
+            problemDetail = createProblemDetail(HttpStatus.CONFLICT, "Concurrent Modification", "Не удалось выполнить операцию из-за одновременного изменения данных. Пожалуйста, повторите попытку.");
+        }
+        else {
             problemDetail = createProblemDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", "Произошла внутренняя ошибка сервера.");
             log.error("Произошла непредвиденная ошибка: {}", ex.getMessage(), ex);
         }
@@ -97,12 +95,6 @@ public class GlobalExceptionHandler implements ErrorWebExceptionHandler {
         return problemDetail;
     }
 
-    /**
-     * Проверяет, является ли исключение следствием разрыва соединения клиентом.
-     *
-     * @param ex Исключение.
-     * @return {@code true}, если это ошибка разрыва соединения.
-     */
     private boolean isClientAbortException(Throwable ex) {
         if (ex instanceof CancellationException || ex instanceof IOException) {
             return true;

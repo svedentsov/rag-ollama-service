@@ -39,6 +39,6 @@ public class PrioritizationController {
             description = "Запускает 'prioritization-pipeline', который собирает полную картину о состоянии проекта " +
                     "(баги, техдолг, безопасность) и генерирует на ее основе приоритизированный бэклог.")
     public CompletableFuture<List<AgentResult>> prioritizeBacklog(@Valid @RequestBody PrioritizationRequest request) {
-        return orchestratorService.invokePipeline("prioritization-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("prioritization-pipeline", request.toAgentContext());
     }
 }

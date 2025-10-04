@@ -36,7 +36,7 @@ public class ComplianceAgentController {
     @PostMapping("/check-privacy")
     @Operation(summary = "Проверить код на соответствие политикам конфиденциальности")
     public CompletableFuture<List<AgentResult>> checkPrivacyCompliance(@Valid @RequestBody PrivacyCheckRequest request) {
-        return orchestratorService.invokePipeline("privacy-compliance-check-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("privacy-compliance-check-pipeline", request.toAgentContext());
     }
 
     /**
@@ -48,6 +48,6 @@ public class ComplianceAgentController {
     @PostMapping("/gather-evidence")
     @Operation(summary = "Собрать доказательства для аудита соответствия")
     public CompletableFuture<List<AgentResult>> gatherComplianceEvidence(@Valid @RequestBody ComplianceEvidenceRequest request) {
-        return orchestratorService.invokePipeline("compliance-evidence-gathering-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("compliance-evidence-gathering-pipeline", request.toAgentContext());
     }
 }

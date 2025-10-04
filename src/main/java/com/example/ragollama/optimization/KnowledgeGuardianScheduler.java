@@ -27,7 +27,7 @@ public class KnowledgeGuardianScheduler {
     @Scheduled(cron = "${app.optimization.guardian.scheduler.cron}")
     public void runScheduledConsistencyCheck() {
         log.info("Планировщик запускает фоновую задачу аудита консистентности базы знаний...");
-        orchestratorService.invokePipeline("knowledge-guardian-pipeline", new AgentContext(Map.of()))
+        orchestratorService.invoke("knowledge-guardian-pipeline", new AgentContext(Map.of()))
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
                         log.error("Задача аудита консистентности завершилась с ошибкой.", ex);

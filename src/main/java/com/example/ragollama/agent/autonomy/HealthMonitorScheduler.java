@@ -35,7 +35,7 @@ public class HealthMonitorScheduler {
     public void runAutonomousHealthCheck() {
         log.info("Планировщик запускает автономный аудит здоровья проекта...");
         // Запускаем конвейер, который, в свою очередь, запустит AutonomousMaintenanceAgent
-        orchestratorService.invokePipeline("health-monitor-pipeline", new AgentContext(Map.of("days", 30)))
+        orchestratorService.invoke("health-monitor-pipeline", new AgentContext(Map.of("days", 30)))
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
                         log.error("Автономный аудит здоровья проекта завершился с ошибкой.", ex);

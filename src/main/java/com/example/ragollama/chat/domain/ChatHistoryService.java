@@ -18,6 +18,9 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Сервис для управления историей сообщений в чате.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -32,15 +35,9 @@ public class ChatHistoryService {
     public CompletableFuture<ChatMessage> saveMessageAsync(ChatSession session, MessageRole role, String content, UUID parentId, UUID taskId) {
         ChatSession managedSession = chatSessionRepository.findById(session.getSessionId())
                 .orElseThrow(() -> new IllegalStateException("Session not found for saving message"));
-
         ChatMessage message = chatHistoryMapper.toChatMessageEntity(managedSession, role, content, parentId, taskId);
-
-        managedSession.addMessage(message);
-        chatSessionRepository.save(managedSession);
-
+        ChatMessage savedMessage = chatMessageRepository.saveAndFlush(message);
         log.debug("Сохранено сообщение для сессии {}: Role={}, ParentId={}, TaskId={}", session.getSessionId(), role, parentId, taskId);
-
-        ChatMessage savedMessage = managedSession.getMessages().get(managedSession.getMessages().size() - 1);
         return CompletableFuture.completedFuture(savedMessage);
     }
 

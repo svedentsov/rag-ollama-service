@@ -11,7 +11,14 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * DTO для представления сессии чата.
+ * <p>
+ * Включает поле `activeBranches` для передачи на клиент
+ * сохраненного состояния выбора веток.
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Schema(description = "DTO для сессии чата")
 public record ChatSessionDto(
         UUID sessionId,
         String chatName,

@@ -43,7 +43,7 @@ public class GitAgentController {
                 "oldRef", request.oldRef(),
                 "newRef", request.newRef()
         ));
-        return orchestratorService.invokePipeline("git-inspector-pipeline", context);
+        return orchestratorService.invoke("git-inspector-pipeline", context);
     }
 
     /**
@@ -61,7 +61,7 @@ public class GitAgentController {
                 "oldRef", request.oldRef(),
                 "newRef", request.newRef()
         ));
-        return orchestratorService.invokePipeline("test-coverage-pipeline", context);
+        return orchestratorService.invoke("test-coverage-pipeline", context);
     }
 
     /**
@@ -79,7 +79,7 @@ public class GitAgentController {
                 "oldRef", request.oldRef(),
                 "newRef", request.newRef()
         ));
-        return orchestratorService.invokePipeline("deep-security-audit-pipeline", context);
+        return orchestratorService.invoke("deep-security-audit-pipeline", context);
     }
 
     /**
@@ -97,7 +97,7 @@ public class GitAgentController {
                 "oldRef", request.oldRef(),
                 "newRef", request.newRef()
         ));
-        return orchestratorService.invokePipeline("impact-analysis-pipeline", context);
+        return orchestratorService.invoke("impact-analysis-pipeline", context);
     }
 
     /**
@@ -115,7 +115,7 @@ public class GitAgentController {
                 "oldRef", request.oldRef(),
                 "newRef", request.newRef()
         ));
-        return orchestratorService.invokePipeline("auth-test-generation-pipeline", context);
+        return orchestratorService.invoke("auth-test-generation-pipeline", context);
     }
 
     /**
@@ -130,6 +130,6 @@ public class GitAgentController {
                     "коммиты между двумя Git-ссылками и генерирует из них человекочитаемый отчет.")
     public CompletableFuture<List<AgentResult>> generateReleaseNotes(@Valid @RequestBody ReleaseNotesRequest request) {
         AgentContext context = request.toAgentContext();
-        return orchestratorService.invokePipeline("release-notes-generation-pipeline", context);
+        return orchestratorService.invoke("release-notes-generation-pipeline", context);
     }
 }

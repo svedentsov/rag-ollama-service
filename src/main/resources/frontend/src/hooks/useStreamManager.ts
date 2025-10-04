@@ -4,24 +4,16 @@ import toast from 'react-hot-toast';
 import { Message, UniversalStreamResponse } from '../types';
 import { streamChatResponse } from '../api';
 import { useAddNotification } from '../state/notificationStore';
+import { useSessionStore } from '../state/sessionStore';
 
 /**
  * Хук для управления множественными, параллельными потоками ответов чата.
- * Инкапсулирует логику запуска, обработки событий (SSE), обновления кэша
- * React Query в реальном времени и отмены запросов.
  */
 export function useStreamManager() {
   const queryClient = useQueryClient();
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const addNotification = useAddNotification();
 
-  /**
-   * Обновляет кэш сообщений React Query на основе входящего события из потока.
-   * Эта функция обернута в useCallback для стабильности ссылок.
-   * @param sessionId ID сессии, для которой пришло обновление.
-   * @param assistantMessageId ID сообщения-плейсхолдера ассистента, которое нужно обновить.
-   * @param event Событие из потока SSE.
-   */
   const updateQueryCache = useCallback((sessionId: string, assistantMessageId: string, event: UniversalStreamResponse) => {
     const queryKey = ['messages', sessionId];
     queryClient.setQueryData<Message[]>(queryKey, (oldData = []) =>
@@ -48,18 +40,10 @@ export function useStreamManager() {
     );
   }, [queryClient]);
 
-  /**
-   * Запускает новый поток для генерации ответа.
-   * @param sessionId ID сессии чата.
-   * @param query Текст запроса пользователя.
-   * @param assistantMessageId Клиентский ID для сообщения-плейсхолдера ассистента.
-   * @param currentSessionId ID текущей активной сессии в UI.
-   */
   const startStream = useCallback(async (
     sessionId: string,
     query: string,
-    assistantMessageId: string,
-    currentSessionId: string | null
+    assistantMessageId: string
   ) => {
     const abortController = new AbortController();
     abortControllersRef.current.set(assistantMessageId, abortController);
@@ -80,17 +64,16 @@ export function useStreamManager() {
         )
       );
       abortControllersRef.current.delete(assistantMessageId);
+
+      const currentSessionId = useSessionStore.getState().currentSessionId;
       if (sessionId !== currentSessionId) {
         addNotification(sessionId);
       }
+
       await queryClient.invalidateQueries({ queryKey: ['chatSessions'] });
     }
   }, [queryClient, updateQueryCache, addNotification]);
 
-  /**
-   * Отменяет активный поток генерации по ID сообщения ассистента.
-   * @param assistantMessageId ID сообщения, генерацию которого нужно остановить.
-   */
   const stopStream = useCallback((assistantMessageId: string) => {
     const controller = abortControllersRef.current.get(assistantMessageId);
     if (controller) {

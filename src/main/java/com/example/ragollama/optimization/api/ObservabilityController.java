@@ -36,6 +36,6 @@ public class ObservabilityController {
     @Operation(summary = "Проанализировать распределенный трейс для запроса",
             description = "Имитирует сбор данных из Jaeger/Zipkin и использует AI для поиска узких мест.")
     public CompletableFuture<List<AgentResult>> analyzeTrace(@Valid @RequestBody TraceAnalysisRequest request) {
-        return orchestratorService.invokePipeline("observability-analysis-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("observability-analysis-pipeline", request.toAgentContext());
     }
 }

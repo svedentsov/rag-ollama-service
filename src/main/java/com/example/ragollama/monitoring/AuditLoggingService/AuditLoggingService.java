@@ -5,21 +5,15 @@ import com.example.ragollama.monitoring.model.RagAuditLog;
 import com.example.ragollama.rag.domain.model.SourceCitation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 /**
- * Асинхронный сервис для записи аудиторских логов RAG-взаимодействий.
- * <p>
- * Обеспечивает персистентное сохранение полного контекста каждого запроса
- * (включая промпт, контекст, ответ) для целей отладки, анализа и комплаенса.
- * Эта версия принимает на вход `List<SourceCitation>` для сохранения
- * полной информации об источниках.
+ * Сервис для записи аудиторских логов RAG-взаимодействий.
  */
 @Slf4j
 @Service
@@ -29,7 +23,7 @@ public class AuditLoggingService {
     private final RagAuditLogRepository auditLogRepository;
 
     /**
-     * Асинхронно сохраняет полную запись о RAG-взаимодействии в базу данных.
+     * Синхронно сохраняет полную запись о RAG-взаимодействии в базу данных.
      *
      * @param requestId       Уникальный идентификатор HTTP-запроса.
      * @param sessionId       Идентификатор сессии диалога.
@@ -37,11 +31,9 @@ public class AuditLoggingService {
      * @param sourceCitations Список структурированных цитат.
      * @param finalPrompt     Финальный промпт, отправленный в LLM.
      * @param llmAnswer       Ответ, сгенерированный LLM.
-     * @return {@link CompletableFuture}, который завершается после сохранения.
      */
-    @Async("applicationTaskExecutor")
-    @Transactional
-    public CompletableFuture<Void> logInteractionAsync(
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logInteraction(
             String requestId,
             UUID sessionId,
             String originalQuery,
@@ -49,7 +41,7 @@ public class AuditLoggingService {
             String finalPrompt,
             String llmAnswer) {
         try {
-            String username = "anonymous";
+            String username = "anonymous"; // Заглушка, пока нет аутентификации
 
             RagAuditLog auditLog = RagAuditLog.builder()
                     .requestId(requestId)
@@ -66,6 +58,5 @@ public class AuditLoggingService {
         } catch (Exception e) {
             log.error("Не удалось сохранить аудиторскую запись для requestId {}: {}", requestId, e.getMessage(), e);
         }
-        return CompletableFuture.completedFuture(null);
     }
 }

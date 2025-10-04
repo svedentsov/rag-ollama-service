@@ -40,6 +40,6 @@ public class ResourceAllocationController {
             description = "Запускает 'resource-allocation-pipeline', который симулирует сбор исторических " +
                     "метрик и использует AI для предложения более оптимальной конфигурации CPU/Memory.")
     public CompletableFuture<List<AgentResult>> analyzeAndSuggest(@Valid @RequestBody ResourceAllocationRequest request) {
-        return orchestratorService.invokePipeline("resource-allocation-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("resource-allocation-pipeline", request.toAgentContext());
     }
 }

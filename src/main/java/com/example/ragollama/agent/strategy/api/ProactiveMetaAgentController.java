@@ -43,7 +43,7 @@ public class ProactiveMetaAgentController {
     @PostMapping("/incident-analysis") // Renamed from webhook endpoint for clarity
     @Operation(summary = "Принять алерт от системы мониторинга и запустить расследование")
     public CompletableFuture<List<AgentResult>> handleMonitoringAlert(@Valid @RequestBody IncidentAlertRequest request) {
-        return orchestratorService.invokePipeline("incident-response-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("incident-response-pipeline", request.toAgentContext());
     }
 
     /**
@@ -56,6 +56,6 @@ public class ProactiveMetaAgentController {
     @PostMapping("/analyze-market-opportunity")
     @Operation(summary = "Проанализировать конкурента и найти пробелы в функциональности")
     public CompletableFuture<List<AgentResult>> analyzeMarketOpportunity(@Valid @RequestBody MarketAnalysisRequest request) {
-        return orchestratorService.invokePipeline("market-opportunity-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("market-opportunity-pipeline", request.toAgentContext());
     }
 }

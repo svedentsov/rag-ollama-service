@@ -26,6 +26,6 @@ public class VisualizationController {
     @PostMapping("/generate")
     @Operation(summary = "Сгенерировать код визуализации из данных")
     public CompletableFuture<List<AgentResult>> generateVisualization(@Valid @RequestBody VisualizationRequest request) {
-        return orchestratorService.invokePipeline("visualization-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("visualization-pipeline", request.toAgentContext());
     }
 }

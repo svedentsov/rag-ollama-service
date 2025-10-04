@@ -10,17 +10,12 @@ import { useScrollManager } from './hooks/useScrollManager';
 import { useVisibleMessages } from './hooks/useVisibleMessages';
 import styles from './App.module.css';
 
-/**
- * Пропсы для компонента App.
- */
 interface AppProps {
-  /** @param sessionId - ID текущей сессии чата. */
   sessionId: string;
 }
 
 /**
  * Главный компонент-контейнер для чата.
- * @param {AppProps} props - Пропсы компонента.
  */
 const App: React.FC<AppProps> = ({ sessionId }) => {
   const queryClient = useQueryClient();
@@ -29,7 +24,6 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
   const { visibleMessages, messageBranchInfo } = useVisibleMessages(sessionId, messages);
-
   const { containerRef, messagesEndRef, showScrollButton, scrollToBottom } = useScrollManager([visibleMessages]);
   const isAnyMessageStreaming = messages.some(m => m.isStreaming);
 
@@ -39,7 +33,7 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
     const assistantMessage: Message = { id: uuidv4(), type: 'assistant', text: '', parentId: userMessage.id, isStreaming: true };
 
     queryClient.setQueryData<Message[]>(['messages', sessionId], (old = []) => [...old, userMessage, assistantMessage]);
-    startStream(sessionId, inputText, assistantMessage.id, sessionId);
+    startStream(sessionId, inputText, assistantMessage.id);
   }, [isAnyMessageStreaming, queryClient, sessionId, startStream]);
 
   const handleRegenerate = useCallback((assistantMessage: Message) => {
@@ -48,13 +42,9 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
     const parentMessage = messages.find(m => m.id === assistantMessage.parentId);
     if (parentMessage) {
       const newAssistantMessage: Message = { id: uuidv4(), type: 'assistant', text: '', parentId: parentMessage.id, isStreaming: true };
-      
-      queryClient.setQueryData<Message[]>(['messages', sessionId], (old = []) => [...old, newAssistantMessage]);
-      // Здесь больше не нужно вызывать `selectBranch`, так как `useVisibleMessages` 
-      // автоматически подхватит новое сообщение как последнее и сделает его видимым.
-      // Сохранение выбора произойдет в ChatMessage при явном клике пользователя.
 
-      startStream(sessionId, parentMessage.text, newAssistantMessage.id, sessionId);
+      queryClient.setQueryData<Message[]>(['messages', sessionId], (old = []) => [...old, newAssistantMessage]);
+      startStream(sessionId, parentMessage.text, newAssistantMessage.id);
     }
   }, [isAnyMessageStreaming, messages, queryClient, sessionId, startStream]);
 

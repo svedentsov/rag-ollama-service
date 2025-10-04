@@ -35,6 +35,6 @@ public class CoverageController {
     @PostMapping("/audit")
     @Operation(summary = "Провести аудит тестового покрытия для изменений в коде")
     public CompletableFuture<List<AgentResult>> auditCoverage(@Valid @RequestBody CoverageAuditRequest request) {
-        return orchestratorService.invokePipeline("coverage-audit-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("coverage-audit-pipeline", request.toAgentContext());
     }
 }

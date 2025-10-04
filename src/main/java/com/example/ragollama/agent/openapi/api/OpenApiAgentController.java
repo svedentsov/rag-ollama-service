@@ -37,7 +37,7 @@ public class OpenApiAgentController {
     @PostMapping("/query")
     @Operation(summary = "Задать вопрос по OpenAPI спецификации")
     public CompletableFuture<List<AgentResult>> querySpec(@Valid @RequestBody OpenApiQueryRequest request) {
-        return orchestratorService.invokePipeline("openapi-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("openapi-pipeline", request.toAgentContext());
     }
 
     /**
@@ -51,7 +51,7 @@ public class OpenApiAgentController {
             description = "Запускает 'spec-drift-sentinel-pipeline', который сравнивает эндпоинты из " +
                     "спецификации с реально существующими в приложении.")
     public CompletableFuture<List<AgentResult>> analyzeSpecDrift(@Valid @RequestBody SpecDriftAnalysisRequest request) {
-        return orchestratorService.invokePipeline("spec-drift-sentinel-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("spec-drift-sentinel-pipeline", request.toAgentContext());
     }
 
     /**
@@ -63,6 +63,6 @@ public class OpenApiAgentController {
     @PostMapping("/generate-test")
     @Operation(summary = "Сгенерировать код API-теста из спецификации")
     public CompletableFuture<List<AgentResult>> generateTestFromSpec(@Valid @RequestBody SpecToTestRequest request) {
-        return orchestratorService.invokePipeline("spec-to-test-generation-pipeline", request.toAgentContext());
+        return orchestratorService.invoke("spec-to-test-generation-pipeline", request.toAgentContext());
     }
 }
