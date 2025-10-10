@@ -15,9 +15,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который анализирует код автотеста на предмет "запахов" (smells)
@@ -31,6 +31,7 @@ public class TestSmellRefactorerAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     /**
      * {@inheritDoc}
@@ -60,18 +61,18 @@ public class TestSmellRefactorerAgent implements ToolAgent {
      * Асинхронно выполняет анализ и рефакторинг кода.
      *
      * @param context Контекст, содержащий исходный код теста.
-     * @return {@link CompletableFuture} с результатом, содержащим отчет о рефакторинге.
+     * @return {@link Mono} с результатом, содержащим отчет о рефакторинге.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String testCode = (String) context.payload().get("testCode");
         log.info("TestSmellRefactorerAgent: запуск анализа и рефакторинга кода...");
 
         String promptString = promptService.render("testSmellRefactorerPrompt", Map.of("testCode", testCode));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .thenApply(this::parseLlmResponse)
-                .thenApply(refactoringResult -> new AgentResult(
+                .map(this::parseLlmResponse)
+                .map(refactoringResult -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,
                         "Рефакторинг кода успешно предложен. Найдено запахов: " + refactoringResult.smellsFound().size(),
@@ -79,16 +80,9 @@ public class TestSmellRefactorerAgent implements ToolAgent {
                 ));
     }
 
-    /**
-     * Безопасно парсит JSON-ответ от LLM в {@link TestRefactoringResult}.
-     *
-     * @param jsonResponse Ответ от LLM.
-     * @return Десериализованный объект {@link TestRefactoringResult}.
-     * @throws ProcessingException если парсинг не удался.
-     */
     private TestRefactoringResult parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, TestRefactoringResult.class);
         } catch (JsonProcessingException e) {
             log.error("Не удалось распарсить JSON-ответ от LLM для TestRefactoringResult: {}", jsonResponse, e);

@@ -1,62 +1,40 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-
-const NOTIFICATIONS_QUERY_KEY = ['notifications'];
+import { create } from 'zustand';
 
 /**
- * Создает и управляет состоянием уведомлений о новых сообщениях.
- * Хранит Set из sessionId, в которых есть непрочитанные обновления.
+ * @interface NotificationState
+ * @description Определяет структуру состояния для отслеживания уведомлений о новых сообщениях.
  */
-function useNotificationState() {
-  const queryClient = useQueryClient();
-
-  // Инициализируем кэш, если его еще нет
-  queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY, (oldData: Set<string> | undefined) => oldData ?? new Set<string>());
-
-  const { data: notifications } = useQuery({
-    queryKey: NOTIFICATIONS_QUERY_KEY,
-    queryFn: () => queryClient.getQueryData<Set<string>>(NOTIFICATIONS_QUERY_KEY)!,
-    staleTime: Infinity, // Эти данные управляются только вручную
-  });
-
-  const addMutation = useMutation({
-    mutationFn: async (sessionId: string) => {
-      queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY, (old: Set<string> | undefined) => {
-        const newSet = new Set(old);
-        newSet.add(sessionId);
-        return newSet;
-      });
-    },
-  });
-
-  const clearMutation = useMutation({
-    mutationFn: async (sessionId: string) => {
-      queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY, (old: Set<string> | undefined) => {
-        const newSet = new Set(old);
-        newSet.delete(sessionId);
-        return newSet;
-      });
-    },
-  });
-
-  return {
-    notifications: notifications ?? new Set<string>(),
-    addNotification: addMutation.mutate,
-    clearNotification: clearMutation.mutate,
-  };
+interface NotificationState {
+  /** @property {Set<string>} notifications - Множество ID сессий, в которых есть непрочитанные обновления. */
+  notifications: Set<string>;
+  /**
+   * @function addNotification
+   * @description Добавляет ID сессии в множество уведомлений.
+   * @param {string} sessionId - ID сессии для добавления.
+   */
+  addNotification: (sessionId: string) => void;
+  /**
+   * @function clearNotification
+   * @description Удаляет ID сессии из множества уведомлений.
+   * @param {string} sessionId - ID сессии для удаления.
+   */
+  clearNotification: (sessionId: string) => void;
 }
 
-// Экспортируем хуки для использования в компонентах
-export const useNotifications = () => {
-  const { notifications } = useNotificationState();
-  return { notifications };
-};
-
-export const useAddNotification = () => {
-  const { addNotification } = useNotificationState();
-  return addNotification;
-};
-
-export const useClearNotification = () => {
-  const { clearNotification } = useNotificationState();
-  return clearNotification;
-};
+/**
+ * Глобальный стор Zustand для управления уведомлениями о новых сообщениях в неактивных чатах.
+ * Является единым источником правды о том, в каких чатах есть непрочитанные обновления.
+ */
+export const useNotificationStore = create<NotificationState>((set) => ({
+  notifications: new Set<string>(),
+  addNotification: (sessionId) =>
+    set((state) => ({
+      notifications: new Set(state.notifications).add(sessionId),
+    })),
+  clearNotification: (sessionId) =>
+    set((state) => {
+      const newNotifications = new Set(state.notifications);
+      newNotifications.delete(sessionId);
+      return { notifications: newNotifications };
+    }),
+}));

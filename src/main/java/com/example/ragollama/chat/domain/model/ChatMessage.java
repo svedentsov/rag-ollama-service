@@ -1,68 +1,63 @@
 package com.example.ragollama.chat.domain.model;
 
-import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Version;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * Сущность JPA, представляющая одно сообщение в диалоге.
- * Добавлены поля parentId и taskId для поддержки ветвления и асинхронных операций.
+ * Сущность, представляющая одно сообщение в диалоге, адаптированная для R2DBC.
+ * <p>
+ * В эту версию добавлено поле `version` с аннотацией {@link Version} для реализации
+ * механизма оптимистичной блокировки, что предотвращает потерянные обновления
+ * при одновременном редактировании.
  */
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@ToString(exclude = {"content", "session"})
+@ToString(exclude = {"content"})
 @EqualsAndHashCode(of = "id")
-@Entity
-@Table(name = "chat_messages")
+@Table("chat_messages")
 public class ChatMessage {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "session_id", nullable = false)
-    private ChatSession session;
+    @Column("session_id")
+    private UUID sessionId;
 
-    /**
-     * ID родительского сообщения. Для сообщения пользователя это null.
-     * Для ответа ассистента это ID сообщения пользователя.
-     * Позволяет создавать древовидные структуры и ветвление.
-     */
-    @Column(name = "parent_id", updatable = false)
+    @Column("parent_id")
     private UUID parentId;
 
-    /**
-     * ID асинхронной задачи, которая сгенерировала это сообщение.
-     * Позволяет связать ответ с операцией для сбора фидбэка.
-     */
-    @Column(name = "task_id")
+    @Column("task_id")
     private UUID taskId;
 
     @NotNull
-    @Enumerated(EnumType.STRING)
-    @Column(name = "role", nullable = false, updatable = false)
+    @Column("role")
     private MessageRole role;
 
     @NotNull
-    @Column(name = "content", columnDefinition = "TEXT")
+    @Column("content")
     private String content;
 
     @NotNull
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @CreatedDate
+    @Column("created_at")
     private OffsetDateTime createdAt;
 
     /**
-     * Вспомогательный метод для получения ID сессии без загрузки ленивой сущности.
-     * @return ID сессии.
+     * Поле для реализации оптимистичной блокировки.
+     * Spring Data R2DBC автоматически управляет этим полем:
+     * инкрементирует при каждом UPDATE и проверяет при сохранении.
      */
-    public UUID getSessionId() {
-        return (session != null) ? session.getSessionId() : null;
-    }
+    @Version
+    private Long version;
 }

@@ -8,10 +8,10 @@ import com.example.ragollama.agent.buganalysis.model.EnhancedBugReport;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Агент-ассистент, который помогает тестировщику в создании баг-репорта.
@@ -42,8 +42,8 @@ public class BugReportEnhancerAgent implements ToolAgent {
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        return CompletableFuture.supplyAsync(() -> {
+    public Mono<AgentResult> execute(AgentContext context) {
+        return Mono.fromCallable(() -> {
             BugReportSummary summary = (BugReportSummary) context.payload().get("bugReportSummary");
             boolean isDuplicate = (boolean) context.payload().get("isDuplicate");
             List<String> candidates = (List<String>) context.payload().getOrDefault("candidates", List.of());

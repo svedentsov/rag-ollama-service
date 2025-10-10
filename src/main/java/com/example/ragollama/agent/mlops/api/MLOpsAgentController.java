@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агентов, выполняющих задачи MLOps.
@@ -30,11 +30,11 @@ public class MLOpsAgentController {
      * Запускает агента для анализа дрейфа признаков между двумя наборами данных.
      *
      * @param request DTO с эталонным и текущим наборами данных.
-     * @return {@link CompletableFuture} с финальным отчетом о дрейфе.
+     * @return {@link Mono} с финальным отчетом о дрейфе.
      */
     @PostMapping("/detect-feature-drift")
     @Operation(summary = "Обнаружить дрейф признаков (Feature Drift) между двумя наборами данных")
-    public CompletableFuture<List<AgentResult>> detectFeatureDrift(@Valid @RequestBody DriftDetectionRequest request) {
+    public Mono<List<AgentResult>> detectFeatureDrift(@Valid @RequestBody DriftDetectionRequest request) {
         return orchestratorService.invoke("ml-feature-drift-pipeline", request.toAgentContext());
     }
 }

@@ -2,9 +2,9 @@ package com.example.ragollama.agent.dashboard.api;
 
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentResult;
-import com.example.ragollama.agent.dashboard.domain.QaCommandCenterService;
 import com.example.ragollama.agent.dashboard.model.QaDashboard;
 import com.example.ragollama.agent.strategy.domain.FederatedInsightsAgent;
+import com.example.ragollama.optimization.QaCommandCenterService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -12,9 +12,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер, предоставляющий доступ к сводным дашбордам состояния QA.
@@ -35,19 +35,15 @@ public class DashboardController {
     /**
      * Собирает и возвращает полную сводку о состоянии QA-процессов для
      * анализа изменений между двумя Git-ссылками.
-     * <p>
-     * Этот эндпоинт асинхронно запускает множество аналитических конвейеров,
-     * агрегирует их результаты и представляет в виде единого,
-     * удобного для восприятия объекта {@link QaDashboard}.
      *
      * @param baseRef Исходная Git-ссылка для анализа (например, 'main').
      * @param headRef Конечная Git-ссылка для анализа (например, 'feature/new-logic').
-     * @return {@link CompletableFuture}, который по завершении будет содержать
+     * @return {@link Mono}, который по завершении будет содержать
      * полностью собранный дашборд.
      */
     @GetMapping("/qa-overview")
     @Operation(summary = "Получить сводный QA-дашборд для изменений")
-    public CompletableFuture<QaDashboard> getQaOverview(
+    public Mono<QaDashboard> getQaOverview(
             @RequestParam(defaultValue = "main") String baseRef,
             @RequestParam String headRef) {
         return commandCenterService.generateDashboard(baseRef, headRef);
@@ -55,17 +51,13 @@ public class DashboardController {
 
     /**
      * Запускает федеративный анализ по всем проектам и возвращает стратегический отчет.
-     * <p>
-     * Агент-аналитик собирает агрегированные KPI по каждому проекту,
-     * а затем использует LLM для проведения сравнительного анализа, выявления
-     * системных проблем и формулирования рекомендаций для инженерного руководства.
      *
-     * @return {@link CompletableFuture}, который по завершении будет содержать
+     * @return {@link Mono}, который по завершении будет содержать
      * отчет с выводами и рекомендациями от AI-стратега.
      */
     @GetMapping("/federated-overview")
     @Operation(summary = "Получить сводный стратегический отчет по всем проектам (Federated)")
-    public CompletableFuture<AgentResult> getFederatedOverview() {
+    public Mono<AgentResult> getFederatedOverview() {
         return federatedInsightsAgent.execute(new AgentContext(Map.of()));
     }
 }

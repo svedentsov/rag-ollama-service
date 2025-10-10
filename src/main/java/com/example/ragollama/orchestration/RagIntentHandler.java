@@ -15,6 +15,9 @@ import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Обработчик для намерения "RAG", адаптированный для реактивного стека.
+ */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -30,7 +33,8 @@ public class RagIntentHandler implements IntentHandler {
     @Override
     public CompletableFuture<UniversalSyncResponse> handleSync(UniversalRequest request, UUID taskId) {
         return ragApplicationService.processRagRequestAsync(request.toRagQueryRequest(), taskId)
-                .thenApply(response -> UniversalSyncResponse.from(response, canHandle()));
+                .map(response -> UniversalSyncResponse.from(response, canHandle()))
+                .toFuture();
     }
 
     @Override

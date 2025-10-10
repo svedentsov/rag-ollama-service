@@ -15,9 +15,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Мета-агент, выступающий в роли "AI MLOps Engineer".
@@ -34,61 +34,60 @@ public class RagOptimizerAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "rag-optimizer-agent";
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Анализирует метрики производительности RAG и предлагает улучшения конфигурации.";
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
-        // Этот агент запускается без входных данных, он сам их собирает.
         return true;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        // Шаг 1: Асинхронно собрать все данные о производительности.
-        return aggregatorService.aggregatePerformanceData()
-                .thenCompose(snapshot -> {
-                    // Шаг 2: Передать данные в LLM для анализа и генерации рекомендаций.
+    public Mono<AgentResult> execute(AgentContext context) {
+        return Mono.fromFuture(aggregatorService.aggregatePerformanceData())
+                .flatMap(snapshot -> {
                     try {
                         String snapshotJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(snapshot);
                         String promptString = promptService.render("ragOptimizerPrompt", Map.of("performance_snapshot_json", snapshotJson));
 
                         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                                .thenApply(this::parseLlmResponse)
-                                .thenApply(report -> new AgentResult(
+                                .map(this::parseLlmResponse)
+                                .map(report -> new AgentResult(
                                         getName(),
                                         AgentResult.Status.SUCCESS,
                                         report.summary(),
                                         Map.of("optimizationReport", report)
                                 ));
                     } catch (JsonProcessingException e) {
-                        return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации отчета о производительности.", e));
+                        return Mono.error(new ProcessingException("Ошибка сериализации отчета о производительности.", e));
                     }
                 });
     }
 
-    /**
-     * Безопасно парсит JSON-ответ от LLM в {@link OptimizationReport}.
-     *
-     * @param jsonResponse Ответ от LLM.
-     * @return Десериализованный объект {@link OptimizationReport}.
-     * @throws ProcessingException если парсинг не удался.
-     */
     private OptimizationReport parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, OptimizationReport.class);
         } catch (JsonProcessingException e) {
             log.error("Не удалось распарсить JSON-ответ от RAG Optimizer LLM: {}", jsonResponse, e);

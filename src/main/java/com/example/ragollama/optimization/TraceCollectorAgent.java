@@ -6,10 +6,10 @@ import com.example.ragollama.agent.ToolAgent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Агент-инструмент (L2), имитирующий сбор данных из системы
@@ -46,17 +46,13 @@ public class TraceCollectorAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     * <p>
-     * Генерирует правдоподобные, но случайные данные о выполнении
-     * различных шагов RAG-конвейера.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        return CompletableFuture.supplyAsync(() -> {
+    public Mono<AgentResult> execute(AgentContext context) {
+        return Mono.fromCallable(() -> {
             String requestId = (String) context.payload().get("requestId");
             log.info("Имитация сбора трейса для requestId: {}", requestId);
 
-            // Mock-данные, имитирующие спаны OpenTelemetry/Jaeger
             List<Map<String, Object>> traceData = List.of(
                     Map.of("spanId", "span-1", "operationName", "QueryProcessingStep", "durationMillis", 150),
                     Map.of("spanId", "span-2", "operationName", "RetrievalStep", "durationMillis", 450),

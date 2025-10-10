@@ -3,48 +3,38 @@ package com.example.ragollama.rag.domain.retrieval;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
-import jakarta.persistence.Query;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
+import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Mono;
+
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
- * Репозиторий для выполнения нативных SQL-запросов полнотекстового поиска (FTS).
- * <p>
- * Изолирует низкоуровневую логику работы с FTS от сервисного слоя,
- * следуя Принципу единственной ответственности (SRP).
+ * Репозиторий для выполнения нативных SQL-запросов полнотекстового поиска (FTS) с использованием R2DBC.
  */
 @Repository
 @Slf4j
 @RequiredArgsConstructor
 public class DocumentFtsRepository {
 
-    @PersistenceContext
-    private EntityManager entityManager;
+    private final DatabaseClient databaseClient;
     private final ObjectMapper objectMapper;
 
     /**
      * Выполняет полнотекстовый поиск по ключевым словам.
-     * <p>
-     * Использует нативный SQL-запрос с функцией `to_tsquery` и GIN-индексом
-     * для эффективного лексического поиска по заранее подготовленному
-     * tsvector-полю `content_tsv`.
      *
      * @param keywords Текст запроса.
      * @param limit    Максимальное количество возвращаемых документов.
-     * @return Список найденных {@link Document}.
+     * @return {@link Mono} со списком найденных {@link Document}.
      */
-    @SuppressWarnings("unchecked")
-    public List<Document> searchByKeywords(String keywords, int limit) {
+    public Mono<List<Document>> searchByKeywords(String keywords, int limit) {
         String tsQueryString = String.join(" | ", keywords.trim().split("\\s+"));
         log.debug("Выполнение FTS-поиска с запросом: {}", tsQueryString);
 
@@ -56,35 +46,26 @@ public class DocumentFtsRepository {
                 LIMIT :limit
                 """;
 
-        Query query = entityManager.createNativeQuery(sql, Object[].class)
-                .setParameter("query", tsQueryString)
-                .setParameter("limit", limit);
-
-        List<Object[]> results = query.getResultList();
-
-        return results.stream()
-                .map(row -> {
-                    UUID id = (UUID) row[0];
-                    String content = (String) row[1];
-                    Map<String, Object> metadata = parseMetadata((String) row[2]);
-                    return new Document(id.toString(), content, metadata);
+        return databaseClient.sql(sql)
+                .bind("query", tsQueryString)
+                .bind("limit", limit)
+                .map((row, metadata) -> {
+                    UUID id = row.get("id", UUID.class);
+                    String content = row.get("content", String.class);
+                    String metaJson = row.get("metadata", String.class);
+                    Map<String, Object> meta = parseMetadata(metaJson);
+                    return new Document(id.toString(), content, meta);
                 })
-                .collect(Collectors.toList());
+                .all()
+                .collectList();
     }
 
-    /**
-     * Безопасно парсит JSON-строку метаданных.
-     *
-     * @param metadataJson JSON-строка из БД.
-     * @return {@link Map} с метаданными или пустая карта в случае ошибки.
-     */
     private Map<String, Object> parseMetadata(String metadataJson) {
         if (metadataJson == null || metadataJson.isBlank()) {
             return Collections.emptyMap();
         }
         try {
-            return objectMapper.readValue(metadataJson, new TypeReference<>() {
-            });
+            return objectMapper.readValue(metadataJson, new TypeReference<>() {});
         } catch (JsonProcessingException e) {
             log.warn("Не удалось распарсить метаданные из FTS-результата: {}", metadataJson, e);
             return Collections.emptyMap();

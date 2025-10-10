@@ -9,9 +9,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Агент-исполнитель, который создает задачу в Jira на основе
@@ -52,10 +52,10 @@ public class CurationActionAgent implements ToolAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         ContradictionResult contradiction = (ContradictionResult) context.payload().get("contradictionDetails");
         if (contradiction == null || !contradiction.isContradictory()) {
-            return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Противоречий нет, задача не создана.", Map.of()));
+            return Mono.just(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Противоречий нет, задача не создана.", Map.of()));
         }
         Document docA = (Document) context.payload().get("docA");
         Document docB = (Document) context.payload().get("docB");

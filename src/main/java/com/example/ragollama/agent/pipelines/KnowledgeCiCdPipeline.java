@@ -8,10 +8,10 @@ import com.example.ragollama.evaluation.RagEvaluationService;
 import com.example.ragollama.evaluation.domain.EvaluationComparatorAgent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 @Component
 @RequiredArgsConstructor
@@ -26,8 +26,7 @@ public class KnowledgeCiCdPipeline implements AgentPipeline {
     }
 
     /**
-     * Этот конвейер имеет кастомную реализацию, так как ему нужно
-     * преобразовать сложный объект EvaluationResult в AgentResult.
+     * {@inheritDoc}
      */
     @Override
     public List<List<QaAgent>> getStages() {
@@ -48,15 +47,14 @@ public class KnowledgeCiCdPipeline implements AgentPipeline {
             }
 
             @Override
-            public CompletableFuture<AgentResult> execute(AgentContext context) {
+            public Mono<AgentResult> execute(AgentContext context) {
                 return evaluationService.evaluate()
                         .map(result -> new AgentResult(
                                 getName(),
                                 AgentResult.Status.SUCCESS,
                                 "Оценка успешно завершена.",
                                 Map.of("evaluationResult", result)
-                        ))
-                        .toFuture();
+                        ));
             }
         };
 

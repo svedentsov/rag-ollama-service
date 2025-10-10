@@ -7,19 +7,15 @@ import com.example.ragollama.chat.mappers.ChatHistoryMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.Message;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 /**
- * Сервис для управления историей сообщений в чате.
+ * Сервис для управления историей сообщений в чате, адаптированный для R2DBC.
  */
 @Service
 @RequiredArgsConstructor
@@ -30,28 +26,42 @@ public class ChatHistoryService {
     private final ChatHistoryMapper chatHistoryMapper;
     private final ChatSessionRepository chatSessionRepository;
 
-    @Async("databaseTaskExecutor")
+    /**
+     * Сохраняет сообщение асинхронно.
+     *
+     * @param session  Сессия.
+     * @param role     Роль.
+     * @param content  Контент.
+     * @param parentId ID родителя.
+     * @param taskId   ID задачи.
+     * @return {@link Mono} с сохраненным сообщением.
+     */
     @Transactional
-    public CompletableFuture<ChatMessage> saveMessageAsync(ChatSession session, MessageRole role, String content, UUID parentId, UUID taskId) {
-        ChatSession managedSession = chatSessionRepository.findById(session.getSessionId())
-                .orElseThrow(() -> new IllegalStateException("Session not found for saving message"));
-        ChatMessage message = chatHistoryMapper.toChatMessageEntity(managedSession, role, content, parentId, taskId);
-        ChatMessage savedMessage = chatMessageRepository.saveAndFlush(message);
-        log.debug("Сохранено сообщение для сессии {}: Role={}, ParentId={}, TaskId={}", session.getSessionId(), role, parentId, taskId);
-        return CompletableFuture.completedFuture(savedMessage);
+    public Mono<ChatMessage> saveMessage(ChatSession session, MessageRole role, String content, UUID parentId, UUID taskId) {
+        return chatSessionRepository.findById(session.getSessionId())
+                .switchIfEmpty(Mono.error(new IllegalStateException("Session not found for saving message")))
+                .flatMap(managedSession -> {
+                    ChatMessage message = chatHistoryMapper.toChatMessageEntity(managedSession.getSessionId(), role, content, parentId, taskId);
+                    return chatMessageRepository.save(message);
+                })
+                .doOnSuccess(saved -> log.debug("Сохранено сообщение для сессии {}: Role={}, ParentId={}, TaskId={}", session.getSessionId(), role, parentId, taskId));
     }
 
-    @Async("databaseTaskExecutor")
+    /**
+     * Получает последние N сообщений.
+     *
+     * @param sessionId ID сессии.
+     * @param lastN     Количество сообщений.
+     * @return {@link Mono} со списком сообщений.
+     */
     @Transactional(readOnly = true)
-    public CompletableFuture<List<Message>> getLastNMessagesAsync(UUID sessionId, int lastN) {
+    public Mono<List<Message>> getLastNMessages(UUID sessionId, int lastN) {
         if (lastN <= 0) {
-            return CompletableFuture.completedFuture(List.of());
+            return Mono.just(List.of());
         }
-        Pageable pageable = PageRequest.of(0, lastN, Sort.by(Sort.Direction.DESC, "createdAt"));
-        List<ChatMessage> recentMessages = chatMessageRepository.findBySessionId(sessionId, pageable);
-        log.debug("Загружено {} сообщений для сессии {}", recentMessages.size(), sessionId);
-
-        List<Message> springAiMessages = chatHistoryMapper.toSpringAiMessages(recentMessages);
-        return CompletableFuture.completedFuture(springAiMessages);
+        return chatMessageRepository.findRecentMessages(sessionId, lastN)
+                .collectList()
+                .map(chatHistoryMapper::toSpringAiMessages)
+                .doOnSuccess(list -> log.debug("Загружено {} сообщений для сессии {}", list.size(), sessionId));
     }
 }

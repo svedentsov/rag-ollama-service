@@ -12,13 +12,25 @@ spring:
   application:
     name: rag-ollama-service # Имя приложения, используется в логах и метриках
   lifecycle:
-    timeout-per-shutdown-phase: 30s # Таймаут для корректного завершения работы приложения (graceful shutdown)
-  mvc:
-    async:
-      # САМЫЙ ВНЕШНИЙ УРОВЕНЬ: Таймаут для асинхронных запросов в контроллерах.
-      # Увеличено для предоставления большего запаса времени для LLM.
-      # Должен быть больше всех вложенных таймаутов.
-      request-timeout: 20m
+    timeout-per-shutdown-phase: 30s
+
+  # --- R2DBC (Reactive Database Connectivity) ---
+  r2dbc:
+    url: r2dbc:postgresql://localhost:5432/ragdb
+    username: user
+    password: password
+    pool:
+      enabled: true
+      initial-size: 5
+      max-size: 20
+      max-idle-time: 30m
+
+  # --- JDBC for non-R2DBC components (Flyway, PgVectorStore, JdbcTemplate) ---
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ragdb
+    username: user
+    password: password
+    driver-class-name: org.postgresql.Driver
 
   # --- FreeMarker Template Engine Configuration ---
   freemarker:
@@ -33,26 +45,10 @@ spring:
     settings:
       boolean_format: c
 
-  # --- Database & Persistence ---
-  datasource:
-    # Данные для подключения к PostgreSQL, запущенному в Docker Compose.
-    url: jdbc:postgresql://localhost:5432/ragdb
-    username: user
-    password: password
-    driver-class-name: org.postgresql.Driver
-  jpa:
-    # `validate`: Проверять схему БД на соответствие сущностям при старте.
-    # Самый безопасный вариант для production, предотвращающий случайные изменения схемы.
-    hibernate:
-      ddl-auto: validate
-    show-sql: false # !!! PRODUCTION: Установить в `false` для снижения объема логов и повышения производительности.
-    properties:
-      hibernate:
-        format_sql: true # Форматирует SQL для лучшей читаемости в логах.
-    open-in-view: false
   flyway:
     enabled: true
     locations: classpath:db/migration # Путь к SQL-миграциям.
+
   cache:
     type: simple
     cache-names:
@@ -142,7 +138,7 @@ resilience4j:
         failure-rate-threshold: 60 # % ошибок для размыкания цепи.
         wait-duration-in-open-state: 15s # Время в "разомкнутом" состоянии.
         record-exceptions: # Считать DataAccessException как сбой
-          - org.springframework.dao.DataAccessException
+          - org.springframework.web.reactive.function.client.WebClientRequestException
           - java.util.concurrent.TimeoutException
       database:
         register-health-indicator: true
@@ -151,8 +147,8 @@ resilience4j:
         failure-rate-threshold: 50
         wait-duration-in-open-state: 30s
         record-exceptions:
-          - org.springframework.dao.TransientDataAccessException
-          - java.sql.SQLTransientException
+          - io.r2dbc.spi.R2dbcTransientResourceException
+          - java.util.concurrent.TimeoutException
       jira: # Конфигурация для Jira API
         register-health-indicator: true
         sliding-window-size: 20
@@ -176,22 +172,29 @@ resilience4j:
       ollama:
         max-attempts: 2
         wait-duration: 5s
-        retry-on-exception: "org.springframework.web.reactive.function.client.WebClientRequestException, org.springframework.web.client.ResourceAccessException, java.util.concurrent.TimeoutException"
+        retry-on-exception:
+          - org.springframework.web.reactive.function.client.WebClientRequestException
+          - java.util.concurrent.TimeoutException
       database:
         max-attempts: 3
         wait-duration: 200ms
         retry-exceptions:
-          - org.springframework.dao.TransientDataAccessException
+          - io.r2dbc.spi.R2dbcTransientResourceException
           - java.util.concurrent.TimeoutException
-          - java.sql.SQLTransientException
-      jira: # Конфигурация для Jira API
+      jira:
         max-attempts: 3
         wait-duration: 1s
-        retry-on-exception: "org.springframework.web.reactive.function.client.WebClientRequestException, java.util.concurrent.TimeoutException, org.springframework.web.reactive.function.client.WebClientResponseException$ServiceUnavailable"
-      confluence: # Конфигурация для Confluence API
+        retry-on-exception:
+          - org.springframework.web.reactive.function.client.WebClientRequestException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.reactive.function.client.WebClientResponseException$ServiceUnavailable
+      confluence:
         max-attempts: 3
-        wait-duration: 2s # Задержка побольше, т.к. API может быть под нагрузкой
-        retry-on-exception: "org.springframework.web.reactive.function.client.WebClientRequestException, java.util.concurrent.TimeoutException, org.springframework.web.reactive.function.client.WebClientResponseException$ServiceUnavailable"
+        wait-duration: 2s
+        retry-on-exception:
+          - org.springframework.web.reactive.function.client.WebClientRequestException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.reactive.function.client.WebClientResponseException$ServiceUnavailable
   timelimiter:
     instances:
       ollama:
@@ -228,8 +231,6 @@ app:
       keyword-boost:
         enabled: true
         boost-factor: 0.1
-      llm:
-        enabled: false
       diversity:
         enabled: true
         lambda: 0.5
@@ -358,6 +359,7 @@ app:
       per-lost-user: 200.0
     autonomy:
       cron: "0 0 7 * * MON-FRI" # Запуск автономного анализа в 7 утра по будням
+
   health-monitor:
     scheduler:
       enabled: true
@@ -391,10 +393,10 @@ app:
       # API токен, сгенерированный в Confluence
       api-token: "YourConfluenceApiToken"
     git:
-      # URL для клонирования/fetch репозитория
-      repository-url: "https://github.com/your-org/your-repo.git"
-      # Персональный токен доступа (PAT) с правами на чтение репозитория
-      personal-access-token: "ghp_YourGitPersonalAccessToken"
+      # URL вашего Git-репозитория
+      repository-url: "https://github.com/your-organization/your-repository.git"
+      # Ваш персональный токен доступа (PAT) с правами на чтение репозитория
+      personal-access-token: "ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
     ci:
       base-url: "http://your-jenkins-instance:8080"
       username: "your-ci-user"
@@ -423,6 +425,7 @@ app:
         - "ey[a-zA-Z0-9_\\-]+\\.[a-zA-Z0-9_\\-]+\\.[a-zA-Z0-9_\\-]+"
         # Паттерн для поиска IP-адресов
         - "\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b"
+
   indexing:
     test-files:
       path: "src/test/java"

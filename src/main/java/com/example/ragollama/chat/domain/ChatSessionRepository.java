@@ -1,27 +1,29 @@
 package com.example.ragollama.chat.domain;
 
 import com.example.ragollama.chat.domain.model.ChatSession;
-import jakarta.persistence.LockModeType;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.r2dbc.repository.Query;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Реактивный репозиторий для управления сущностями ChatSession.
+ */
 @Repository
-public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> {
-    List<ChatSession> findByUserNameOrderByUpdatedAtDesc(String userName);
+public interface ChatSessionRepository extends ReactiveCrudRepository<ChatSession, UUID> {
+    Flux<ChatSession> findByUserNameOrderByUpdatedAtDesc(String userName);
 
     /**
-     * Находит сессию по ID и накладывает пессимистическую блокировку на запись.
+     * Находит сессию по ID.
+     * В R2DBC нет поддержки пессимистичных блокировок на уровне Spring Data.
+     * Оптимистичные блокировки реализуются через @Version.
      *
      * @param sessionId ID сессии.
-     * @return Optional с заблокированной сущностью.
+     * @return Mono с сущностью.
      */
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT s FROM ChatSession s WHERE s.sessionId = :sessionId")
-    Optional<ChatSession> findByIdWithLock(UUID sessionId);
+    @Query("SELECT * FROM chat_sessions WHERE session_id = :sessionId")
+    Mono<ChatSession> findByIdWithLock(UUID sessionId);
 }

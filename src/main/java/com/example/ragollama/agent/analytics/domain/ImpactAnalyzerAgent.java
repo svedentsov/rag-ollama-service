@@ -21,7 +21,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент для проведения анализа влияния (Impact Analysis) изменений в коде.
@@ -53,7 +52,7 @@ public class ImpactAnalyzerAgent implements ToolAgent {
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         List<String> changedFiles = (List<String>) context.payload().get("changedFiles");
         String newRef = (String) context.payload().get("newRef");
 
@@ -79,26 +78,19 @@ public class ImpactAnalyzerAgent implements ToolAgent {
                             summary,
                             Map.of("impacts", flattenedImpacts)
                     );
-                })
-                .toFuture();
+                });
     }
 
-    /**
-     * Вызывает LLM для анализа одного файла.
-     */
     private Mono<List<ImpactAnalysis>> analyzeFileImpact(String code, String filePath) {
         if (code == null || code.isBlank()) {
             return Mono.just(List.of());
         }
 
         String promptString = promptService.render("impactAnalysisPrompt", Map.of("code", code, "filePath", filePath));
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .map(this::parseLlmResponse);
     }
 
-    /**
-     * Безопасно парсит JSON-ответ от LLM.
-     */
     private List<ImpactAnalysis> parseLlmResponse(String jsonResponse) {
         try {
             String cleanedJson = jsonResponse.replaceAll("(?s)```json\\s*|\\s*```", "").trim();

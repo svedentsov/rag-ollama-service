@@ -1,6 +1,7 @@
 package com.example.ragollama.orchestration;
 
-import com.example.ragollama.agent.buganalysis.domain.BugAnalysisService;
+import com.example.ragollama.agent.AgentOrchestratorService;
+import com.example.ragollama.agent.buganalysis.mappers.BugAnalysisMapper;
 import com.example.ragollama.agent.routing.QueryIntent;
 import com.example.ragollama.orchestration.dto.UniversalRequest;
 import com.example.ragollama.orchestration.dto.UniversalResponse;
@@ -14,11 +15,18 @@ import reactor.core.publisher.Mono;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Обработчик для намерения "BUG_ANALYSIS".
+ * <p>
+ * Эта версия корректно использует `AgentOrchestratorService` для запуска
+ * конвейера и `BugAnalysisMapper` для преобразования результата в публичный DTO.
+ */
 @Service
 @RequiredArgsConstructor
 public class BugAnalysisIntentHandler implements IntentHandler {
 
-    private final BugAnalysisService bugAnalysisService;
+    private final AgentOrchestratorService orchestratorService;
+    private final BugAnalysisMapper bugAnalysisMapper;
 
     @Override
     public QueryIntent canHandle() {
@@ -27,13 +35,16 @@ public class BugAnalysisIntentHandler implements IntentHandler {
 
     @Override
     public CompletableFuture<UniversalSyncResponse> handleSync(UniversalRequest request, UUID taskId) {
-        return bugAnalysisService.analyzeBugReport(request.query())
-                .thenApply(response -> UniversalSyncResponse.from(response, canHandle()));
+        return orchestratorService.invoke("bug-report-analysis-pipeline", request.toAgentContext())
+                .map(bugAnalysisMapper::toReport)
+                .map(report -> UniversalSyncResponse.from(report, canHandle()))
+                .toFuture();
     }
 
     @Override
     public Flux<UniversalResponse> handleStream(UniversalRequest request, UUID taskId) {
-        return Mono.fromFuture(() -> bugAnalysisService.analyzeBugReport(request.query()))
+        // Потоковая обработка для анализа бага не имеет смысла, эмулируем поток из одного элемента.
+        return Mono.fromFuture(() -> handleSync(request, taskId))
                 .map(UniversalResponse::from)
                 .flux();
     }

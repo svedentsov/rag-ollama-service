@@ -2,6 +2,8 @@ package com.example.ragollama.shared.aop;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.reactor.circuitbreaker.operator.CircuitBreakerOperator;
+import io.github.resilience4j.reactor.retry.RetryOperator;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryRegistry;
 import jakarta.annotation.PostConstruct;
@@ -11,16 +13,13 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.function.Supplier;
 
 /**
- * Аспект для применения политик отказоустойчивости к операциям с базой данных.
- * <p>
- * Этот аспект перехватывает все вызовы методов, аннотированных
- * {@link ResilientDatabaseOperation}, и оборачивает их в Circuit Breaker и Retry.
- * Это позволяет централизованно управлять обработкой транзиентных сбоев
- * при работе с БД, не загрязняя бизнес-логику репозиториев.
+ * Аспект для применения политик отказоустойчивости, адаптированный для реактивного стека.
  */
 @Aspect
 @Component
@@ -38,7 +37,6 @@ public class DatabaseResilienceAspect {
 
     /**
      * Инициализирует компоненты Resilience4j после создания бина.
-     * Загружает именованные конфигурации из реестров для дальнейшего использования.
      */
     @PostConstruct
     public void init() {
@@ -47,38 +45,44 @@ public class DatabaseResilienceAspect {
     }
 
     /**
-     * Совет (Advice), который оборачивает выполнение целевого метода.
-     * <p>
-     * Он создает декорированную цепочку вызовов, применяя сначала
-     * политику Retry, а затем Circuit Breaker к исходной операции.
+     * Совет, который оборачивает выполнение целевого метода.
      *
      * @param joinPoint Точка соединения, представляющая вызов метода.
-     * @return Результат выполнения исходного метода.
-     * @throws Throwable если выполнение метода завершилось исключением после
-     *                   всех попыток повторения, или если Circuit Breaker разомкнут.
+     * @return Результат выполнения метода.
+     * @throws Throwable если выполнение завершилось исключением.
      */
     @Around("@annotation(com.example.ragollama.shared.aop.ResilientDatabaseOperation)")
     public Object applyResilience(ProceedingJoinPoint joinPoint) throws Throwable {
+        Object returnValue = joinPoint.proceed();
+
+        if (returnValue instanceof Mono<?> mono) {
+            log.trace("Применение реактивных операторов Resilience4j к Mono");
+            return mono.transformDeferred(RetryOperator.of(retry))
+                    .transformDeferred(CircuitBreakerOperator.of(circuitBreaker));
+        }
+
+        if (returnValue instanceof Flux<?> flux) {
+            log.trace("Применение реактивных операторов Resilience4j к Flux");
+            return flux.transformDeferred(RetryOperator.of(retry))
+                    .transformDeferred(CircuitBreakerOperator.of(circuitBreaker));
+        }
+
+        // Fallback для не-реактивных методов (если такие остались)
+        log.trace("Применение блокирующих декораторов Resilience4j для синхронного метода");
         Supplier<Object> supplier = () -> {
             try {
                 return joinPoint.proceed();
             } catch (Throwable throwable) {
-                // Оборачиваем проверяемое исключение в непроверяемое,
-                // так как декораторы Resilience4j работают с Supplier<T>,
-                // который не может выбрасывать проверяемые исключения.
                 throw new RuntimeException(throwable);
             }
         };
 
-        // Создаем цепочку декораторов: сначала Retry, затем CircuitBreaker
         Supplier<Object> decoratedSupplier = Retry.decorateSupplier(retry, supplier);
         decoratedSupplier = CircuitBreaker.decorateSupplier(circuitBreaker, decoratedSupplier);
 
         try {
             return decoratedSupplier.get();
         } catch (RuntimeException e) {
-            // Разворачиваем RuntimeException, чтобы выбросить исходное исключение
-            // наверх. Это важно для сохранения оригинального типа ошибки.
             if (e.getCause() != null) {
                 throw e.getCause();
             }

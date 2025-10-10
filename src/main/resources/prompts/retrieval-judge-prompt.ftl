@@ -16,7 +16,7 @@
 "${query}"
 
 **НАЙДЕННЫЕ ДОКУМЕНТЫ:**
-<#-- ИСПРАВЛЕНИЕ: Теперь мы итерируемся по коллекции объектов Document -->
+<#-- Теперь мы итерируемся по коллекции объектов Document -->
 <#list documents as doc>
 <doc id="${(doc.metadata.chunkId)!'unknown'}">
 ${doc.text}

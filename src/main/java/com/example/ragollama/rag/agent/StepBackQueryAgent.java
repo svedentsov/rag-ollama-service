@@ -30,7 +30,7 @@ public class StepBackQueryAgent implements QueryEnhancementAgent {
     public Mono<List<String>> enhance(String originalQuery) {
         String promptString = promptService.render("stepBackPrompt", Map.of("query", originalQuery));
         Prompt prompt = new Prompt(promptString);
-        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FASTEST))
+        return llmClient.callChat(prompt, ModelCapability.FASTEST)
                 .map(stepBackQuery -> {
                     log.info("Step-Back: для запроса '{}' сгенерирован концептуальный запрос '{}'", originalQuery, stepBackQuery);
                     return List.of(stepBackQuery);

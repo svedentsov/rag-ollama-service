@@ -11,9 +11,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Агент, который генерирует API-тест на основе OpenAPI спецификации.
@@ -60,25 +60,26 @@ public class ContractTestGeneratorAgent implements ToolAgent {
      * Асинхронно выполняет генерацию теста.
      *
      * @param context Контекст, содержащий источник спецификации и имя целевого эндпоинта.
-     * @return {@link CompletableFuture} с результатом, содержащим сгенерированный код.
+     * @return {@link Mono} с результатом, содержащим сгенерированный код.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String openApiContent = (String) context.payload().get("openApiContent");
         String specUrl = (String) context.payload().get("specUrl");
         String endpointName = (String) context.payload().get("endpointName");
-        // Шаг 1: Извлекаем детали эндпоинта с помощью парсера
+
         String endpointDetails = (specUrl != null)
                 ? openApiParser.extractEndpointDetails(openApiParser.parseFromUrl(specUrl), endpointName)
                 : openApiParser.extractEndpointDetails(openApiParser.parseFromContent(openApiContent), endpointName);
+
         if (endpointDetails.startsWith("Детали для эндпоинта")) {
-            return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.FAILURE, endpointDetails, Map.of()));
+            return Mono.just(new AgentResult(getName(), AgentResult.Status.FAILURE, endpointDetails, Map.of()));
         }
-        // Шаг 2: Формируем промпт для LLM
+
         String promptString = promptService.render("contractTestGeneratorPrompt", Map.of("endpoint_details", endpointDetails));
-        // Шаг 3: Вызываем LLM для генерации кода
+
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .thenApply(generatedCode -> {
+                .map(generatedCode -> {
                     log.info("Успешно сгенерирован API-тест для эндпоинта '{}'", endpointName);
                     String summary = "API-тест для '" + endpointName + "' успешно сгенерирован.";
                     return new AgentResult(

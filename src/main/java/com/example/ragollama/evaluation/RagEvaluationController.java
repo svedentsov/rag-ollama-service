@@ -18,16 +18,9 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер и Actuator-эндпоинт для управления оценкой RAG-системы.
- * <p>
- * Этот класс объединяет две ответственности:
- * 1. Предоставляет кастомный эндпоинт Spring Boot Actuator для запуска
- * оценки RAG-системы по пути {@code /actuator/rageval}.
- * 2. Предоставляет стандартный REST API для запуска агента, который
- * преобразует пользовательский фидбэк в новый тест.
  */
 @Component
 @RestController
@@ -42,32 +35,24 @@ public class RagEvaluationController {
 
     /**
      * Запускает процесс оценки через Actuator и возвращает результаты.
-     * <p>
-     * Доступен по пути {@code GET /actuator/rageval}.
      *
      * @return {@link Mono} с объектом {@link EvaluationResult}.
      */
     @ReadOperation
-    @Operation(summary = "Запустить оценку RAG по 'золотому датасету' (Actuator)",
-            description = "Доступен по GET /actuator/rageval. Асинхронно прогоняет все тесты из датасета и возвращает метрики качества.")
+    @Operation(summary = "Запустить оценку RAG по 'золотому датасету' (Actuator)")
     public Mono<EvaluationResult> evaluate() {
         return evaluationService.evaluate();
     }
 
     /**
      * Запускает конвейер для анализа фидбэка и автоматического создания нового теста.
-     * <p>
-     * Этот эндпоинт принимает ID негативного отзыва, запускает AI-агента для
-     * определения "истины" (ground truth) и добавляет новый регрессионный тест
-     * в "золотой датасет", замыкая MLOps-цикл.
      *
      * @param request DTO с ID фидбэка для анализа.
-     * @return {@link CompletableFuture} с результатом, содержащим информацию о созданном тесте (`GoldenRecord`).
+     * @return {@link Mono} с результатом, содержащим информацию о созданном тесте.
      */
     @PostMapping("/generate-test-from-feedback")
-    @Operation(summary = "Сгенерировать тест для 'золотого датасета' из фидбэка пользователя",
-            description = "Принимает ID негативного фидбэка, анализирует его и автоматически создает новый тест для предотвращения регрессий.")
-    public CompletableFuture<List<AgentResult>> generateTestFromFeedback(@Valid @RequestBody FeedbackToTestRequest request) {
+    @Operation(summary = "Сгенерировать тест для 'золотого датасета' из фидбэка пользователя")
+    public Mono<List<AgentResult>> generateTestFromFeedback(@Valid @RequestBody FeedbackToTestRequest request) {
         return orchestratorService.invoke("feedback-to-test-pipeline", request.toAgentContext());
     }
 }

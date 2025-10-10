@@ -5,9 +5,9 @@ import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.ToolAgent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Агент-сборщик, имитирующий получение метрик жизненного цикла задач из Jira.
@@ -31,8 +31,8 @@ public class JiraMetricsFetcherAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        return CompletableFuture.supplyAsync(() -> {
+    public Mono<AgentResult> execute(AgentContext context) {
+        return Mono.fromCallable(() -> {
             log.info("Сбор mock-данных о метриках Jira...");
             Map<String, Object> jiraEffort = Map.of(
                     "avgFeatureCycleTimeDays", 12.5,

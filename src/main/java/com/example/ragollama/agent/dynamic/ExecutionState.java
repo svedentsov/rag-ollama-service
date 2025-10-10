@@ -1,12 +1,12 @@
 package com.example.ragollama.agent.dynamic;
 
 import com.example.ragollama.agent.AgentResult;
-import io.hypersistence.utils.hibernate.type.json.JsonType;
-import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.Type;
-import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -15,13 +15,10 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Сущность JPA, представляющая полное состояние выполнения одного динамического конвейера.
- * <p>
- * Хранит в себе не только план и текущий контекст, но и историю уже
- * выполненных шагов, что критически важно для возобновления и отладки.
+ * Сущность, представляющая полное состояние выполнения одного динамического конвейера.
+ * Адаптирована для работы со Spring Data R2DBC с использованием кастомных конвертеров.
  */
-@Entity
-@Table(name = "pipeline_executions")
+@Table("pipeline_executions")
 @Getter
 @Setter
 @Builder
@@ -30,38 +27,37 @@ import java.util.UUID;
 public class ExecutionState {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @Column("session_id")
     private UUID sessionId;
 
-    @Enumerated(EnumType.STRING)
+    @Column("status")
     private Status status;
 
-    @Type(JsonType.class)
-    @Column(columnDefinition = "jsonb")
+    @Column("plan_steps")
     private List<PlanStep> planSteps;
 
-    @Type(JsonType.class)
-    @Column(columnDefinition = "jsonb")
+    @Column("accumulated_context")
     private Map<String, Object> accumulatedContext;
 
     @Builder.Default
-    @Type(JsonType.class)
-    @Column(columnDefinition = "jsonb")
+    @Column("execution_history")
     private List<AgentResult> executionHistory = new ArrayList<>();
 
+    @Column("current_step_index")
     private int currentStepIndex;
 
     @Builder.Default
+    @Column("resumed_after_approval")
     private boolean resumedAfterApproval = false;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @CreatedDate
+    @Column("created_at")
     private OffsetDateTime createdAt;
 
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
+    @LastModifiedDate
+    @Column("updated_at")
     private OffsetDateTime updatedAt;
 
     /**

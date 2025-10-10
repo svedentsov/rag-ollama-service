@@ -1,12 +1,17 @@
-import { ChatSession, Message, UniversalStreamResponse } from './types';
+import { ChatSession, ServerMessageDto, UniversalStreamResponse } from './types';
 
 const API_BASE_URL = '/api/v1';
 
 /**
  * @class ApiError
- * @description Кастомный класс ошибки для API-клиента.
+ * @description Кастомный класс ошибки для API-клиента. Содержит HTTP-статус и тело ответа для удобной отладки.
  */
 class ApiError extends Error {
+  /**
+   * @param {number} status - HTTP-статус ответа.
+   * @param {any} responseBody - Тело ответа сервера.
+   * @param {string} [message] - Сообщение об ошибке.
+   */
   constructor(public status: number, public responseBody: any, message?: string) {
     super(message || `API Error: ${status}`);
     this.name = 'ApiError';
@@ -14,14 +19,14 @@ class ApiError extends Error {
 }
 
 /**
- * Централизованный API-клиент.
- * @description Явно обрабатывает успешные ответы без тела (статусы 202 и 204),
- * возвращая промис, который разрешается в `undefined`. Это устраняет ошибку в `useMutation`.
- * @template T - Ожидаемый тип данных в успешном ответе.
- * @param {string} endpoint - Путь к эндпоинту API.
- * @param {RequestInit} [options] - Опции для fetch.
- * @returns {Promise<T>} Промис с распарсенными данными.
- * @throws {ApiError} В случае ошибки.
+ * Централизованный, робастный API-клиент для взаимодействия с бэкендом.
+ * Отвечает исключительно за сетевые запросы и обработку HTTP-статусов.
+ * Не занимается трансформацией данных.
+ * @template T - Ожидаемый тип данных в успешном ответе (серверный DTO).
+ * @param {string} endpoint - Путь к эндпоинту API (например, '/chats').
+ * @param {RequestInit} [options] - Стандартные опции для `fetch`.
+ * @returns {Promise<T>} Промис, который разрешается с "сырыми" данными от сервера.
+ * @throws {ApiError} В случае любой сетевой ошибки или неуспешного HTTP-статуса.
  */
 async function apiClient<T>(endpoint: string, options?: RequestInit): Promise<T> {
   try {
@@ -44,9 +49,11 @@ async function apiClient<T>(endpoint: string, options?: RequestInit): Promise<T>
       }
       throw new ApiError(response.status, errorJson, `HTTP error on ${endpoint}`);
     }
+
     if (response.status === 202 || response.status === 204) {
       return undefined as T;
     }
+
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
         return response.json();
@@ -64,40 +71,82 @@ async function apiClient<T>(endpoint: string, options?: RequestInit): Promise<T>
 
 /**
  * Объект, предоставляющий все методы для взаимодействия с API бэкенда.
+ * Каждый метод использует централизованный `apiClient` для выполнения запросов.
  */
 export const api = {
+  /**
+   * Получает список всех сессий чата для текущего пользователя.
+   * @returns {Promise<ChatSession[]>} Массив сессий чата.
+   */
   getChatSessions: () => apiClient<ChatSession[]>('/chats'),
+  /**
+   * Создает новую сессию чата.
+   * @returns {Promise<ChatSession>} Созданная сессия чата.
+   */
   createNewChat: () => apiClient<ChatSession>('/chats', { method: 'POST' }),
+  /**
+   * Обновляет имя сессии чата.
+   * @param {object} params - Параметры.
+   * @param {string} params.sessionId - ID сессии.
+   * @param {string} params.newName - Новое имя.
+   * @returns {Promise<void>}
+   */
   updateChatName: ({ sessionId, newName }: { sessionId: string; newName: string }) =>
     apiClient<void>(`/chats/${sessionId}`, {
       method: 'PUT',
       body: JSON.stringify({ newName }),
     }),
-  fetchMessages: (sessionId: string): Promise<Message[]> =>
-    apiClient<{ id: string; parentId: string | null; role: 'USER' | 'ASSISTANT'; content: string; taskId?: string }[]>(`/chats/${sessionId}/messages`)
-    .then(messages =>
-        messages.map(msg => ({
-            id: msg.id,
-            taskId: msg.taskId,
-            parentId: msg.parentId ?? undefined,
-            type: msg.role === 'USER' ? 'user' : 'assistant',
-            text: msg.content,
-            sources: [],
-            isStreaming: false,
-        }))
-    ),
+  /**
+   * Загружает "сырую" историю сообщений (DTO) для указанной сессии.
+   * @param {string} sessionId - ID сессии.
+   * @returns {Promise<ServerMessageDto[]>} Массив серверных DTO сообщений.
+   */
+  fetchMessages: (sessionId: string): Promise<ServerMessageDto[]> =>
+    apiClient<ServerMessageDto[]>(`/chats/${sessionId}/messages`),
+  /**
+   * Удаляет сессию чата.
+   * @param {string} sessionId - ID сессии.
+   * @returns {Promise<void>}
+   */
   deleteChatSession: (sessionId: string) => apiClient<void>(`/chats/${sessionId}`, { method: 'DELETE' }),
+  /**
+   * Обновляет текст существующего сообщения.
+   * @param {object} params - Параметры.
+   * @param {string} params.messageId - ID сообщения.
+   * @param {string} params.newContent - Новый текст.
+   * @returns {Promise<void>}
+   */
   updateMessage: ({ messageId, newContent }: { messageId: string; newContent: string }) =>
     apiClient<void>(`/messages/${messageId}`, {
       method: 'PUT',
       body: JSON.stringify({ newContent }),
     }),
+  /**
+   * Удаляет сообщение.
+   * @param {string} messageId - ID сообщения.
+   * @returns {Promise<void>}
+   */
   deleteMessage: (messageId: string) => apiClient<void>(`/messages/${messageId}`, { method: 'DELETE' }),
+  /**
+   * Отправляет обратную связь по ответу.
+   * @param {object} params - Параметры.
+   * @param {string} params.taskId - ID задачи, сгенерировавшей ответ.
+   * @param {boolean} params.isHelpful - Оценка пользователя.
+   * @returns {Promise<void>}
+   */
   sendFeedback: ({ taskId, isHelpful }: { taskId: string; isHelpful: boolean }) =>
     apiClient<void>('/feedback', {
       method: 'POST',
       body: JSON.stringify({ requestId: taskId, isHelpful }),
     }),
+  /**
+   * Устанавливает активную ветку для ответа в диалоге.
+   * @param {object} params - Параметры.
+   * @param {string} params.sessionId - ID сессии.
+   * @param {string} params.parentId - ID родительского сообщения.
+   * @param {string} params.childId - ID дочернего сообщения, которое становится активным.
+   * @returns {Promise<void>}
+   */
   setActiveBranch: ({ sessionId, parentId, childId }: { sessionId: string; parentId: string; childId: string }) =>
     apiClient<void>(`/chats/${sessionId}/active-branch`, {
         method: 'PUT',
@@ -107,6 +156,10 @@ export const api = {
 
 /**
  * Низкоуровневая сервисная функция для получения потока событий (SSE).
+ * @param {string} query - Текст запроса пользователя.
+ * @param {string} sessionId - ID текущей сессии.
+ * @param {AbortSignal} signal - Сигнал для отмены запроса.
+ * @returns {AsyncGenerator<UniversalStreamResponse, void, undefined>} Асинхронный генератор, который выдает части ответа.
  */
 export async function* streamChatResponse(
     query: string,

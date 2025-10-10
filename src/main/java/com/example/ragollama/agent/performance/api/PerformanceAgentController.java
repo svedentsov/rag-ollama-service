@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агентов, выполняющих анализ производительности.
@@ -30,11 +30,11 @@ public class PerformanceAgentController {
      * Запускает конвейер для прогнозирования влияния изменений на производительность.
      *
      * @param request DTO с Git-ссылками, определяющими диапазон анализа.
-     * @return {@link CompletableFuture} с результатом, содержащим отчет о потенциальных рисках.
+     * @return {@link Mono} с результатом, содержащим отчет о потенциальных рисках.
      */
     @PostMapping("/predict-impact")
     @Operation(summary = "Спрогнозировать влияние изменений на производительность")
-    public CompletableFuture<List<AgentResult>> predictPerformanceImpact(@Valid @RequestBody PerformancePredictionRequest request) {
+    public Mono<List<AgentResult>> predictPerformanceImpact(@Valid @RequestBody PerformancePredictionRequest request) {
         return orchestratorService.invoke("performance-prediction-pipeline", request.toAgentContext());
     }
 }

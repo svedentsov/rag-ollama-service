@@ -15,10 +15,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который анализирует исторические метрики и текущую конфигурацию
@@ -32,6 +32,7 @@ public class ResourceAllocatorAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     /**
      * {@inheritDoc}
@@ -63,7 +64,7 @@ public class ResourceAllocatorAgent implements ToolAgent {
      */
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         List<Map<String, Double>> metrics = (List<Map<String, Double>>) context.payload().get("historicalMetrics");
         String currentConfig = (String) context.payload().get("currentConfigYaml");
 
@@ -75,28 +76,21 @@ public class ResourceAllocatorAgent implements ToolAgent {
             ));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(this::parseLlmResponse)
-                    .thenApply(report -> new AgentResult(
+                    .map(this::parseLlmResponse)
+                    .map(report -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,
                             report.summary(),
                             Map.of("allocationReport", report)
                     ));
         } catch (JsonProcessingException e) {
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации метрик.", e));
+            return Mono.error(new ProcessingException("Ошибка сериализации метрик.", e));
         }
     }
 
-    /**
-     * Безопасно парсит JSON-ответ от LLM в {@link ResourceAllocationReport}.
-     *
-     * @param jsonResponse Ответ от LLM.
-     * @return Десериализованный объект {@link ResourceAllocationReport}.
-     * @throws ProcessingException если парсинг не удался.
-     */
     private ResourceAllocationReport parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, ResourceAllocationReport.class);
         } catch (JsonProcessingException e) {
             log.error("Не удалось распарсить JSON-ответ от ResourceAllocatorAgent: {}", jsonResponse, e);

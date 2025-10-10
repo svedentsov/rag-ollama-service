@@ -8,10 +8,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -58,7 +58,7 @@ public class RequirementLinkerAgent implements ToolAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String oldRef = (String) context.payload().get("oldRef");
         String newRef = (String) context.payload().get("newRef");
 
@@ -83,7 +83,6 @@ public class RequirementLinkerAgent implements ToolAgent {
                             summary,
                             Map.of("commitToTicketLinks", links)
                     );
-                })
-                .toFuture();
+                });
     }
 }

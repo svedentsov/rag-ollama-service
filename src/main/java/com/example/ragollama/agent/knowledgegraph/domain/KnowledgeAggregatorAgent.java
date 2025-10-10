@@ -14,9 +14,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Мета-агент "Агрегатор Знаний".
@@ -63,14 +64,13 @@ public class KnowledgeAggregatorAgent implements ToolAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String question = (String) context.payload().get("question");
         String cypherQuery = (String) context.payload().get("cypherQuery");
 
-        // Шаг 1: Выполнить Cypher-запрос, чтобы получить "сырые" данные
-        return CompletableFuture.supplyAsync(() -> graphQueryService.executeQuery(cypherQuery))
-                .thenCompose(graphResult -> {
-                    // Шаг 2: Передать данные в LLM для синтеза ответа
+        return Mono.fromCallable(() -> graphQueryService.executeQuery(cypherQuery))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(graphResult -> {
                     try {
                         String graphResultJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(graphResult);
                         String promptString = promptService.render("knowledgeAggregator", Map.of(
@@ -80,7 +80,7 @@ public class KnowledgeAggregatorAgent implements ToolAgent {
                         ));
 
                         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                                .thenApply(naturalLanguageResponse -> {
+                                .map(naturalLanguageResponse -> {
                                     KnowledgeGraphResponse finalResponse = new KnowledgeGraphResponse(
                                             naturalLanguageResponse,
                                             cypherQuery,
@@ -94,7 +94,7 @@ public class KnowledgeAggregatorAgent implements ToolAgent {
                                     );
                                 });
                     } catch (JsonProcessingException e) {
-                        return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации результата графа.", e));
+                        return Mono.error(new ProcessingException("Ошибка сериализации результата графа.", e));
                     }
                 });
     }

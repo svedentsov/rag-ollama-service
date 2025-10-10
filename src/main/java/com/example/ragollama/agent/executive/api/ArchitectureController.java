@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для "Губернатора Архитектурной Эволюции".
@@ -30,11 +30,11 @@ public class ArchitectureController {
      * Запускает "AI Chief Architect" для анализа долгосрочного здоровья архитектуры.
      *
      * @param request Пустой DTO-заглушка.
-     * @return {@link CompletableFuture} с финальным стратегическим отчетом.
+     * @return {@link Mono} с финальным стратегическим отчетом.
      */
     @PostMapping("/analyze-health")
     @Operation(summary = "Проанализировать долгосрочное здоровье архитектуры (AI Chief Architect)")
-    public CompletableFuture<List<AgentResult>> analyzeArchitecturalHealth(@Valid @RequestBody ArchitecturalHealthRequest request) {
+    public Mono<List<AgentResult>> analyzeArchitecturalHealth(@Valid @RequestBody ArchitecturalHealthRequest request) {
         return orchestratorService.invoke("architectural-evolution-pipeline", request.toAgentContext());
     }
 }

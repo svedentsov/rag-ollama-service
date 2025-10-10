@@ -10,7 +10,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
@@ -18,11 +17,7 @@ import reactor.core.publisher.Mono;
 import java.util.*;
 
 /**
- * Stateful-сервис, отвечающий за выполнение, приостановку, возобновление
- * и **самовосстановление** планов, сгенерированных `PlanningAgentService`.
- * <p>
- * Эта версия использует рекурсивный подход для выполнения плана, что позволяет
- * элегантно реализовать логику самовосстановления при сбоях.
+ * Stateful-сервис для выполнения динамических планов, полностью переведенный на Project Reactor.
  */
 @Slf4j
 @Service
@@ -35,11 +30,11 @@ public class DynamicPipelineExecutionService {
     private static final int MAX_RECOVERY_ATTEMPTS = 2;
 
     /**
-     * Запускает выполнение нового плана.
+     * Запускает выполнение плана.
      *
-     * @param plan           Список шагов для выполнения.
+     * @param plan           План для выполнения.
      * @param initialContext Начальный контекст.
-     * @param sessionId      ID сессии для трассировки.
+     * @param sessionId      ID сессии.
      * @return {@link Mono} с финальным списком результатов.
      */
     public Mono<List<AgentResult>> executePlan(List<PlanStep> plan, AgentContext initialContext, UUID sessionId) {
@@ -48,49 +43,53 @@ public class DynamicPipelineExecutionService {
         }
 
         ExecutionState state = ExecutionState.builder()
+                .id(UUID.randomUUID())
                 .sessionId(sessionId)
                 .status(ExecutionState.Status.RUNNING)
                 .planSteps(plan)
-                .accumulatedContext(new HashMap<>(initialContext.payload())) // Создаем изменяемую копию
+                .accumulatedContext(new HashMap<>(initialContext.payload()))
                 .currentStepIndex(0)
                 .build();
-        executionStateRepository.save(state);
 
-        log.info("Начало выполнения плана для executionId: {}", state.getId());
-        return executeSequentially(state, new ArrayList<>(), 0);
+        return executionStateRepository.save(state)
+                .doOnSuccess(s -> log.info("Начало выполнения плана для executionId: {}", s.getId()))
+                .flatMap(s -> executeSequentially(s, new ArrayList<>(), 0));
     }
 
     /**
-     * Асинхронно возобновляет выполнение плана, ожидающего утверждения.
+     * Возобновляет выполнение плана после утверждения.
      *
      * @param executionId ID выполнения.
+     * @return {@link Mono<Void>} сигнализирующий о завершении.
      */
-    @Async("applicationTaskExecutor")
     @Transactional
-    public void resumeExecution(UUID executionId) {
+    public Mono<Void> resumeExecution(UUID executionId) {
         log.info("Возобновление выполнения для executionId: {}", executionId);
-        executionStateRepository.findById(executionId).ifPresent(state -> {
-            if (state.getStatus() == ExecutionState.Status.PENDING_APPROVAL) {
-                state.setStatus(ExecutionState.Status.RUNNING);
-                state.setResumedAfterApproval(true);
-                executionStateRepository.save(state);
-                executeSequentially(state, new ArrayList<>(state.getExecutionHistory()), 0)
-                        .subscribe(
-                                results -> log.info("Возобновленный конвейер {} успешно завершен.", executionId),
-                                error -> log.error("Ошибка при возобновлении конвейера {}", executionId, error)
-                        );
-            } else {
-                log.warn("Попытка возобновить конвейер {}, который не находится в статусе PENDING_APPROVAL.", executionId);
-            }
-        });
+        return executionStateRepository.findById(executionId)
+                .flatMap(state -> {
+                    if (state.getStatus() == ExecutionState.Status.PENDING_APPROVAL) {
+                        state.setStatus(ExecutionState.Status.RUNNING);
+                        state.setResumedAfterApproval(true);
+                        return executionStateRepository.save(state)
+                                .flatMap(savedState ->
+                                        executeSequentially(savedState, new ArrayList<>(savedState.getExecutionHistory()), 0)
+                                                .doOnSuccess(results -> log.info("Возобновленный конвейер {} успешно завершен.", executionId))
+                                                .doOnError(error -> log.error("Ошибка при возобновлении конвейера {}", executionId, error))
+                                                .then()
+                                );
+                    } else {
+                        log.warn("Попытка возобновить конвейер {}, который не в статусе PENDING_APPROVAL.", executionId);
+                        return Mono.empty();
+                    }
+                });
     }
 
     private Mono<List<AgentResult>> executeSequentially(ExecutionState state, List<AgentResult> accumulatedResults, int recoveryAttempt) {
         if (state.getCurrentStepIndex() >= state.getPlanSteps().size()) {
             state.setStatus(ExecutionState.Status.COMPLETED);
-            executionStateRepository.save(state);
-            log.info("План для executionId: {} успешно завершен.", state.getId());
-            return Mono.just(accumulatedResults);
+            return executionStateRepository.save(state)
+                    .doOnSuccess(s -> log.info("План для executionId: {} успешно завершен.", s.getId()))
+                    .thenReturn(accumulatedResults);
         }
 
         PlanStep currentStep = state.getPlanSteps().get(state.getCurrentStepIndex());
@@ -101,15 +100,16 @@ public class DynamicPipelineExecutionService {
         if (agent.requiresApproval() && !state.isResumedAfterApproval()) {
             log.info("Шаг {} ('{}') требует утверждения. Приостановка выполнения.", state.getCurrentStepIndex(), agent.getName());
             state.setStatus(ExecutionState.Status.PENDING_APPROVAL);
-            executionStateRepository.save(state);
-            AgentResult approvalResult = new AgentResult(
-                    "human-in-the-loop-gate",
-                    AgentResult.Status.SUCCESS,
-                    "Требуется утверждение для шага: " + agent.getName(),
-                    Map.of("executionId", state.getId())
-            );
-            accumulatedResults.add(approvalResult);
-            return Mono.just(accumulatedResults);
+            return executionStateRepository.save(state).map(savedState -> {
+                AgentResult approvalResult = new AgentResult(
+                        "human-in-the-loop-gate",
+                        AgentResult.Status.SUCCESS,
+                        "Требуется утверждение для шага: " + agent.getName(),
+                        Map.of("executionId", savedState.getId())
+                );
+                accumulatedResults.add(approvalResult);
+                return accumulatedResults;
+            });
         }
 
         return executeStep(currentStep, new AgentContext(state.getAccumulatedContext()), toolRegistry)
@@ -119,8 +119,8 @@ public class DynamicPipelineExecutionService {
                     state.getExecutionHistory().add(result);
                     state.setCurrentStepIndex(state.getCurrentStepIndex() + 1);
                     state.setResumedAfterApproval(false);
-                    executionStateRepository.save(state);
-                    return executeSequentially(state, accumulatedResults, 0);
+                    return executionStateRepository.save(state)
+                            .flatMap(savedState -> executeSequentially(savedState, accumulatedResults, 0));
                 })
                 .onErrorResume(error -> {
                     if (recoveryAttempt >= MAX_RECOVERY_ATTEMPTS) {
@@ -140,7 +140,7 @@ public class DynamicPipelineExecutionService {
                 "stackTrace", ExceptionUtils.getStackTrace(error)
         ));
 
-        return Mono.fromFuture(() -> errorHandlerAgent.execute(errorContext))
+        return errorHandlerAgent.execute(errorContext)
                 .flatMap(result -> {
                     RemediationPlan plan = (RemediationPlan) result.details().get("remediationPlan");
                     if (plan.action() == RemediationPlan.ActionType.RETRY_WITH_FIX) {
@@ -148,13 +148,12 @@ public class DynamicPipelineExecutionService {
                         PlanStep fixedStep = new PlanStep(failedStep.agentName(), plan.modifiedArguments());
                         currentState.getPlanSteps().set(currentState.getCurrentStepIndex(), fixedStep);
                         currentState.setResumedAfterApproval(true);
-                        executionStateRepository.save(currentState);
-                        return Mono.just(currentState);
+                        return executionStateRepository.save(currentState);
                     } else {
-                        log.error("План исправления: FAIL_GRACEFULLY. Завершение конвейера. Причина: {}", plan.justification());
+                        log.error("План исправления: FAIL_GRACEFULLY. Завершение. Причина: {}", plan.justification());
                         currentState.setStatus(ExecutionState.Status.FAILED);
-                        executionStateRepository.save(currentState);
-                        return Mono.error(new RuntimeException("Выполнение остановлено по плану исправления: " + plan.justification(), error));
+                        return executionStateRepository.save(currentState)
+                                .then(Mono.error(new RuntimeException("Выполнение остановлено: " + plan.justification(), error)));
                     }
                 });
     }
@@ -166,8 +165,8 @@ public class DynamicPipelineExecutionService {
 
         log.debug("Выполнение шага: агент '{}' с контекстом: {}", step.agentName(), stepPayload);
         QaAgent agent = toolRegistry.getAgent(step.agentName())
-                .orElseThrow(() -> new IllegalArgumentException("Агент '" + step.agentName() + "' не найден в реестре."));
+                .orElseThrow(() -> new IllegalArgumentException("Агент '" + step.agentName() + "' не найден."));
 
-        return Mono.fromFuture(() -> agent.execute(stepContext));
+        return agent.execute(stepContext);
     }
 }

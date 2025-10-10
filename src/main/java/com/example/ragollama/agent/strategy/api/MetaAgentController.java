@@ -12,15 +12,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для высокоуровневых, стратегических мета-агентов.
- * <p>
- * Предоставляет API для запуска сложных аналитических конвейеров, которые
- * имитируют принятие решений на уровне тимлида или продакт-менеджера.
  */
 @RestController
 @RequestMapping("/api/v1/agents/strategy")
@@ -35,11 +32,11 @@ public class MetaAgentController {
      * и формирования предложений по рефакторингу.
      *
      * @param request DTO с периодом анализа.
-     * @return {@link CompletableFuture} с отчетом, содержащим стратегию рефакторинга.
+     * @return {@link Mono} с отчетом, содержащим стратегию рефакторинга.
      */
     @PostMapping("/plan-refactoring")
     @Operation(summary = "Сформировать стратегию рефакторинга (AI Tech Lead)")
-    public CompletableFuture<List<AgentResult>> planRefactoring(@Valid @RequestBody MetaAgentRequest request) {
+    public Mono<List<AgentResult>> planRefactoring(@Valid @RequestBody MetaAgentRequest request) {
         return orchestratorService.invoke("strategic-refactoring-pipeline", request.toAgentContext());
     }
 
@@ -47,11 +44,11 @@ public class MetaAgentController {
      * Запускает мета-агента "AI Product Manager" для формирования плана на спринт.
      *
      * @param request DTO с периодом анализа.
-     * @return {@link CompletableFuture} с отчетом, содержащим цель и бэклог спринта.
+     * @return {@link Mono} с отчетом, содержащим цель и бэклог спринта.
      */
     @PostMapping("/plan-sprint")
     @Operation(summary = "Сформировать план на спринт (AI Product Manager)")
-    public CompletableFuture<List<AgentResult>> planSprint(@Valid @RequestBody SprintPlanningRequest request) {
+    public Mono<List<AgentResult>> planSprint(@Valid @RequestBody SprintPlanningRequest request) {
         return orchestratorService.invoke("sprint-planning-pipeline", request.toAgentContext());
     }
 }

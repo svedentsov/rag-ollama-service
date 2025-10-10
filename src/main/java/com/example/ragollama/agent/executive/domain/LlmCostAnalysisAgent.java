@@ -8,17 +8,20 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
- * Реальный агент-аналитик для расчета стоимости использования LLM.
- *
- * <p>Этот агент выполняет SQL-запрос к таблице `llm_usage_log` для
- * агрегации данных об использовании токенов и рассчитывает их
- * стоимость на основе тарифов, заданных в {@link QuotaProperties}.
+ * Агент-аналитик, рассчитывающий финансовую стоимость использования LLM.
+ * <p>
+ * Этот агент является примером "инструмента", который выполняет детерминированную
+ * бизнес-логику. Он выполняет прямой SQL-запрос к таблице `llm_usage_log` для
+ * агрегации данных об использовании токенов и рассчитывает их стоимость на основе
+ * тарифов, заданных в типобезопасной конфигурации {@link QuotaProperties}.
+ * Все блокирующие I/O операции с базой данных выполняются на отдельном пуле потоков.
  */
 @Slf4j
 @Component
@@ -52,27 +55,31 @@ public class LlmCostAnalysisAgent implements ToolAgent {
     }
 
     /**
-     * {@inheritDoc}
+     * Асинхронно выполняет SQL-запрос и рассчитывает стоимость.
+     *
+     * @param context Контекст выполнения (не используется).
+     * @return {@link Mono} с результатом, содержащим общую стоимость.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        return CompletableFuture.supplyAsync(() -> {
-            log.info("Расчет стоимости использования LLM...");
-            String sql = "SELECT SUM(prompt_tokens) as total_prompt, SUM(completion_tokens) as total_completion FROM llm_usage_log";
-            List<Map<String, Object>> result = jdbcTemplate.queryForList(sql);
+    public Mono<AgentResult> execute(AgentContext context) {
+        return Mono.fromCallable(() -> {
+                    log.info("Расчет стоимости использования LLM...");
+                    String sql = "SELECT SUM(prompt_tokens) as total_prompt, SUM(completion_tokens) as total_completion FROM llm_usage_log";
+                    List<Map<String, Object>> result = jdbcTemplate.queryForList(sql);
 
-            if (result.isEmpty() || result.getFirst().get("total_prompt") == null) {
-                return new AgentResult(getName(), AgentResult.Status.SUCCESS, "Данных об использовании LLM не найдено.", Map.of("llmCosts", 0.0));
-            }
+                    if (result.isEmpty() || result.getFirst().get("total_prompt") == null) {
+                        return new AgentResult(getName(), AgentResult.Status.SUCCESS, "Данных об использовании LLM не найдено.", Map.of("llmCosts", 0.0));
+                    }
 
-            long promptTokens = ((Number) result.getFirst().get("total_prompt")).longValue();
-            long completionTokens = ((Number) result.getFirst().get("total_completion")).longValue();
+                    long promptTokens = ((Number) result.getFirst().get("total_prompt")).longValue();
+                    long completionTokens = ((Number) result.getFirst().get("total_completion")).longValue();
 
-            double inputCost = (promptTokens / 1000.0) * quotaProperties.costs().input();
-            double outputCost = (completionTokens / 1000.0) * quotaProperties.costs().output();
-            double totalCost = inputCost + outputCost;
+                    double inputCost = (promptTokens / 1000.0) * quotaProperties.costs().input();
+                    double outputCost = (completionTokens / 1000.0) * quotaProperties.costs().output();
+                    double totalCost = inputCost + outputCost;
 
-            return new AgentResult(getName(), AgentResult.Status.SUCCESS, "Стоимость LLM успешно рассчитана.", Map.of("llmCosts", totalCost));
-        });
+                    return new AgentResult(getName(), AgentResult.Status.SUCCESS, "Стоимость LLM успешно рассчитана.", Map.of("llmCosts", totalCost));
+                })
+                .subscribeOn(Schedulers.boundedElastic());
     }
 }

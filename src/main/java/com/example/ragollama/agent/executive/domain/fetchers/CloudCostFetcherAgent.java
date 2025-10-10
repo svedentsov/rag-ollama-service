@@ -6,9 +6,9 @@ import com.example.ragollama.agent.ToolAgent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Агент-сборщик, имитирующий получение данных о затратах на инфраструктуру.
@@ -47,11 +47,11 @@ public class CloudCostFetcherAgent implements ToolAgent {
     /**
      * {@inheritDoc}
      *
-     * @return {@link CompletableFuture} с результатом, содержащим mock-данные о затратах.
+     * @return {@link Mono} с результатом, содержащим mock-данные о затратах.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        return CompletableFuture.supplyAsync(() -> {
+    public Mono<AgentResult> execute(AgentContext context) {
+        return Mono.fromCallable(() -> {
             log.info("Сбор mock-данных о затратах на инфраструктуру...");
             // Имитация данных о месячных затратах в USD
             Map<String, Double> cloudCosts = Map.of(

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
 import java.time.Duration;
@@ -21,7 +22,6 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Сервис-реестр для управления жизненным циклом асинхронных, отменяемых задач.
- * Объединяет персистентное хранение состояния (в БД) и управление выполнением (в памяти).
  */
 @Slf4j
 @Service
@@ -45,81 +45,99 @@ public class TaskLifecycleService {
             .expireAfterWrite(Duration.ofMinutes(30))
             .build();
 
+    /**
+     * Регистрирует новую асинхронную задачу в базе данных и в in-memory реестре.
+     *
+     * @param taskFuture {@link CompletableFuture}, представляющий выполнение задачи.
+     * @param sessionId  ID сессии, к которой привязана задача.
+     * @return {@link Mono} с ID созданной задачи.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public <T> UUID register(CompletableFuture<T> taskFuture, UUID sessionId) {
-        final UUID taskId = UUID.randomUUID();
+    public <T> Mono<UUID> register(CompletableFuture<T> taskFuture, UUID sessionId) {
         AsyncTask taskEntity = AsyncTask.builder()
-                .id(taskId)
                 .sessionId(sessionId)
                 .status(TaskStatus.RUNNING)
                 .build();
-        taskRepository.save(taskEntity);
 
-        final TaskRecord taskRecord = new TaskRecord(taskFuture);
-        runningTasks.put(taskId, taskRecord);
+        return taskRepository.save(taskEntity)
+                .map(savedTask -> {
+                    final UUID taskId = savedTask.getId();
+                    final TaskRecord taskRecord = new TaskRecord(taskFuture);
+                    runningTasks.put(taskId, taskRecord);
 
-        taskFuture.whenComplete((result, throwable) -> {
-            // Используем self-инъекцию для выполнения в новой транзакции
-            updateTaskStatusOnCompletion(taskId, throwable);
-        });
-
-        log.info("Новая задача {} для сессии {} зарегистрирована.", taskId, sessionId);
-        return taskId;
+                    taskFuture.whenComplete((result, throwable) ->
+                            updateTaskStatusOnCompletion(taskId, throwable).subscribe()
+                    );
+                    log.info("Новая задача {} для сессии {} зарегистрирована.", taskId, sessionId);
+                    return taskId;
+                });
     }
 
+    /**
+     * Обновляет статус задачи в БД по ее завершении (успешном или с ошибкой).
+     *
+     * @param taskId    ID задачи.
+     * @param throwable Исключение, если задача завершилась с ошибкой, иначе null.
+     * @return {@link Mono<Void>}, завершающийся после обновления.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void updateTaskStatusOnCompletion(UUID taskId, Throwable throwable) {
-        AsyncTask task = taskRepository.findById(taskId).orElse(null);
-        if (task == null) return;
-
-        TaskRecord record = runningTasks.getIfPresent(taskId);
-
-        if (throwable != null) {
-            Throwable cause = unwrapCompletionException(throwable);
-            if (cause instanceof CancellationException) {
-                task.setStatus(TaskStatus.CANCELLED);
-                log.info("Задача {} была отменена.", taskId);
-                record.getSink().tryEmitError(cause);
-            } else {
-                task.markAsFailed(cause.getMessage());
-                log.warn("Задача {} завершилась с ошибкой: {}", taskId, cause.toString());
-                record.getSink().tryEmitError(cause);
-            }
-        } else {
-            task.setStatus(TaskStatus.COMPLETED);
-            log.info("Задача {} успешно завершилась.", taskId);
-            record.getSink().tryEmitComplete();
-        }
-        taskRepository.save(task);
-        runningTasks.invalidate(taskId); // Очищаем из in-memory кэша
+    public Mono<Void> updateTaskStatusOnCompletion(UUID taskId, Throwable throwable) {
+        return taskRepository.findById(taskId)
+                .flatMap(task -> {
+                    TaskRecord record = runningTasks.getIfPresent(taskId);
+                    if (throwable != null) {
+                        Throwable cause = unwrapCompletionException(throwable);
+                        if (cause instanceof CancellationException) {
+                            task.setStatus(TaskStatus.CANCELLED);
+                            log.info("Задача {} была отменена.", taskId);
+                            if (record != null) record.getSink().tryEmitError(cause);
+                        } else {
+                            task.markAsFailed(cause.getMessage());
+                            log.warn("Задача {} завершилась с ошибкой: {}", taskId, cause.toString());
+                            if (record != null) record.getSink().tryEmitError(cause);
+                        }
+                    } else {
+                        task.setStatus(TaskStatus.COMPLETED);
+                        log.info("Задача {} успешно завершилась.", taskId);
+                        if (record != null) record.getSink().tryEmitComplete();
+                    }
+                    runningTasks.invalidate(taskId);
+                    return taskRepository.save(task);
+                }).then();
     }
 
+    /**
+     * Запрашивает отмену выполняющейся задачи.
+     *
+     * @param taskId ID задачи.
+     * @return {@link Mono<Void>}, завершающийся после запроса на отмену.
+     */
     @Transactional
-    public boolean cancel(UUID taskId) {
-        AsyncTask task = taskRepository.findById(taskId).orElse(null);
-        if (task == null || task.getStatus() != TaskStatus.RUNNING) {
-            log.warn("Попытка отменить несуществующую или уже завершенную задачу {}", taskId);
-            return false;
-        }
-
-        task.setStatus(TaskStatus.CANCELLATION_REQUESTED);
-        taskRepository.save(task);
-
-        TaskRecord taskRecord = runningTasks.getIfPresent(taskId);
-        if (taskRecord != null) {
-            log.warn("Запрошена отмена для задачи {}. Попытка прервать future.", taskId);
-            return taskRecord.getFuture().cancel(true);
-        }
-        return true;
+    public Mono<Void> cancel(UUID taskId) {
+        return taskRepository.findById(taskId)
+                .filter(task -> task.getStatus() == TaskStatus.RUNNING)
+                .flatMap(task -> {
+                    task.setStatus(TaskStatus.CANCELLATION_REQUESTED);
+                    return taskRepository.save(task);
+                })
+                .doOnSuccess(task -> {
+                    if (task != null) {
+                        TaskRecord taskRecord = runningTasks.getIfPresent(taskId);
+                        if (taskRecord != null) {
+                            log.warn("Запрошена отмена для задачи {}. Попытка прервать future.", taskId);
+                            taskRecord.getFuture().cancel(true);
+                        }
+                    }
+                }).then();
     }
 
     @Transactional(readOnly = true)
-    public Optional<TaskStatus> getStatus(UUID taskId) {
+    public Mono<TaskStatus> getStatus(UUID taskId) {
         return taskRepository.findById(taskId).map(AsyncTask::getStatus);
     }
 
     @Transactional(readOnly = true)
-    public Optional<AsyncTask> getActiveTaskForSession(UUID sessionId) {
+    public Mono<AsyncTask> getActiveTaskForSession(UUID sessionId) {
         return taskRepository.findBySessionIdAndStatus(sessionId, TaskStatus.RUNNING);
     }
 

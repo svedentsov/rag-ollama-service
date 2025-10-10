@@ -1,6 +1,7 @@
 package com.example.ragollama.shared.config;
 
 import com.example.ragollama.shared.config.properties.AppProperties;
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
@@ -10,6 +11,9 @@ import io.netty.handler.timeout.WriteTimeoutHandler;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
+import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -18,12 +22,14 @@ import org.springframework.core.task.TaskDecorator;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.http.codec.json.Jackson2JsonDecoder;
 import org.springframework.http.codec.json.Jackson2JsonEncoder;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.lang.NonNull;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Hooks;
 import reactor.netty.http.client.HttpClient;
 
+import javax.sql.DataSource;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -32,30 +38,26 @@ import java.util.concurrent.TimeUnit;
 /**
  * Основной конфигурационный класс приложения.
  * <p>
- * Содержит централизованную настройку ключевых бинов, таких как
- * пулы потоков и HTTP-клиенты, обеспечивая консистентность и надежность во всем приложении.
+ * Эта версия содержит явное создание бина {@link DataSource}, что необходимо
+ * для корректной работы JDBC-компонентов (Flyway, PgVectorStore, JdbcTemplate)
+ * в гибридном приложении с WebFlux. Также исправлено расположение аннотаций @Primary.
  */
 @Configuration
 @RequiredArgsConstructor
 public class AppConfig {
 
     private final AppProperties appProperties;
+    private final DataSourceProperties dataSourceProperties;
 
-    /**
-     * Включает автоматическую передачу контекста Reactor в другие контексты,
-     * такие как MDC, при старте приложения.
-     */
     @PostConstruct
     void initializeReactorContext() {
         Hooks.enableAutomaticContextPropagation();
     }
 
     /**
-     * Создает и настраивает основной, переиспользуемый ObjectMapper для всего приложения.
-     * Эта конфигурация делает десериализацию Enum нечувствительной к регистру и
-     * добавляет поддержку современных типов даты/времени Java 8 (JSR-310).
+     * Создает и настраивает основной, строгий бин ObjectMapper.
      *
-     * @return Сконфигурированный ObjectMapper.
+     * @return Сконфигурированный экземпляр ObjectMapper.
      */
     @Bean
     @Primary
@@ -67,14 +69,27 @@ public class AppConfig {
     }
 
     /**
-     * Создает и настраивает основной, переиспользуемый строитель для {@link WebClient}.
-     * <p>
-     * Эта конфигурация является центральной точкой для всех HTTP-взаимодействий. Она
-     * устанавливает таймауты, пулы соединений и использует кастомный {@link ObjectMapper},
-     * что обеспечивает консистентность и надежность всех внешних вызовов.
+     * Создает отдельный, "снисходительный" бин ObjectMapper для парсинга
+     * потенциально "грязных" JSON-ответов от LLM.
      *
-     * @param objectMapper ObjectMapper, настроенный для всего приложения.
-     * @return Сконфигурированный {@link WebClient.Builder}.
+     * @param primaryObjectMapper Основной, строго настроенный ObjectMapper.
+     * @return Новый экземпляр ObjectMapper с включенными флагами для гибкого парсинга.
+     */
+    @Bean
+    @Qualifier("permissiveObjectMapper")
+    public ObjectMapper permissiveObjectMapper(ObjectMapper primaryObjectMapper) {
+        return primaryObjectMapper.copy()
+                .enable(JsonParser.Feature.ALLOW_COMMENTS)
+                .enable(JsonParser.Feature.ALLOW_SINGLE_QUOTES)
+                .enable(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES)
+                .enable(JsonParser.Feature.ALLOW_TRAILING_COMMA);
+    }
+
+    /**
+     * Создает и настраивает глобальный WebClient.Builder с таймаутами.
+     *
+     * @param objectMapper Сконфигурированный ObjectMapper.
+     * @return Преднастроенный WebClient.Builder.
      */
     @Bean
     @Primary
@@ -95,9 +110,35 @@ public class AppConfig {
     }
 
     /**
-     * Создает основной пул потоков для общих фоновых задач.
+     * Явно создает бин {@link DataSource} для JDBC-компонентов.
      *
-     * @return Сконфигурированный {@link AsyncTaskExecutor}.
+     * @return Сконфигурированный {@link DataSource}.
+     */
+    @Bean
+    public DataSource dataSource() {
+        return DataSourceBuilder.create()
+                .url(dataSourceProperties.getUrl())
+                .username(dataSourceProperties.getUsername())
+                .password(dataSourceProperties.getPassword())
+                .driverClassName(dataSourceProperties.getDriverClassName())
+                .build();
+    }
+
+    /**
+     * Создает бин {@link JdbcTemplate}, используя явно созданный DataSource.
+     *
+     * @param dataSource Бин DataSource, созданный методом выше.
+     * @return Готовый к использованию JdbcTemplate.
+     */
+    @Bean
+    public JdbcTemplate jdbcTemplate(DataSource dataSource) {
+        return new JdbcTemplate(dataSource);
+    }
+
+    /**
+     * Создает основной пул потоков для общих асинхронных задач.
+     *
+     * @return Сконфигурированный AsyncTaskExecutor.
      */
     @Bean
     @Primary
@@ -106,9 +147,9 @@ public class AppConfig {
     }
 
     /**
-     * Создает выделенный пул потоков для долгих I/O-операций с LLM.
+     * Создает выделенный пул потоков для долгих вызовов к LLM.
      *
-     * @return Изолированный {@link AsyncTaskExecutor} для LLM.
+     * @return Сконфигурированный AsyncTaskExecutor.
      */
     @Bean
     public AsyncTaskExecutor llmTaskExecutor() {
@@ -116,22 +157,15 @@ public class AppConfig {
     }
 
     /**
-     * Создает выделенный пул потоков для быстрых I/O-операций с базой данных.
+     * Создает выделенный пул потоков для блокирующих операций с БД (через JdbcTemplate).
      *
-     * @return Изолированный {@link AsyncTaskExecutor} для БД.
+     * @return Сконфигурированный AsyncTaskExecutor.
      */
     @Bean
     public AsyncTaskExecutor databaseTaskExecutor() {
         return createExecutor(appProperties.dbExecutor(), "db-async-");
     }
 
-    /**
-     * Вспомогательный метод для создания и конфигурации {@link ThreadPoolTaskExecutor}.
-     *
-     * @param props  Конфигурация пула.
-     * @param prefix Префикс для имен потоков.
-     * @return Готовый к использованию {@link AsyncTaskExecutor}.
-     */
     private AsyncTaskExecutor createExecutor(AppProperties.TaskExecutor props, String prefix) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(props.corePoolSize());
@@ -144,9 +178,7 @@ public class AppConfig {
     }
 
     /**
-     * Декоратор, который копирует контекст MDC из родительского
-     * потока в дочерний. Это обеспечивает сквозную трассировку
-     * в асинхронных операциях.
+     * Декоратор задач, обеспечивающий проброс контекста MDC в асинхронные потоки.
      */
     static class ContextAwareTaskDecorator implements TaskDecorator {
         @Override
@@ -168,12 +200,8 @@ public class AppConfig {
 
     /**
      * Создает планировщик для библиотеки Resilience4j.
-     * <p>
-     * Этот планировщик используется компонентом TimeLimiter для асинхронного
-     * прерывания операций по таймауту. Выделение отдельного потока
-     * обеспечивает изоляцию и предсказуемость работы механизмов отказоустойчивости.
      *
-     * @return Экземпляр {@link ScheduledExecutorService} с одним потоком.
+     * @return ScheduledExecutorService.
      */
     @Bean(name = "resilience4jScheduler", destroyMethod = "shutdown")
     public ScheduledExecutorService resilience4jScheduler() {

@@ -22,7 +22,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.client.DefaultResponseErrorHandler;
 import org.springframework.web.client.RestClient;
@@ -44,10 +43,10 @@ public class AiConfig {
     private final AppProperties appProperties;
 
     /**
-     * Переопределяет стандартный бин OllamaApi, чтобы он использовал WebClient с увеличенными таймаутами.
+     * Переопределяет стандартный бин OllamaApi.
      *
-     * @param ollamaBaseUrl URL-адрес Ollama из конфигурационного файла.
-     * @return Сконфигурированный экземпляр {@link OllamaApi}.
+     * @param ollamaBaseUrl URL-адрес Ollama.
+     * @return Сконфигурированный {@link OllamaApi}.
      */
     @Bean
     @Primary
@@ -70,12 +69,10 @@ public class AiConfig {
     }
 
     /**
-     * Создает бин EmbeddingModel-декоратора, который добавляет L2-нормализацию.
-     * Аннотация @Primary гарантирует, что именно этот бин будет внедряться
-     * везде, где требуется EmbeddingModel (включая PgVectorStore).
+     * Создает бин EmbeddingModel-декоратора.
      *
-     * @param ollamaEmbeddingModel Стандартный бин, созданный автоконфигурацией Spring AI.
-     * @return Декоратор, который будет использоваться во всем приложении.
+     * @param ollamaEmbeddingModel Стандартный бин.
+     * @return Декоратор.
      */
     @Bean
     @Primary
@@ -84,10 +81,10 @@ public class AiConfig {
     }
 
     /**
-     * Предоставляет основной бин {@link ChatClient} для всего приложения.
+     * Предоставляет основной бин {@link ChatClient}.
      *
-     * @param ollamaChatModel Модель чата, автоматически сконфигурированная Spring AI.
-     * @return Готовый к использованию {@link ChatClient}.
+     * @param ollamaChatModel Модель чата.
+     * @return Готовый {@link ChatClient}.
      */
     @Bean
     @Primary
@@ -97,19 +94,14 @@ public class AiConfig {
 
     /**
      * Создает и предоставляет наш кастомный фасад {@link LlmClient}.
-     * <p>
-     * Этот метод является примером чистого Dependency Injection, собирая
-     * все необходимые компоненты (шлюз, роутер, исполнитель, сервисы квот и трекинга)
-     * в единый, высокоуровневый клиент.
      *
-     * @param llmGateway              Низкоуровневый шлюз для прямых вызовов.
-     * @param llmRouterService        Сервис для интеллектуального выбора модели.
-     * @param resilientExecutor       Декоратор для обеспечения отказоустойчивости.
-     * @param quotaService            Сервис для проверки квот.
-     * @param usageTracker            Сервис для логирования использования.
-     * @param tokenizationService     Сервис для работы с токенами.
-     * @param applicationTaskExecutor Пул потоков для выполнения асинхронных операций.
-     * @return Полностью сконфигурированный экземпляр {@link LlmClient}.
+     * @param llmGateway          Низкоуровневый шлюз.
+     * @param llmRouterService    Сервис-роутер.
+     * @param resilientExecutor   Декоратор отказоустойчивости.
+     * @param quotaService        Сервис квот.
+     * @param usageTracker        Сервис логирования.
+     * @param tokenizationService Сервис токенизации.
+     * @return Полностью сконфигурированный {@link LlmClient}.
      */
     @Bean
     public LlmClient llmClient(
@@ -118,8 +110,7 @@ public class AiConfig {
             ResilientLlmExecutor resilientExecutor,
             QuotaService quotaService,
             LlmUsageTracker usageTracker,
-            TokenizationService tokenizationService,
-            AsyncTaskExecutor applicationTaskExecutor
+            TokenizationService tokenizationService
     ) {
         return new LlmClient(
                 llmGateway,
@@ -127,8 +118,7 @@ public class AiConfig {
                 resilientExecutor,
                 quotaService,
                 usageTracker,
-                tokenizationService,
-                applicationTaskExecutor
+                tokenizationService
         );
     }
 }

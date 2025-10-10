@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Шаг RAG-конвейера, реализующий логику Parent Document Retriever.
+ * Шаг RAG-конвейера, реализующий логику Parent Document Retriever, адаптированный для R2DBC.
  */
 @Component
 @Order(28)
@@ -35,8 +35,11 @@ public class ContextExpansionStep implements RagPipelineStep {
         if (rerankedChildDocs.isEmpty()) {
             return Mono.just(context);
         }
-        taskLifecycleService.getActiveTaskForSession(context.sessionId()).ifPresent(task ->
-                taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Расширяю контекст...")));
+
+        taskLifecycleService.getActiveTaskForSession(context.sessionId())
+                .doOnNext(task -> taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Расширяю контекст...")))
+                .subscribe();
+
         Map<String, Document> parentDocsMap = rerankedChildDocs.stream()
                 .filter(doc -> doc.getMetadata().containsKey("parentChunkId") && doc.getMetadata().containsKey("parentChunkText"))
                 .collect(Collectors.toMap(
@@ -44,6 +47,7 @@ public class ContextExpansionStep implements RagPipelineStep {
                         this::createParentDocumentFromChild,
                         (existing, replacement) -> existing
                 ));
+
         if (parentDocsMap.isEmpty()) {
             log.warn("Не найдено ни одного чанка с метаданными родителя. Пропускаем шаг расширения контекста.");
             return Mono.just(context);

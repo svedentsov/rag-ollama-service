@@ -38,26 +38,23 @@ public class ContextCompressionService {
                 .mapToInt(doc -> tokenizationService.countTokens(doc.getText()))
                 .sum();
         if (totalTokens <= appProperties.context().maxTokens()) {
-            return Mono.just(documents); // Сжатие не требуется
+            return Mono.just(documents);
         }
         log.warn("Общий размер контекста ({}) превышает лимит ({}). Запуск сжатия...",
                 totalTokens, appProperties.context().maxTokens());
-        // Параллельно сжимаем каждый документ
+
         return Flux.fromIterable(documents)
                 .flatMap(doc -> compressDocument(doc, query))
                 .collectList();
     }
 
-    /**
-     * Сжимает один документ.
-     */
     private Mono<Document> compressDocument(Document document, String query) {
         String promptString = promptService.render("contextCompressorPrompt", Map.of(
                 "query", query,
                 "document_text", document.getText()
         ));
         Prompt prompt = new Prompt(promptString);
-        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FASTEST))
+        return llmClient.callChat(prompt, ModelCapability.FASTEST)
                 .map(compressedText -> new Document(compressedText, document.getMetadata()))
                 .doOnSuccess(doc -> log.trace("Документ {} успешно сжат.", doc.getId()));
     }

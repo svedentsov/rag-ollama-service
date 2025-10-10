@@ -15,9 +15,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Мета-агент, выступающий в роли "AI SRE", который диагностирует сбои
@@ -31,6 +31,7 @@ public class ErrorHandlerAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @Override
     public String getName() {
@@ -48,12 +49,12 @@ public class ErrorHandlerAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String promptString = promptService.render("errorHandlerPrompt", context.payload());
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .thenApply(this::parseLlmResponse)
-                .thenApply(plan -> {
+                .map(this::parseLlmResponse)
+                .map(plan -> {
                     log.info("ErrorHandlerAgent сгенерировал план исправления: {}", plan.action());
                     return new AgentResult(
                             getName(),
@@ -66,7 +67,7 @@ public class ErrorHandlerAgent implements ToolAgent {
 
     private RemediationPlan parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, RemediationPlan.class);
         } catch (JsonProcessingException e) {
             throw new ProcessingException("ErrorHandlerAgent LLM вернул невалидный JSON.", e);

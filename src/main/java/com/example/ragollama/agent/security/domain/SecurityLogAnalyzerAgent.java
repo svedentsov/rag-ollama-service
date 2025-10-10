@@ -16,10 +16,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, выполняющий анализ логов на предмет аномалий безопасности (IAST-like).
@@ -32,6 +32,7 @@ public class SecurityLogAnalyzerAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @Override
     public String getName() {
@@ -49,17 +50,17 @@ public class SecurityLogAnalyzerAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String logs = (String) context.payload().get("applicationLogs");
         if (logs == null || logs.isBlank()) {
-            return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Логи для анализа не предоставлены.", Map.of("logAnalysisFindings", List.of())));
+            return Mono.just(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Логи для анализа не предоставлены.", Map.of("logAnalysisFindings", List.of())));
         }
 
         String promptString = promptService.render("securityLogAnalyzerPrompt", Map.of("application_logs", logs));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .thenApply(this::parseLlmResponse)
-                .thenApply(findings -> new AgentResult(
+                .map(this::parseLlmResponse)
+                .map(findings -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,
                         "Анализ логов завершен. Найдено аномалий: " + findings.size(),
@@ -69,7 +70,7 @@ public class SecurityLogAnalyzerAgent implements ToolAgent {
 
     private List<SecurityFinding> parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, new TypeReference<>() {
             });
         } catch (JsonProcessingException e) {

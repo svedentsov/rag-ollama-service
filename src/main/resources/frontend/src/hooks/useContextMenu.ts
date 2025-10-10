@@ -2,35 +2,48 @@ import { useState, useCallback, useEffect, RefObject } from 'react';
 import { useClickOutside } from './useClickOutside';
 
 /**
- * Тип состояния для контекстного меню.
+ * @interface ContextMenuState<T>
+ * @description Тип состояния для контекстного меню.
  * @template T - Тип элемента, к которому привязано меню.
  */
 interface ContextMenuState<T> {
-  /** Флаг видимости меню. */
+  /** @property {boolean} show - Флаг видимости меню. */
   show: boolean;
-  /** Координата X для позиционирования. */
+  /** @property {number} x - Координата X для позиционирования. */
   x: number;
-  /** Координата Y для позиционирования. */
+  /** @property {number} y - Координата Y для позиционирования. */
   y: number;
-  /** Элемент, для которого было вызвано меню. */
+  /** @property {T | null} item - Элемент, для которого было вызвано меню. */
   item: T | null;
 }
 
 /**
- * Хук для инкапсуляции логики управления контекстным меню.
+ * Хук для инкапсуляции логики управления всплывающим меню (контекстным или по клику).
  * @template T - Тип элемента, с которым ассоциировано меню.
- * @param menuRef - Ref-объект, указывающий на DOM-элемент самого меню.
- * @returns Объект с состоянием меню и функциями для управления им.
+ * @param {RefObject<HTMLDivElement>} menuRef - Ref-объект, указывающий на DOM-элемент самого меню.
+ * @returns {{
+ *   menuState: ContextMenuState<T>,
+ *   openMenu: (event: React.MouseEvent, item: T) => void,
+ *   closeMenu: () => void
+ * }} Объект с состоянием меню и функциями для управления им.
  */
 export function useContextMenu<T>(menuRef: RefObject<HTMLDivElement>) {
   const [menuState, setMenuState] = useState<ContextMenuState<T>>({ show: false, x: 0, y: 0, item: null });
 
-  const handleContextMenu = useCallback((event: React.MouseEvent, item: T) => {
+  /**
+   * Открывает меню, позиционируя его по координатам клика.
+   * @param {React.MouseEvent} event - Событие мыши.
+   * @param {T} item - Элемент, для которого открывается меню.
+   */
+  const openMenu = useCallback((event: React.MouseEvent, item: T) => {
     event.preventDefault();
     event.stopPropagation();
     setMenuState({ show: true, x: event.clientX, y: event.clientY, item });
   }, []);
 
+  /**
+   * Закрывает меню.
+   */
   const closeMenu = useCallback(() => {
     setMenuState(prev => ({ ...prev, show: false }));
   }, []);
@@ -49,5 +62,5 @@ export function useContextMenu<T>(menuRef: RefObject<HTMLDivElement>) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [closeMenu]);
 
-  return { menuState, handleContextMenu, closeMenu };
+  return { menuState, openMenu, closeMenu };
 }

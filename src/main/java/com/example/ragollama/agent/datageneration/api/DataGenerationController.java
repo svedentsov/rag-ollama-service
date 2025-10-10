@@ -14,16 +14,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для управления AI-агентами, генерирующими данные.
- * <p>
- * Предоставляет API для создания различных видов тестовых данных:
- * от простых моков до сложных, статистически-релевантных и анонимных
- * наборов данных с гарантиями дифференциальной приватности.
  */
 @RestController
 @RequestMapping("/api/v1/agents/data")
@@ -37,13 +33,13 @@ public class DataGenerationController {
      * Запускает агента для генерации синтетических данных.
      *
      * @param request DTO с определением Java-класса и количеством моков.
-     * @return {@link CompletableFuture} с результатом, содержащим сгенерированный JSON.
+     * @return {@link Mono} с результатом, содержащим сгенерированный JSON.
      */
     @PostMapping("/generate-mock")
     @Operation(summary = "Сгенерировать моковые данные для Java-класса",
             description = "Принимает исходный код Java DTO или Entity и генерирует " +
                     "указанное количество JSON-объектов с реалистичными данными.")
-    public CompletableFuture<List<AgentResult>> generateMockData(@Valid @RequestBody SyntheticDataRequest request) {
+    public Mono<List<AgentResult>> generateMockData(@Valid @RequestBody SyntheticDataRequest request) {
         return orchestratorService.invoke(
                 "synthetic-data-generation-pipeline", request.toAgentContext()
         );
@@ -53,13 +49,13 @@ public class DataGenerationController {
      * Запускает агента для создания подмножества данных из БД с маскированием PII.
      *
      * @param request DTO со схемой таблицы и целью выборки.
-     * @return {@link CompletableFuture} с результатом, содержащим сгенерированный SQL и замаскированные данные.
+     * @return {@link Mono} с результатом, содержащим сгенерированный SQL и замаскированные данные.
      */
     @PostMapping("/create-subset")
     @Operation(summary = "Создать и замаскировать подмножество данных из БД",
             description = "Принимает DDL таблицы и цель на естественном языке. AI генерирует SQL, " +
                     "который выполняется после вашего одобрения, а результат маскируется.")
-    public CompletableFuture<List<AgentResult>> createDataSubset(@Valid @RequestBody DataSubsetRequest request) {
+    public Mono<List<AgentResult>> createDataSubset(@Valid @RequestBody DataSubsetRequest request) {
         return orchestratorService.invoke("data-subset-masking-pipeline", request.toAgentContext());
     }
 
@@ -67,11 +63,11 @@ public class DataGenerationController {
      * Запускает конвейер для создания синтетических данных с дифференциальной приватностью.
      *
      * @param request DTO с SQL-запросом для исходных данных и параметрами генерации.
-     * @return {@link CompletableFuture} с финальным отчетом, содержащим данные.
+     * @return {@link Mono} с финальным отчетом, содержащим данные.
      */
     @PostMapping("/create-dp-subset")
     @Operation(summary = "Создать синтетические данные с дифференциальной приватностью (DP)")
-    public CompletableFuture<List<AgentResult>> createDpDataSubset(@Valid @RequestBody SyntheticDataDpRequest request) {
+    public Mono<List<AgentResult>> createDpDataSubset(@Valid @RequestBody SyntheticDataDpRequest request) {
         return orchestratorService.invoke("dp-synthetic-data-pipeline", request.toAgentContext());
     }
 
@@ -79,11 +75,11 @@ public class DataGenerationController {
      * Запускает агента для генерации статистически-релевантных синтетических данных.
      *
      * @param request DTO с SQL-запросом для исходных данных и количеством записей.
-     * @return {@link CompletableFuture} с отчетом, содержащим сгенерированные данные.
+     * @return {@link Mono} с отчетом, содержащим сгенерированные данные.
      */
     @PostMapping("/generate-statistical-data")
     @Operation(summary = "Сгенерировать статистически-релевантные данные")
-    public CompletableFuture<List<AgentResult>> generateStatisticalData(@Valid @RequestBody DataGenerationRequest request) {
+    public Mono<List<AgentResult>> generateStatisticalData(@Valid @RequestBody DataGenerationRequest request) {
         return orchestratorService.invoke("statistical-data-generation-pipeline", request.toAgentContext());
     }
 }

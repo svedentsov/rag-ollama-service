@@ -19,10 +19,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -44,6 +44,7 @@ public class AutonomousMaintenanceAgent implements QaAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     /**
      * {@inheritDoc}
@@ -63,11 +64,6 @@ public class AutonomousMaintenanceAgent implements QaAgent {
 
     /**
      * {@inheritDoc}
-     * <p>
-     * Этот агент является инициирующим, поэтому он всегда готов к работе.
-     *
-     * @param context Контекст выполнения (обычно пустой).
-     * @return Всегда {@code true}.
      */
     @Override
     public boolean canHandle(AgentContext context) {
@@ -76,36 +72,26 @@ public class AutonomousMaintenanceAgent implements QaAgent {
 
     /**
      * {@inheritDoc}
-     * <p>
-     * Реализует многошаговый асинхронный процесс:
-     * 1. Запускает все доступные аналитические конвейеры для сбора отчетов о состоянии проекта.
-     * 2. Агрегирует эти отчеты и передает их LLM для проведения триажа и приоритизации.
-     * 3. LLM генерирует список задач (тикетов), которые необходимо создать.
-     * 4. Агент преобразует этот список в динамический план выполнения для агента `jira-ticket-creator`.
-     * 5. Запускает исполнение этого плана, которое создаст тикеты после утверждения человеком.
-     *
-     * @param context Контекст выполнения.
-     * @return {@link CompletableFuture} с результатом, содержащим информацию о сгенерированном плане.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         log.info("Запуск автономного агента по обслуживанию...");
         // Шаг 1: Асинхронно запускаем сбор данных о здоровье проекта.
-        return healthAggregatorService.aggregateHealthReports(context)
-                .thenCompose(healthReport -> {
+        return Mono.fromFuture(healthAggregatorService.aggregateHealthReports(context))
+                .flatMap(healthReport -> {
                     if (healthReport.isEmpty()) {
                         String summary = "Анализ завершен. Критичного технического долга не обнаружено.";
                         log.info(summary);
-                        return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, summary, Map.of()));
+                        return Mono.just(new AgentResult(getName(), AgentResult.Status.SUCCESS, summary, Map.of()));
                     }
                     try {
                         String reportsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(healthReport);
                         String promptString = promptService.render("autonomousTriagePrompt", Map.of("reportsJson", reportsJson));
                         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                                .thenCompose(llmResponse -> {
+                                .flatMap(llmResponse -> {
                                     List<JiraTicketRequest> ticketsToCreate = parseLlmResponse(llmResponse);
                                     if (ticketsToCreate.isEmpty()) {
-                                        return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Анализ завершен. Новых задач по техдолгу не создано.", Map.of()));
+                                        return Mono.just(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Анализ завершен. Новых задач по техдолгу не создано.", Map.of()));
                                     }
                                     // Шаг 3: Преобразуем ответ LLM в план и запускаем исполнитель.
                                     List<PlanStep> plan = ticketsToCreate.stream()
@@ -124,10 +110,10 @@ public class AutonomousMaintenanceAgent implements QaAgent {
                                                         summary,
                                                         Map.of("createdTicketsPlan", executionResults)
                                                 );
-                                            }).toFuture();
+                                            });
                                 });
                     } catch (JsonProcessingException e) {
-                        return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации отчетов для триажа", e));
+                        return Mono.error(new ProcessingException("Ошибка сериализации отчетов для триажа", e));
                     }
                 });
     }
@@ -141,7 +127,7 @@ public class AutonomousMaintenanceAgent implements QaAgent {
      */
     private List<JiraTicketRequest> parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, new TypeReference<>() {
             });
         } catch (JsonProcessingException e) {

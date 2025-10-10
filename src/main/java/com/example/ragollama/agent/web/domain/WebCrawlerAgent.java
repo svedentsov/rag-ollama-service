@@ -7,12 +7,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Агент-инструмент для скрапинга (веб-кроулинга) веб-страниц.
@@ -58,45 +59,33 @@ public class WebCrawlerAgent implements ToolAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        return CompletableFuture.supplyAsync(() -> {
-            String urlString = (String) context.payload().get(URL_KEY);
+    public Mono<AgentResult> execute(AgentContext context) {
+        return Mono.fromCallable(() -> {
+                    String urlString = (String) context.payload().get(URL_KEY);
 
-            // Усиленная валидация входных данных
-            if (urlString == null || urlString.isBlank()) {
-                return new AgentResult(getName(), AgentResult.Status.FAILURE, "URL для скрапинга не предоставлен.", Map.of());
-            }
+                    if (urlString == null || urlString.isBlank()) {
+                        return new AgentResult(getName(), AgentResult.Status.FAILURE, "URL для скрапинга не предоставлен.", Map.of());
+                    }
 
-            try {
-                // Проверяем, что URL валиден, перед использованием
-                new URL(urlString);
-
-                log.info("WebCrawlerAgent: запуск скрапинга для URL: {}", urlString);
-                String textContent = Jsoup.connect(urlString).get().text();
-                String summary = "Скрапинг успешно завершен. Извлечено символов: " + textContent.length();
-                return new AgentResult(
-                        getName(),
-                        AgentResult.Status.SUCCESS,
-                        summary,
-                        Map.of("scrapedText", textContent)
-                );
-            } catch (MalformedURLException e) {
-                log.error("Предоставлен невалидный URL для скрапинга: {}", urlString, e);
-                return new AgentResult(
-                        getName(),
-                        AgentResult.Status.FAILURE,
-                        "Невалидный формат URL: " + urlString,
-                        Map.of()
-                );
-            } catch (IOException e) {
-                log.error("Ошибка при скрапинге URL: {}", urlString, e);
-                return new AgentResult(
-                        getName(),
-                        AgentResult.Status.FAILURE,
-                        "Не удалось извлечь контент: " + e.getMessage(),
-                        Map.of()
-                );
-            }
-        });
+                    try {
+                        new URL(urlString);
+                        log.info("WebCrawlerAgent: запуск скрапинга для URL: {}", urlString);
+                        String textContent = Jsoup.connect(urlString).get().text();
+                        String summary = "Скрапинг успешно завершен. Извлечено символов: " + textContent.length();
+                        return new AgentResult(
+                                getName(),
+                                AgentResult.Status.SUCCESS,
+                                summary,
+                                Map.of("scrapedText", textContent)
+                        );
+                    } catch (MalformedURLException e) {
+                        log.error("Предоставлен невалидный URL для скрапинга: {}", urlString, e);
+                        return new AgentResult(getName(), AgentResult.Status.FAILURE, "Невалидный формат URL: " + urlString, Map.of());
+                    } catch (IOException e) {
+                        log.error("Ошибка при скрапинге URL: {}", urlString, e);
+                        return new AgentResult(getName(), AgentResult.Status.FAILURE, "Не удалось извлечь контент: " + e.getMessage(), Map.of());
+                    }
+                })
+                .subscribeOn(Schedulers.boundedElastic());
     }
 }

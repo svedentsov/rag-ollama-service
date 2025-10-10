@@ -13,9 +13,13 @@ services:
     ports:
       - "8080:8080" # Проброс порта приложения
     environment:
-      # Настройки для подключения к другим сервисам внутри Docker сети
-      # Приложение внутри Docker будет использовать имена сервисов как хосты.
+      # ИСПОЛЬЗУЕМ СТАНДАРТНЫЕ СВОЙСТВА SPRING BOOT
+      - SPRING_R2DBC_URL=r2dbc:pool:postgresql://postgres:5432/ragdb
+      - SPRING_R2DBC_USERNAME=user
+      - SPRING_R2DBC_PASSWORD=password
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/ragdb
+      - SPRING_DATASOURCE_USERNAME=user
+      - SPRING_DATASOURCE_PASSWORD=password
       - SPRING_AI_OLLAMA_BASE_URL=http://ollama:11434
       - APP_INTEGRATIONS_NEO4J_URI=bolt://neo4j:7687
     depends_on:

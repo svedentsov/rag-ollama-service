@@ -24,18 +24,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Сервис-оркестратор, который является единой точкой входа для обработки
- * всех пользовательских запросов.
- * <p>
- * Его обязанности:
- * <ol>
- *     <li>Создать и зарегистрировать асинхронную задачу через {@link TaskLifecycleService}.</li>
- *     <li>Определить намерение (intent) пользователя с помощью {@link RouterAgentService}.</li>
- *     <li>Выбрать и делегировать выполнение соответствующему {@link IntentHandler}.</li>
- *     <li>Обеспечить корректную обработку успешного завершения, ошибок и отмены задачи.</li>
- * </ol>
- * Эта версия адаптирована для работы в полностью реактивной среде,
- * корректно обрабатывая исключения, связанные с разрывом соединения клиентом.
+ * Сервис-оркестратор, адаптированный для работы с реактивными сервисами.
  */
 @Slf4j
 @Service
@@ -45,44 +34,27 @@ public class OrchestrationService {
     private final Map<QueryIntent, IntentHandler> handlerMap;
     private final TaskLifecycleService taskService;
 
-    /**
-     * Конструктор, который автоматически обнаруживает все реализации {@link IntentHandler}
-     * и регистрирует их в карте для быстрой маршрутизации.
-     *
-     * @param handlers  Список всех бинов-обработчиков.
-     * @param router    Сервис-маршрутизатор.
-     * @param taskService Сервис управления задачами.
-     */
     @Autowired
     public OrchestrationService(List<IntentHandler> handlers, RouterAgentService router, TaskLifecycleService taskService) {
         this.router = router;
         this.taskService = taskService;
         this.handlerMap = new EnumMap<>(QueryIntent.class);
-        for (IntentHandler handler : handlers) {
+        handlers.forEach(handler -> {
             handlerMap.put(handler.canHandle(), handler);
             if (handler.fallbackIntent() != null) {
                 handlerMap.put(handler.fallbackIntent(), handler);
             }
-        }
+        });
     }
 
-    /**
-     * Логирует информацию о зарегистрированных обработчиках при старте приложения.
-     */
     @PostConstruct
     public void init() {
-        log.info("OrchestrationService инициализирован. Зарегистрировано {} обработчиков для интентов: {}", handlerMap.size(), handlerMap.keySet());
+        log.info("OrchestrationService: {} обработчиков зарегистрировано для интентов: {}", handlerMap.size(), handlerMap.keySet());
     }
 
-    /**
-     * Асинхронно обрабатывает запрос и возвращает ID задачи для отслеживания.
-     *
-     * @param request Универсальный запрос от пользователя.
-     * @return DTO с ID созданной задачи.
-     */
     public TaskSubmissionResponse processAsync(UniversalRequest request) {
         CompletableFuture<UniversalSyncResponse> taskFuture = new CompletableFuture<>();
-        UUID taskId = taskService.register(taskFuture, request.sessionId());
+        UUID taskId = taskService.register(taskFuture, request.sessionId()).block();
 
         router.route(request.query())
                 .flatMap(intent -> {
@@ -97,62 +69,39 @@ public class OrchestrationService {
         return new TaskSubmissionResponse(taskId);
     }
 
-
-    /**
-     * Обрабатывает запрос в потоковом режиме (SSE).
-     *
-     * @param request Универсальный запрос от пользователя.
-     * @return Реактивный поток {@link UniversalResponse}.
-     */
     public Flux<UniversalResponse> processStream(UniversalRequest request) {
         return router.route(request.query())
-                .flatMapMany(intent -> {
-                    CompletableFuture<Void> streamCompletionFuture = new CompletableFuture<>();
-                    UUID taskId = taskService.register(streamCompletionFuture, request.sessionId());
-                    log.info("Маршрутизация потокового запроса с намерением: {}. TaskID: {}", intent, taskId);
+                .flatMapMany(intent ->
+                        taskService.register(new CompletableFuture<Void>(), request.sessionId())
+                                .flatMapMany(taskId -> {
+                                    log.info("Маршрутизация потокового запроса: {}. TaskID: {}", intent, taskId);
 
-                    IntentHandler handler = findHandler(intent);
-                    Flux<UniversalResponse> responseStream = handler.handleStream(request, taskId);
+                                    IntentHandler handler = findHandler(intent);
+                                    Flux<UniversalResponse> responseStream = handler.handleStream(request, taskId);
 
-                    responseStream
-                            .doOnTerminate(() -> {
-                                if (!streamCompletionFuture.isDone()) streamCompletionFuture.complete(null);
-                            })
-                            .doOnError(streamCompletionFuture::completeExceptionally)
-                            .subscribe(
-                                    event -> taskService.emitEvent(taskId, event),
-                                    error -> {},
-                                    () -> {}
-                            );
-
-                    return Flux.concat(
-                            Flux.just(new UniversalResponse.TaskStarted(taskId)),
-                            taskService.getTaskStream(taskId).orElse(Flux.empty())
-                    );
-                })
+                                    return Flux.concat(
+                                                    Flux.just(new UniversalResponse.TaskStarted(taskId)),
+                                                    responseStream
+                                            ).doOnTerminate(() -> taskService.updateTaskStatusOnCompletion(taskId, null).subscribe())
+                                            .doOnError(e -> taskService.updateTaskStatusOnCompletion(taskId, e).subscribe());
+                                })
+                )
                 .onErrorResume(e -> {
                     Throwable cause = (e.getCause() != null) ? e.getCause() : e;
                     if (cause instanceof CancellationException || cause instanceof IOException) {
-                        log.warn("Соединение было разорвано клиентом. Чисто завершаем поток.");
+                        log.warn("Соединение разорвано клиентом: {}", cause.getMessage());
                         return Flux.empty();
                     }
                     log.error("Непредвиденная ошибка в потоке: {}", e.getMessage(), cause);
-                    return Flux.just(new UniversalResponse.Error("Произошла внутренняя ошибка: " + e.getMessage()));
+                    return Flux.just(new UniversalResponse.Error("Внутренняя ошибка: " + e.getMessage()));
                 });
     }
 
-    /**
-     * Находит подходящий обработчик для заданного намерения.
-     *
-     * @param intent Намерение пользователя.
-     * @return Найденный {@link IntentHandler}.
-     * @throws IllegalStateException если обработчик не найден.
-     */
     private IntentHandler findHandler(QueryIntent intent) {
         IntentHandler handler = handlerMap.get(intent);
         if (handler == null) {
-            log.error("Для намерения '{}' не найден соответствующий обработчик.", intent);
-            throw new IllegalStateException("Нет обработчика для намерения: " + intent);
+            log.error("Для намерения '{}' не найден обработчик.", intent);
+            throw new IllegalStateException("Нет обработчика для: " + intent);
         }
         return handler;
     }

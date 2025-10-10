@@ -18,7 +18,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -51,7 +50,7 @@ public class AuthTestBuilderAgent implements ToolAgent {
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         List<Map<String, String>> rules = (List<Map<String, String>>) context.payload().get("extractedRules");
 
         Map<EndpointInfo, List<String>> endpointsToPrincipals = rules.stream()
@@ -62,7 +61,7 @@ public class AuthTestBuilderAgent implements ToolAgent {
                 ));
 
         if (endpointsToPrincipals.isEmpty()) {
-            return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Не найдено защищенных эндпоинтов для генерации тестов.", Map.of()));
+            return Mono.just(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Не найдено защищенных эндпоинтов для генерации тестов.", Map.of()));
         }
 
         return Flux.fromIterable(endpointsToPrincipals.entrySet())
@@ -71,8 +70,7 @@ public class AuthTestBuilderAgent implements ToolAgent {
                 .map(generatedTests -> {
                     String summary = String.format("Генерация тестов безопасности завершена. Создано %d тестовых файлов.", generatedTests.size());
                     return new AgentResult(getName(), AgentResult.Status.SUCCESS, summary, Map.of("generatedAuthTests", generatedTests));
-                })
-                .toFuture();
+                });
     }
 
     private Mono<GeneratedTestFile> generateTestForEndpoint(EndpointInfo endpoint, List<String> requiredPrincipals) {
@@ -88,7 +86,7 @@ public class AuthTestBuilderAgent implements ToolAgent {
                 "insufficientPrincipal", INSUFFICIENT_PRINCIPAL
         ));
 
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .map(code -> new GeneratedTestFile(fileName, code));
     }
 

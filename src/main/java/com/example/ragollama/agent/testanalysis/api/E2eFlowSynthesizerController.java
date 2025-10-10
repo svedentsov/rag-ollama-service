@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агента, синтезирующего E2E-тесты.
@@ -30,11 +30,11 @@ public class E2eFlowSynthesizerController {
      * Принимает описание пользовательского сценария и запускает конвейер для синтеза E2E-теста.
      *
      * @param request DTO с описанием сценария.
-     * @return {@link CompletableFuture} с результатом, содержащим сгенерированный код.
+     * @return {@link Mono} с результатом, содержащим сгенерированный код.
      */
     @PostMapping("/synthesize")
     @Operation(summary = "Синтезировать E2E-тест из описания пользовательского сценария")
-    public CompletableFuture<List<AgentResult>> synthesizeE2eFlow(@Valid @RequestBody E2eFlowSynthesizerRequest request) {
+    public Mono<List<AgentResult>> synthesizeE2eFlow(@Valid @RequestBody E2eFlowSynthesizerRequest request) {
         return orchestratorService.invoke("e2e-flow-synthesis-pipeline", request.toAgentContext());
     }
 }

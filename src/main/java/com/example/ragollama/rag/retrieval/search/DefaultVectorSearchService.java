@@ -3,8 +3,6 @@ package com.example.ragollama.rag.retrieval.search;
 import com.example.ragollama.shared.exception.RetrievalException;
 import com.example.ragollama.shared.metrics.MetricService;
 import jakarta.annotation.Nullable;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
@@ -12,14 +10,14 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.dao.DataAccessException;
+import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 
 /**
- * Базовая реализация {@link VectorSearchService}, отвечающая исключительно
- * за прямое взаимодействие с {@link VectorStore}.
+ * Базовая реализация {@link VectorSearchService}, адаптированная для R2DBC.
  */
 @Slf4j
 @Service
@@ -28,40 +26,31 @@ public class DefaultVectorSearchService implements VectorSearchService {
 
     private final VectorStore vectorStore;
     private final MetricService metricService;
-
-    @PersistenceContext
-    private EntityManager entityManager;
+    private final DatabaseClient databaseClient;
 
     /**
      * {@inheritDoc}
      */
     @Override
-    @Transactional(readOnly = true)
-    public List<Document> search(List<String> queries, int topK, double similarityThreshold, @Nullable Filter.Expression filter, @Nullable Integer efSearch) {
+    public Mono<List<Document>> search(List<String> queries, int topK, double similarityThreshold, @Nullable Filter.Expression filter, @Nullable Integer efSearch) {
+        Mono<Void> setupMono = Mono.empty();
+
         if (efSearch != null) {
-            log.debug("Установка локального параметра hnsw.ef_search = {} для текущей транзакции.", efSearch);
-            entityManager.createNativeQuery("SET LOCAL hnsw.ef_search = :efSearch")
-                    .setParameter("efSearch", efSearch)
-                    .executeUpdate();
+            log.debug("Установка локального параметра hnsw.ef_search = {} для текущего запроса.", efSearch);
+            setupMono = databaseClient.sql("SET LOCAL hnsw.ef_search = :efSearch")
+                    .bind("efSearch", efSearch)
+                    .then();
         }
 
-        return queries.stream()
-                .parallel() // Распараллеливаем запросы для повышения производительности
-                .flatMap(query -> performSingleSearch(query, topK, similarityThreshold, filter).stream())
-                .distinct() // Удаляем дубликаты документов
-                .toList();
+        return setupMono.then(Mono.fromCallable(() ->
+                queries.stream()
+                        .parallel()
+                        .flatMap(query -> performSingleSearch(query, topK, similarityThreshold, filter).stream())
+                        .distinct()
+                        .toList()
+        ));
     }
 
-    /**
-     * Выполняет один поисковый запрос к векторному хранилищу.
-     *
-     * @param query     Текст запроса.
-     * @param topK      Количество извлекаемых документов.
-     * @param threshold Порог схожести.
-     * @param filter    Фильтр метаданных.
-     * @return Список найденных документов.
-     * @throws RetrievalException в случае ошибки доступа к данным.
-     */
     private List<Document> performSingleSearch(String query, int topK, double threshold, Filter.Expression filter) {
         try {
             SearchRequest request = SearchRequest.builder()
@@ -73,7 +62,7 @@ public class DefaultVectorSearchService implements VectorSearchService {
             return metricService.recordTimer("rag.retrieval.vectors.single",
                     () -> vectorStore.similaritySearch(request));
         } catch (DataAccessException e) {
-            log.error("Ошибка доступа к векторному хранилищу при выполнении запроса: '{}'", query, e);
+            log.error("Ошибка доступа к векторному хранилищу: '{}'", query, e);
             throw new RetrievalException("Не удалось выполнить поиск в векторном хранилище.", e);
         }
     }

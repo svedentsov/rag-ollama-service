@@ -1,43 +1,48 @@
 package com.example.ragollama.agent.buganalysis.mappers;
 
-import com.example.ragollama.agent.buganalysis.api.dto.BugAnalysisResponse;
-import com.example.ragollama.shared.exception.ProcessingException;
-import com.example.ragollama.shared.util.JsonExtractorUtil;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
+import com.example.ragollama.agent.AgentResult;
+import com.example.ragollama.agent.buganalysis.model.BugAnalysisReport;
+import com.example.ragollama.agent.buganalysis.model.BugReportSummary;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 /**
- * Компонент-маппер, отвечающий за преобразование "сырого" строкового
- * ответа от LLM в строго типизированный DTO {@link BugAnalysisResponse}.
+ * Компонент-маппер, отвечающий за преобразование внутреннего результата
+ * работы конвейера ({@link AgentResult}) в публичный DTO ответа ({@link BugAnalysisReport}).
  * <p>
- * Изоляция этой логики в отдельном классе повышает тестируемость и
- * соответствует Принципу единственной ответственности.
+ * Является "антикоррупционным слоем", изолирующим публичный API от деталей реализации агентов.
  */
 @Component
 @Slf4j
-@RequiredArgsConstructor
 public class BugAnalysisMapper {
 
-    private final ObjectMapper objectMapper;
-
     /**
-     * Надежно парсит JSON-ответ от LLM, предварительно очищая его от
-     * артефактов (Markdown, лишние пробелы) с помощью {@link JsonExtractorUtil}.
+     * Преобразует результат работы конвейера в публичный DTO.
      *
-     * @param llmResponse Сырой ответ от языковой модели.
-     * @return Десериализованный объект {@link BugAnalysisResponse}.
-     * @throws ProcessingException если парсинг не удался даже после очистки.
+     * @param results Список результатов от агентов конвейера.
+     * @return DTO {@link BugAnalysisReport} для API.
+     * @throws IllegalStateException если результат не содержит ожидаемых данных.
      */
-    public BugAnalysisResponse parse(String llmResponse) {
-        try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(llmResponse);
-            return objectMapper.readValue(cleanedJson, BugAnalysisResponse.class);
-        } catch (JsonProcessingException e) {
-            log.error("Не удалось распарсить JSON-ответ от LLM даже после очистки: {}", llmResponse, e);
-            throw new ProcessingException("LLM вернула невалидный JSON-ответ.", e);
+    @SuppressWarnings("unchecked")
+    public BugAnalysisReport toReport(List<AgentResult> results) {
+        if (results == null || results.isEmpty()) {
+            throw new IllegalStateException("Конвейер анализа багов не вернул результат.");
         }
+
+        // Берем результат последнего агента в цепочке, который содержит агрегированные данные
+        AgentResult finalResult = results.getLast();
+        var details = finalResult.details();
+
+        BugReportSummary summary = (BugReportSummary) details.get("bugReportSummary");
+        boolean isDuplicate = (boolean) details.getOrDefault("isDuplicate", false);
+        List<String> candidates = (List<String>) details.getOrDefault("candidates", List.of());
+
+        if (summary == null) {
+            throw new IllegalStateException("Результат конвейера не содержит обязательный 'bugReportSummary'.");
+        }
+
+        return new BugAnalysisReport(summary, isDuplicate, candidates);
     }
 }

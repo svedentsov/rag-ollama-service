@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Шаг RAG-конвейера, отвечающий за интеллектуальное сжатие контекста.
+ * Шаг RAG-конвейера, отвечающий за интеллектуальное сжатие контекста, адаптированный для R2DBC.
  */
 @Slf4j
 @Component
@@ -40,8 +40,11 @@ public class ContextualCompressionStep implements RagPipelineStep {
             return Mono.just(context.withCompressedContext(""));
         }
         log.info("Шаг [35] Context Compression: запуск сжатия {} документов...", documents.size());
-        taskLifecycleService.getActiveTaskForSession(context.sessionId()).ifPresent(task ->
-                taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Сжимаю найденную информацию...")));
+
+        taskLifecycleService.getActiveTaskForSession(context.sessionId())
+                .doOnNext(task -> taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Сжимаю найденную информацию...")))
+                .subscribe();
+
         String documentsForPrompt = documents.stream()
                 .map(doc -> String.format("<doc id=\"%s\">\n%s\n</doc>",
                         doc.getMetadata().get("chunkId"), doc.getText()))
@@ -51,7 +54,7 @@ public class ContextualCompressionStep implements RagPipelineStep {
                 "documents", documentsForPrompt
         ));
 
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.FASTEST))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.FASTEST, false)
                 .map(compressedText -> {
                     log.info("Контекст успешно сжат.");
                     return context.withCompressedContext(compressedText);

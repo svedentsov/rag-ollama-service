@@ -18,9 +18,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который анализирует изменения в коде и их историю для оценки
@@ -35,6 +33,7 @@ public class CustomerImpactAnalyzerAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @Override
     public String getName() {
@@ -55,18 +54,16 @@ public class CustomerImpactAnalyzerAgent implements ToolAgent {
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        List<String> changedFiles = (List<String>) context.payload().get("changedFiles");
+    public Mono<AgentResult> execute(AgentContext context) {
         String oldRef = (String) context.payload().get("oldRef");
         String newRef = (String) context.payload().get("newRef");
 
-        // Получаем diff и коммиты, затем передаем в LLM
         return gitApiClient.getDiff(oldRef, newRef)
                 .flatMap(diff -> {
                     String promptString = promptService.render("customerImpactAnalyzerPrompt", Map.of(
                             "codeDiff", diff.isBlank() ? "Изменений в коде не найдено." : diff
                     ));
-                    return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED));
+                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
                 })
                 .map(this::parseLlmResponse)
                 .map(report -> new AgentResult(
@@ -74,13 +71,12 @@ public class CustomerImpactAnalyzerAgent implements ToolAgent {
                         AgentResult.Status.SUCCESS,
                         "Анализ влияния на пользователей завершен.",
                         Map.of("customerImpactReport", report)
-                ))
-                .toFuture();
+                ));
     }
 
     private CustomerImpactReport parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, CustomerImpactReport.class);
         } catch (JsonProcessingException e) {
             throw new ProcessingException("LLM вернула невалидный JSON для отчета о влиянии на пользователей.", e);

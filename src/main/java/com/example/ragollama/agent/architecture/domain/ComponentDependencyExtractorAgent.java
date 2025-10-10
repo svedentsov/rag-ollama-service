@@ -12,10 +12,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -58,7 +58,7 @@ public class ComponentDependencyExtractorAgent implements ToolAgent {
      */
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         List<String> changedFiles = (List<String>) context.payload().get("changedFiles");
         String newRef = (String) context.payload().get("newRef");
 
@@ -73,8 +73,7 @@ public class ComponentDependencyExtractorAgent implements ToolAgent {
                         AgentResult.Status.SUCCESS,
                         "Граф зависимостей успешно построен.",
                         Map.of("dependencyGraph", graph)
-                ))
-                .toFuture();
+                ));
     }
 
     private record ParsedFile(ComponentNode node, List<String> dependencies) {}

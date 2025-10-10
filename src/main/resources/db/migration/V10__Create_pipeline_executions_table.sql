@@ -2,7 +2,7 @@
 -- Это позволяет реализовать приостановку и возобновление выполнения.
 CREATE TABLE IF NOT EXISTS pipeline_executions
 (
-    id                  UUID PRIMARY KEY,
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id          UUID,
     status              VARCHAR(50)              NOT NULL,
     plan_steps          JSONB,

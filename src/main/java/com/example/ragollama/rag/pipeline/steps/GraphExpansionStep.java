@@ -13,8 +13,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 /**
- * Шаг RAG-конвейера, который расширяет контекст, добавляя связанные сущности
- * из Графа Знаний.
+ * Шаг RAG-конвейера для расширения контекста через Граф Знаний, адаптированный для R2DBC.
  */
 @Component
 @Order(27)
@@ -39,8 +38,10 @@ public class GraphExpansionStep implements RagPipelineStep {
             return Mono.just(context);
         }
         log.info("Шаг [27] Graph Expansion: расширение контекста через Граф Знаний...");
-        taskLifecycleService.getActiveTaskForSession(context.sessionId()).ifPresent(task ->
-                taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Ищу связи в графе знаний...")));
+
+        taskLifecycleService.getActiveTaskForSession(context.sessionId())
+                .doOnNext(task -> taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Ищу связи в графе знаний...")))
+                .subscribe();
 
         return expanderService.expand(context.rerankedDocuments())
                 .map(context::withRerankedDocuments);

@@ -12,12 +12,17 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
- * Контроллер для AI-агента, анализирующего баг-репорты.
+ * Контроллер для AI-агентов, анализирующих баг-репорты.
+ * <p>
+ * Предоставляет API для выполнения сложных, многоэтапных бизнес-процессов,
+ * таких как структурирование отчета с последующим поиском дубликатов или
+ * генерация скрипта для воспроизведения. Вся логика оркестрации делегируется
+ * {@link AgentOrchestratorService}.
  */
 @RestController
 @RequestMapping("/api/v1/agents/bug-analyzer")
@@ -28,31 +33,33 @@ public class BugAnalysisController {
     private final AgentOrchestratorService orchestratorService;
 
     /**
-     * Принимает "сырой" текст баг-репорта, структурирует его и проверяет на дубликаты.
+     * Принимает "сырой" текст баг-репорта, запускает конвейер для его
+     * структурирования и проверки на дубликаты.
      *
      * @param request DTO с текстом отчета от пользователя.
-     * @return {@link CompletableFuture} с результатом, содержащим структурированный отчет и список дубликатов.
+     * @return {@link Mono} с результатом, содержащим структурированный отчет и список дубликатов.
      */
     @PostMapping("/summarize-and-check")
     @Operation(summary = "Структурировать отчет и проверить на дубликаты",
             description = "Принимает неструктурированный текст, описывающий проблему, использует LLM для " +
                     "его структурирования, а затем по улучшенному тексту ищет дубликаты.")
-    public CompletableFuture<List<AgentResult>> summarizeAndCheckBugReport(@Valid @RequestBody BugReportSummaryRequest request) {
+    public Mono<List<AgentResult>> summarizeAndCheckBugReport(@Valid @RequestBody BugReportSummaryRequest request) {
         AgentContext context = request.toAgentContext();
         return orchestratorService.invoke("bug-report-analysis-pipeline", context);
     }
 
     /**
-     * Принимает "сырой" текст бага и генерирует для него исполняемый API-тест для воспроизведения.
+     * Принимает "сырой" текст бага и запускает конвейер для генерации
+     * исполняемого API-теста для его воспроизведения.
      *
      * @param request DTO с текстом отчета от пользователя.
-     * @return {@link CompletableFuture} с результатом, содержащим сгенерированный Java-код.
+     * @return {@link Mono} с результатом, содержащим сгенерированный Java-код.
      */
     @PostMapping("/generate-repro-script")
     @Operation(summary = "Сгенерировать скрипт для воспроизведения бага",
             description = "Принимает неструктурированный текст, описывающий проблему, структурирует его " +
                     "и генерирует Java/RestAssured тест, который воспроизводит ошибку.")
-    public CompletableFuture<List<AgentResult>> generateReproScript(@Valid @RequestBody BugReportSummaryRequest request) {
+    public Mono<List<AgentResult>> generateReproScript(@Valid @RequestBody BugReportSummaryRequest request) {
         AgentContext context = request.toAgentContext();
         return orchestratorService.invoke("bug-reproduction-pipeline", context);
     }

@@ -1,7 +1,7 @@
 -- Создаем таблицу для хранения полного аудиторского следа RAG-взаимодействий.
 CREATE TABLE IF NOT EXISTS rag_audit_log
 (
-    id                UUID PRIMARY KEY,
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     request_id        VARCHAR(36),
     session_id        UUID,
     username          VARCHAR(255),

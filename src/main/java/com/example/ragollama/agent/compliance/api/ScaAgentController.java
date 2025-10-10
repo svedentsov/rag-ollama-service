@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агентов, выполняющих анализ состава ПО (SCA).
@@ -30,11 +30,11 @@ public class ScaAgentController {
      * Запускает агента для анализа лицензий зависимостей на соответствие политике.
      *
      * @param request DTO с содержимым файла сборки и политикой лицензирования.
-     * @return {@link CompletableFuture} с финальным отчетом о соответствии.
+     * @return {@link Mono} с финальным отчетом о соответствии.
      */
     @PostMapping("/scan-licenses")
     @Operation(summary = "Проверить лицензии зависимостей на соответствие политике")
-    public CompletableFuture<List<AgentResult>> scanLicenses(@Valid @RequestBody ScaRequest request) {
+    public Mono<List<AgentResult>> scanLicenses(@Valid @RequestBody ScaRequest request) {
         return orchestratorService.invoke("sca-compliance-pipeline", request.toAgentContext());
     }
 }

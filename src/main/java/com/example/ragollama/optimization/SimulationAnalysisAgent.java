@@ -13,9 +13,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Component
@@ -42,7 +42,7 @@ public class SimulationAnalysisAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String goal = (String) context.payload().get("goal");
         try {
             String resultsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(context.payload());
@@ -52,14 +52,14 @@ public class SimulationAnalysisAgent implements ToolAgent {
             ));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(report -> new AgentResult(
+                    .map(report -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,
                             "Анализ симуляции завершен.",
                             Map.of("simulationReport", report)
                     ));
         } catch (JsonProcessingException e) {
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации результатов симуляции.", e));
+            return Mono.error(new ProcessingException("Ошибка сериализации результатов симуляции.", e));
         }
     }
 }

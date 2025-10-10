@@ -2,47 +2,68 @@ package com.example.ragollama.chat.domain;
 
 import com.example.ragollama.chat.domain.model.ChatMessage;
 import com.example.ragollama.shared.aop.ResilientDatabaseOperation;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.r2dbc.repository.Query;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
-import java.util.Optional;
+import java.util.Collection;
 import java.util.UUID;
 
 /**
- * Репозиторий для управления сущностями {@link ChatMessage}.
+ * Реактивный репозиторий для управления сущностями {@link ChatMessage}.
  * <p>
- * Кастомный метод `deleteBySessionId` был удален, так как каскадное удаление
- * теперь управляется через JPA-связь в `ChatSession`.
+ * В эту версию добавлены методы для поиска дочерних сообщений и для
+ * пакетного удаления, что необходимо для реализации каскадного удаления
+ * на уровне приложения.
  */
 @Repository
-public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> {
+public interface ChatMessageRepository extends ReactiveCrudRepository<ChatMessage, UUID> {
 
     /**
-     * Находит последние N сообщений в сессии.
+     * Находит последние N сообщений в сессии, отсортированных по времени создания.
+     *
      * @param sessionId ID сессии.
-     * @param pageable Объект пагинации для ограничения.
-     * @return Список сообщений.
+     * @param limit     Максимальное количество возвращаемых сообщений.
+     * @return Реактивный поток {@link Flux} с найденными сообщениями.
      */
     @ResilientDatabaseOperation
-    @Query("SELECT m FROM ChatMessage m WHERE m.session.sessionId = :sessionId")
-    List<ChatMessage> findBySessionId(UUID sessionId, Pageable pageable);
+    @Query("SELECT * FROM chat_messages WHERE session_id = :sessionId ORDER BY created_at DESC LIMIT :limit")
+    Flux<ChatMessage> findRecentMessages(UUID sessionId, int limit);
 
     /**
-     * Находит самое последнее сообщение в сессии.
+     * Находит самое последнее сообщение в указанной сессии.
+     *
      * @param sessionId ID сессии.
-     * @return Optional с последним сообщением.
+     * @return {@link Mono} с последним сообщением или пустой, если сообщений нет.
      */
     @ResilientDatabaseOperation
-    Optional<ChatMessage> findTopBySessionSessionIdOrderByCreatedAtDesc(UUID sessionId);
+    Mono<ChatMessage> findTopBySessionIdOrderByCreatedAtDesc(UUID sessionId);
+
+    /**
+     * Находит все прямые дочерние сообщения для заданного родительского ID.
+     *
+     * @param parentId ID родительского сообщения.
+     * @return {@link Flux} с дочерними сообщениями.
+     */
+    @ResilientDatabaseOperation
+    Flux<ChatMessage> findByParentId(UUID parentId);
+
+    /**
+     * Удаляет все сообщения, идентификаторы которых находятся в предоставленной коллекции.
+     *
+     * @param ids Коллекция ID сообщений для удаления.
+     * @return {@link Mono<Void>}, который завершается после выполнения операции.
+     */
+    @ResilientDatabaseOperation
+    Mono<Void> deleteAllByIdIn(Collection<UUID> ids);
 
     @Override
     @ResilientDatabaseOperation
-    <S extends ChatMessage> S save(S entity);
+    <S extends ChatMessage> Mono<S> save(S entity);
 
     @Override
     @ResilientDatabaseOperation
-    Optional<ChatMessage> findById(UUID uuid);
+    Mono<ChatMessage> findById(UUID uuid);
 }

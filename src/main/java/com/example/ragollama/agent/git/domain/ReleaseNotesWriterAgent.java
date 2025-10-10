@@ -15,11 +15,17 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который автоматически генерирует заметки о выпуске (release notes)
  * на основе истории коммитов между двумя Git-ссылками.
+ * <p>
+ * Этот агент инкапсулирует двухэтапный процесс:
+ * <ol>
+ *     <li>Извлечение "сырых" сообщений коммитов с помощью {@link GitApiClient}.</li>
+ *     <li>Передача этих сообщений в LLM для их семантической группировки,
+ *     очистки и преобразования в человекочитаемый Markdown-отчет.</li>
+ * </ol>
  */
 @Slf4j
 @Component
@@ -30,29 +36,43 @@ public class ReleaseNotesWriterAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "release-notes-writer";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Генерирует заметки о выпуске (release notes) из истории коммитов Git.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey("oldRef") && context.payload().containsKey("newRef");
     }
 
+    /**
+     * Асинхронно выполняет полный процесс генерации заметок о выпуске.
+     *
+     * @param context Контекст, содержащий `oldRef` и `newRef`.
+     * @return {@link Mono} с результатом, содержащим сгенерированный Markdown.
+     */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String oldRef = (String) context.payload().get("oldRef");
         String newRef = (String) context.payload().get("newRef");
 
         log.info("ReleaseNotesWriterAgent: запуск генерации заметок о выпуске между {} и {}", oldRef, newRef);
 
-        // Шаг 1: Асинхронно получаем сообщения коммитов
         Mono<List<String>> commitsMono = gitApiClient.getCommitMessages(oldRef, newRef);
 
         return commitsMono.flatMap(commitMessages -> {
@@ -66,17 +86,16 @@ public class ReleaseNotesWriterAgent implements ToolAgent {
                 ));
             }
 
-            // Шаг 2: Формируем промпт и вызываем LLM
             String commitLog = String.join("\n", commitMessages);
             String promptString = promptService.render("releaseNotesWriterPrompt", Map.of("commitMessages", commitLog));
 
-            return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                     .map(releaseNotes -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,
                             "Заметки о выпуске успешно сгенерированы.",
                             Map.of("releaseNotesMarkdown", releaseNotes)
                     ));
-        }).toFuture();
+        });
     }
 }

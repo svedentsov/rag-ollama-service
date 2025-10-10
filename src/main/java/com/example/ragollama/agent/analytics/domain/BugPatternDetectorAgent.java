@@ -3,9 +3,9 @@ package com.example.ragollama.agent.analytics.domain;
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.ToolAgent;
-import com.example.ragollama.agent.buganalysis.domain.BugReportHistoryService;
 import com.example.ragollama.agent.analytics.model.BugPattern;
 import com.example.ragollama.agent.analytics.model.BugPatternReport;
+import com.example.ragollama.agent.buganalysis.domain.BugReportHistoryService;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который анализирует историю баг-репортов, кластеризует их
@@ -40,6 +39,7 @@ public class BugPatternDetectorAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @Override
     public String getName() {
@@ -57,22 +57,18 @@ public class BugPatternDetectorAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        // Параметр analysisPeriodDays пока не используется, но оставлен для будущего
+    public Mono<AgentResult> execute(AgentContext context) {
         return bugReportHistoryService.fetchAllBugReports()
                 .flatMap(allBugs -> {
-                    if (allBugs.size() < 10) { // Не запускаем анализ, если данных слишком мало
+                    if (allBugs.size() < 10) {
                         return Mono.just(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Недостаточно данных для анализа паттернов.", Map.of()));
                     }
                     List<List<Document>> clusters = clusterBugs(allBugs);
                     return analyzeClusters(clusters);
-                })
-                .toFuture();
+                });
     }
 
     private List<List<Document>> clusterBugs(List<Document> allBugs) {
-        // Mock-логика для кластеризации. В реальной системе здесь будет K-Means или DBSCAN.
-        // Для демонстрации, просто разделим на N случайных кластеров.
         log.info("Кластеризация {} баг-репортов...", allBugs.size());
         Collections.shuffle(allBugs);
         int numberOfClusters = Math.max(2, allBugs.size() / 5);
@@ -108,7 +104,7 @@ public class BugPatternDetectorAgent implements ToolAgent {
             );
             String promptString = promptService.render("bugPatternDetectorPrompt", Map.of("bug_cluster_json", clusterJson));
 
-            return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
                     .map(this::parseLlmResponse);
         } catch (JsonProcessingException e) {
             return Mono.error(new ProcessingException("Ошибка сериализации кластера багов", e));
@@ -117,7 +113,7 @@ public class BugPatternDetectorAgent implements ToolAgent {
 
     private BugPattern parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, BugPattern.class);
         } catch (JsonProcessingException e) {
             throw new ProcessingException("Bug Pattern Detector LLM вернул невалидный JSON.", e);

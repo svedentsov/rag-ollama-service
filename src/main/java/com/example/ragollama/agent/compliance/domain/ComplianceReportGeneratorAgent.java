@@ -13,10 +13,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Финальный агент в конвейере сбора доказательств для аудита.
@@ -63,7 +63,7 @@ public class ComplianceReportGeneratorAgent implements ToolAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         log.info("ComplianceReportGeneratorAgent: начало генерации финального аудиторского отчета...");
         try {
             // Создаем копию контекста, чтобы безопасно удалить большие поля
@@ -73,15 +73,16 @@ public class ComplianceReportGeneratorAgent implements ToolAgent {
 
             String evidenceJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(contextForPrompt);
             String promptString = promptService.render("complianceReportGeneratorPrompt", Map.of("evidence_json", evidenceJson));
+
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(markdownReport -> new AgentResult(
+                    .map(markdownReport -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,
                             "Отчет о соответствии для аудита успешно сгенерирован.",
                             Map.of("complianceReportMarkdown", markdownReport)
                     ));
         } catch (JsonProcessingException e) {
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации доказательств для отчета", e));
+            return Mono.error(new ProcessingException("Ошибка сериализации доказательств для отчета", e));
         }
     }
 }

@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агентов, взаимодействующих с Графом Знаний.
@@ -31,11 +31,11 @@ public class KnowledgeGraphController {
      * выполняет в графе и возвращает человекочитаемый ответ.
      *
      * @param request DTO с вопросом пользователя.
-     * @return {@link CompletableFuture} с финальным ответом.
+     * @return {@link Mono} с финальным ответом.
      */
     @PostMapping("/query")
     @Operation(summary = "Задать вопрос к графу знаний проекта")
-    public CompletableFuture<List<AgentResult>> queryKnowledgeGraph(@Valid @RequestBody KnowledgeGraphRequest request) {
+    public Mono<List<AgentResult>> queryKnowledgeGraph(@Valid @RequestBody KnowledgeGraphRequest request) {
         return orchestratorService.invoke("knowledge-aggregator-pipeline", request.toAgentContext());
     }
 }

@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агентов, отвечающих за анализ и оптимизацию
@@ -32,14 +32,12 @@ public class ResourceAllocationController {
      * и генерации рекомендаций по их оптимизации.
      *
      * @param request DTO с именем сервиса и его текущей конфигурацией ресурсов.
-     * @return {@link CompletableFuture} с финальным отчетом, содержащим
+     * @return {@link Mono} с финальным отчетом, содержащим
      * рекомендуемую конфигурацию.
      */
     @PostMapping("/analyze")
-    @Operation(summary = "Проанализировать использование ресурсов и предложить оптимизацию",
-            description = "Запускает 'resource-allocation-pipeline', который симулирует сбор исторических " +
-                    "метрик и использует AI для предложения более оптимальной конфигурации CPU/Memory.")
-    public CompletableFuture<List<AgentResult>> analyzeAndSuggest(@Valid @RequestBody ResourceAllocationRequest request) {
+    @Operation(summary = "Проанализировать использование ресурсов и предложить оптимизацию")
+    public Mono<List<AgentResult>> analyzeAndSuggest(@Valid @RequestBody ResourceAllocationRequest request) {
         return orchestratorService.invoke("resource-allocation-pipeline", request.toAgentContext());
     }
 }

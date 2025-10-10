@@ -1,25 +1,30 @@
 package com.example.ragollama.orchestration.dto;
 
+import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.codegeneration.api.dto.CodeGenerationRequest;
+import com.example.ragollama.agent.openapi.api.dto.OpenApiSourceRequest;
 import com.example.ragollama.chat.api.dto.ChatRequest;
 import com.example.ragollama.rag.api.dto.RagQueryRequest;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 /**
  * Универсальный DTO для всех входящих запросов к оркестратору.
  * <p>
- * Эта версия использует вложенный {@link RagOptions} и каскадную валидацию
- * для обеспечения надежности и чистоты API. Аннотации {@code @Schema}
- * дополнены корректными примерами для генерации правильной документации.
+ * Эта версия включает исправленный метод `toAgentContext`, который корректно
+ * собирает все возможные параметры в единый контекст для передачи
+ * в систему агентов.
  *
- * @param query      Основной текстовый запрос или инструкция от пользователя.
- * @param sessionId  Опциональный идентификатор сессии.
- * @param context    Опциональный дополнительный контекст (например, для кодогенерации).
- * @param ragOptions Опциональные, но валидируемые параметры для RAG-поиска.
+ * @param query         Основной текстовый запрос или инструкция от пользователя.
+ * @param sessionId     Опциональный идентификатор сессии.
+ * @param context       Опциональный дополнительный контекст (например, для кодогенерации).
+ * @param ragOptions    Опциональные, но валидируемые параметры для RAG-поиска.
+ * @param openApiSource Опциональный источник OpenAPI спецификации для анализа.
  */
 @Schema(description = "Универсальный DTO для запросов к AI-оркестратору")
 public record UniversalRequest(
@@ -34,9 +39,37 @@ public record UniversalRequest(
         String context,
 
         @Schema(description = "Опциональные параметры для RAG-поиска")
-        @Valid // Включает каскадную валидацию для вложенного объекта
-        RagOptions ragOptions
+        @Valid
+        RagOptions ragOptions,
+
+        @Schema(description = "Опциональный источник OpenAPI спецификации для анализа")
+        @Valid
+        OpenApiSourceRequest openApiSource
 ) {
+
+    /**
+     * Преобразует DTO в {@link AgentContext} для передачи в конвейер.
+     *
+     * @return Контекст для запуска.
+     */
+    public AgentContext toAgentContext() {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("query", query);
+        if (sessionId != null) {
+            payload.put("sessionId", sessionId);
+        }
+        if (context != null) {
+            payload.put("context", context);
+        }
+        if (ragOptions != null) {
+            payload.put("ragOptions", ragOptions);
+        }
+        if (openApiSource != null) {
+            payload.put("source", openApiSource);
+        }
+        return new AgentContext(payload);
+    }
+
     /**
      * Вложенный record для инкапсуляции и валидации RAG-параметров.
      */
@@ -49,7 +82,7 @@ public record UniversalRequest(
 
             @Schema(description = "Порог схожести (0.1-1.0)", defaultValue = "0.7", example = "0.75")
             @DecimalMin(value = "0.1", message = "similarityThreshold должен быть не меньше 0.1")
-            @Max(value = 1, message = "similarityThreshold не должен превышать 1.0")
+            @DecimalMax(value = "1.0", message = "similarityThreshold не должен превышать 1.0")
             Double similarityThreshold
     ) {
     }

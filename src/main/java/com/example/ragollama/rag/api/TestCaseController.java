@@ -15,9 +15,9 @@ import org.springframework.ai.document.Document;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер, предоставляющий API для специализированного поиска и индексации тест-кейсов.
@@ -34,14 +34,13 @@ public class TestCaseController {
     /**
      * Выполняет семантический поиск по базе проиндексированных тест-кейсов.
      *
-     * @param query Запрос на естественном языке (например, "тесты для формы авторизации").
-     * @return {@link CompletableFuture}, который по завершении будет содержать список найденных документов-тест-кейсов.
+     * @param query Запрос на естественном языке.
+     * @return {@link Mono} со списком найденных документов-тест-кейсов.
      */
     @GetMapping("/search")
-    @Operation(summary = "Найти релевантные тест-кейсы по описанию (Finder)",
-            description = "Выполняет гибридный поиск по базе знаний, отфильтрованной только по документам типа 'test_case'.")
-    public CompletableFuture<List<Document>> searchTestCases(@RequestParam @NotBlank String query) {
-        return testCaseService.findRelevantTestCases(query).toFuture();
+    @Operation(summary = "Найти релевантные тест-кейсы по описанию (Finder)")
+    public Mono<List<Document>> searchTestCases(@RequestParam @NotBlank String query) {
+        return testCaseService.findRelevantTestCases(query);
     }
 
     /**
@@ -51,11 +50,10 @@ public class TestCaseController {
      * @return {@link ResponseEntity} со статусом 202 (Accepted).
      */
     @PostMapping("/index-manual")
-    @Operation(summary = "Проиндексировать один тест-кейс вручную (Indexer)",
-            description = "Принимает исходный код теста и немедленно запускает его асинхронную индексацию в векторной базе.")
+    @Operation(summary = "Проиндексировать один тест-кейс вручную (Indexer)")
     @ApiResponse(responseCode = "202", description = "Задача на индексацию принята.")
     public ResponseEntity<Void> indexManually(@Valid @RequestBody ManualIndexRequest request) {
-        CompletableFuture.runAsync(() -> testCaseService.indexManualTestCase(request));
+        Mono.fromRunnable(() -> testCaseService.indexManualTestCase(request)).subscribe();
         return ResponseEntity.status(HttpStatus.ACCEPTED).build();
     }
 
@@ -63,12 +61,11 @@ public class TestCaseController {
      * Запускает конвейер для поиска семантических дубликатов для заданного тест-кейса.
      *
      * @param request DTO с ID и контентом тест-кейса для анализа.
-     * @return {@link CompletableFuture} с результатом, содержащим список найденных дубликатов.
+     * @return {@link Mono} с результатом, содержащим список найденных дубликатов.
      */
     @PostMapping("/find-duplicates")
-    @Operation(summary = "Найти дубликаты для заданного тест-кейса",
-            description = "Выполняет двухступенчатый анализ: сначала быстрый семантический поиск кандидатов, затем точную верификацию каждой пары с помощью LLM.")
-    public CompletableFuture<List<AgentResult>> findDuplicates(@Valid @RequestBody DeduplicationRequest request) {
+    @Operation(summary = "Найти дубликаты для заданного тест-кейса")
+    public Mono<List<AgentResult>> findDuplicates(@Valid @RequestBody DeduplicationRequest request) {
         return orchestratorService.invoke("test-case-deduplication-pipeline", request.toAgentContext());
     }
 }

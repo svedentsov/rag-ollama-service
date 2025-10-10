@@ -43,7 +43,7 @@ public class CodeGenerationService {
         ));
         Prompt prompt = new Prompt(promptString);
 
-        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.BALANCED))
+        return llmClient.callChat(prompt, ModelCapability.BALANCED)
                 .map(generatedCode -> new CodeGenerationResponse(generatedCode, "java"));
     }
 

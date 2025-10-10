@@ -11,8 +11,10 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
+/**
+ * Сервис-фасад для чата, адаптированный для работы с реактивным DialogManager.
+ */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -21,19 +23,19 @@ public class ChatApplicationService {
     private final ChatService chatService;
     private final DialogManager dialogManager;
 
-    public CompletableFuture<ChatResponse> processChatRequestAsync(ChatRequest request, UUID taskId) {
+    public Mono<ChatResponse> processChatRequestAsync(ChatRequest request, UUID taskId) {
         return dialogManager.startTurn(request.sessionId(), request.message(), MessageRole.USER)
-                .thenCompose(turnContext ->
+                .flatMap(turnContext ->
                         chatService.processChatRequestAsync(turnContext.history())
-                                .thenCompose(llmAnswer ->
+                                .flatMap(llmAnswer ->
                                         dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), llmAnswer, MessageRole.ASSISTANT, taskId)
-                                                .thenApply(v -> new ChatResponse(llmAnswer, turnContext.sessionId()))
+                                                .thenReturn(new ChatResponse(llmAnswer, turnContext.sessionId()))
                                 )
                 );
     }
 
     public Flux<String> processChatRequestStream(ChatRequest request, UUID taskId) {
-        return Mono.fromFuture(() -> dialogManager.startTurn(request.sessionId(), request.message(), MessageRole.USER))
+        return dialogManager.startTurn(request.sessionId(), request.message(), MessageRole.USER)
                 .flatMapMany(turnContext -> {
                     final StringBuilder fullResponseBuilder = new StringBuilder();
                     return chatService.processChatRequestStream(turnContext.history())
@@ -41,7 +43,7 @@ public class ChatApplicationService {
                             .doOnComplete(() -> {
                                 String fullResponse = fullResponseBuilder.toString();
                                 if (!fullResponse.isBlank()) {
-                                    dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), fullResponse, MessageRole.ASSISTANT, taskId);
+                                    dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), fullResponse, MessageRole.ASSISTANT, taskId).subscribe();
                                 }
                             });
                 });

@@ -16,7 +16,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который генерирует код для негативных API-тестов (DAST-like).
@@ -50,7 +49,7 @@ public class DastTestGeneratorAgent implements ToolAgent {
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         List<String> changedFiles = (List<String>) context.payload().get("changedFiles");
         String newRef = (String) context.payload().get("newRef");
 
@@ -63,12 +62,11 @@ public class DastTestGeneratorAgent implements ToolAgent {
                 .map(generatedTests -> {
                     String summary = "Генерация DAST-тестов завершена. Создано предложений: " + generatedTests.size();
                     return new AgentResult(getName(), AgentResult.Status.SUCCESS, summary, Map.of("generatedDastTests", generatedTests));
-                })
-                .toFuture();
+                });
     }
 
     private Mono<String> generateNegativeTestsForController(String filePath, String code) {
         String promptString = promptService.render("dastTestGeneratorPrompt", Map.of("filePath", filePath, "code", code));
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED));
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
     }
 }

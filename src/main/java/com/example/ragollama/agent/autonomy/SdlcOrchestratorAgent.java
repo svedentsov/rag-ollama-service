@@ -43,6 +43,7 @@ public class SdlcOrchestratorAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     /**
      * DTO для представления одного шага в стратегическом плане,
@@ -71,7 +72,7 @@ public class SdlcOrchestratorAgent {
                 "context", initialContext.payload()
         ));
 
-        return Mono.fromFuture(() -> llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .map(this::parseStrategicPlan)
                 .flatMap(plan -> {
                     if (plan.isEmpty()) {
@@ -81,21 +82,23 @@ public class SdlcOrchestratorAgent {
 
                     Tuple2<AgentContext, List<AgentResult>> initialState = Tuples.of(initialContext, new ArrayList<>());
 
+                    // Последовательное выполнение шагов плана с обновлением контекста
                     return Flux.fromIterable(plan)
                             .reduce(initialState, (stateTuple, step) ->
                                     executeStep(step, stateTuple.getT1())
                                             .map(results -> {
                                                 AgentContext currentContext = stateTuple.getT1();
-                                                List<AgentResult> accumulatedResults = stateTuple.getT2();
+                                                List<AgentResult> accumulatedResults = new ArrayList<>(stateTuple.getT2());
                                                 accumulatedResults.addAll(results);
+
                                                 Map<String, Object> newPayload = new HashMap<>(currentContext.payload());
                                                 if (!results.isEmpty()) {
+                                                    // Добавляем детали последнего результата в контекст для следующего шага
                                                     results.getLast().details().forEach(newPayload::putIfAbsent);
                                                 }
                                                 AgentContext newContext = new AgentContext(newPayload);
                                                 return Tuples.of(newContext, accumulatedResults);
-                                            })
-                                            .block()
+                                            }).block() // .block() здесь допустим, так как reduce работает последовательно
                             )
                             .map(Tuple2::getT2);
                 });
@@ -108,13 +111,13 @@ public class SdlcOrchestratorAgent {
             finalPayload.putAll(step.context());
         }
         AgentContext finalContext = new AgentContext(finalPayload);
-        return Mono.fromFuture(() -> orchestratorService.invoke(step.pipeline(), finalContext));
+        return orchestratorService.invoke(step.pipeline(), finalContext);
     }
 
 
     private List<StrategicPlanStep> parseStrategicPlan(String llmResponse) {
         try {
-            String json = JsonExtractorUtil.extractJsonBlock(llmResponse);
+            String json = jsonExtractorUtil.extractJsonBlock(llmResponse);
             if (json.isEmpty()) {
                 return Collections.emptyList();
             }

@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
-@Order(60) // Выполняется после извлечения цитат (50)
+@Order(60)
 @RequiredArgsConstructor
 public class TrustScoringStep implements RagPipelineStep {
 
@@ -38,6 +38,7 @@ public class TrustScoringStep implements RagPipelineStep {
     private final PromptService promptService;
     private final MetricService metricService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
@@ -50,11 +51,9 @@ public class TrustScoringStep implements RagPipelineStep {
             return Mono.just(context.withFinalAnswer(new RagAnswer(answer.answer(), answer.sourceCitations(), emptyReport)));
         }
 
-        // 1. Детерминированный анализ источников
         int recencyScore = sourceAnalyzer.analyzeRecency(context.rerankedDocuments());
         int authorityScore = sourceAnalyzer.analyzeAuthority(context.rerankedDocuments());
 
-        // 2. AI-анализ уверенности
         String contextAsString = context.rerankedDocuments().stream()
                 .map(doc -> String.format("<doc source=\"%s\">\n%s\n</doc>",
                         doc.getMetadata().get("source"), doc.getText()))
@@ -66,11 +65,9 @@ public class TrustScoringStep implements RagPipelineStep {
                 "answer", context.finalAnswer().answer()
         ));
 
-        // Используем надежную модель для получения JSON
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.FAST_RELIABLE, true))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.FAST_RELIABLE, true)
                 .map(llmResponse -> {
                     TrustScoreReport partialReport = parseLlmResponse(llmResponse);
-                    // 3. Комбинируем все оценки в финальный скор
                     int finalScore = calculateFinalScore(partialReport.confidenceScore(), recencyScore, authorityScore);
                     TrustScoreReport fullReport = new TrustScoreReport(
                             finalScore, partialReport.confidenceScore(), recencyScore,
@@ -80,7 +77,6 @@ public class TrustScoringStep implements RagPipelineStep {
                     log.info("Оценка доверия для запроса '{}': {}", context.originalQuery(), fullReport);
                     metricService.recordTrustScore(finalScore);
 
-                    // 4. Обогащаем финальный ответ
                     RagAnswer originalAnswer = context.finalAnswer();
                     RagAnswer answerWithScore = new RagAnswer(originalAnswer.answer(), originalAnswer.sourceCitations(), fullReport);
 
@@ -96,13 +92,12 @@ public class TrustScoringStep implements RagPipelineStep {
     }
 
     private int calculateFinalScore(int confidence, int recency, int authority) {
-        // Веса можно вынести в конфигурацию для гибкого тюнинга
         return (int) (confidence * 0.6 + recency * 0.2 + authority * 0.2);
     }
 
     private TrustScoreReport parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, TrustScoreReport.class);
         } catch (JsonProcessingException e) {
             throw new ProcessingException("TrustScorer LLM вернул невалидный JSON.", e);

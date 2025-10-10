@@ -16,21 +16,12 @@ ext {
     springAiVersion = '1.0.1'
     mapstructVersion = '1.5.5.Final'
     testcontainersVersion = '1.19.8'
-    jaxbApiVersion = '2.3.1'
     lombokVersion = '1.18.32'
     resilience4jVersion = '2.3.0'
     jgitVersion = '6.9.0.202403050737-r'
     swaggerParserVersion = '2.1.22'
-    flywayVersion = '11.11.1'
-    postgresqlVersion = '42.7.7'
     springdocOpenapiVersion = '2.6.0'
-    micrometerPrometheusVersion = '1.13.1'
-    contextPropagationVersion = '1.1.1'
-    jsoupVersion = '1.7.2'
-    jakartaXmlBindVersion = '4.0.2'
-    glassfishJaxbVersion = '4.0.5'
     jtokkitVersion = '1.1.0'
-    hypersistenceUtilsVersion = '3.8.1'
     javaparserVersion = '3.27.0'
     pmdVersion = '7.16.0'
     bucket4jVersion = '8.14.0'
@@ -40,6 +31,7 @@ ext {
     lombokMapstructBindingVersion = '0.2.0'
     djlVersion = '0.27.0'
     guavaVersion = '33.2.1-jre'
+    jsoupVersion = '1.17.2'
 }
 
 repositories {
@@ -58,9 +50,10 @@ dependencyManagement {
 }
 
 dependencies {
-    // --- Spring Boot Starters ---
+    // Spring Boot Starters (Reactive Stack & JDBC)
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-data-r2dbc'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-aop'
@@ -78,10 +71,10 @@ dependencies {
     implementation "ai.djl.huggingface:tokenizers:${djlVersion}"
 
     // Database & Persistence
-    runtimeOnly "org.postgresql:postgresql:${postgresqlVersion}"
-    implementation "org.flywaydb:flyway-core:${flywayVersion}"
-    implementation "org.flywaydb:flyway-database-postgresql:${flywayVersion}"
-    implementation "io.hypersistence:hypersistence-utils-hibernate-63:${hypersistenceUtilsVersion}"
+    runtimeOnly "org.postgresql:postgresql"
+    implementation 'org.postgresql:r2dbc-postgresql'
+    implementation "org.flywaydb:flyway-core"
+    implementation "org.flywaydb:flyway-database-postgresql"
 
     // Resilience & Rate Limiting
     implementation 'io.github.resilience4j:resilience4j-spring-boot3'
@@ -90,8 +83,8 @@ dependencies {
 
     // Observability & API Docs
     implementation "org.springdoc:springdoc-openapi-starter-webflux-ui:${springdocOpenapiVersion}"
-    implementation "io.micrometer:micrometer-registry-prometheus:${micrometerPrometheusVersion}"
-    implementation "io.micrometer:context-propagation:${contextPropagationVersion}"
+    implementation "io.micrometer:micrometer-registry-prometheus"
+    implementation "io.micrometer:context-propagation"
 
     // Code Generation & Utilities
     compileOnly "org.projectlombok:lombok:${lombokVersion}"
@@ -110,10 +103,11 @@ dependencies {
     implementation "com.microsoft.playwright:playwright:${playwrightVersion}"
     implementation "org.apache.commons:commons-math3:${commonsMathVersion}"
 
-    // --- УПРАВЛЕНИЕ JAXB API (ИСПРАВЛЕНО ДЛЯ СОВМЕСТИМОСТИ) ---
-    implementation "javax.xml.bind:jaxb-api:${jaxbApiVersion}"
-    implementation "jakarta.xml.bind:jakarta.xml.bind-api:${jakartaXmlBindVersion}"
-    runtimeOnly "org.glassfish.jaxb:jaxb-runtime:${glassfishJaxbVersion}"
+    // JAXB API for Java 11+ compatibility with swagger-parser and other libraries
+    implementation 'jakarta.xml.bind:jakarta.xml.bind-api:4.0.0'
+    runtimeOnly 'org.glassfish.jaxb:jaxb-runtime:4.0.2'
+    // This is the CRITICAL addition for legacy javax.* namespace compatibility
+    implementation 'javax.xml.bind:jaxb-api:2.3.1'
 
     // Testing
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
@@ -142,4 +136,7 @@ tasks.withType(Test) {
 
 bootJar {
     archiveFileName = 'app.jar'
+    from("src/main/resources/static/assets") {
+        into "static/assets"
+    }
 }

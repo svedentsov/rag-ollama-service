@@ -16,10 +16,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Агент-"Разрушитель" (Adversarial) в паре.
@@ -34,6 +34,7 @@ public class AdversarialTesterAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @Override
     public String getName() {
@@ -51,7 +52,7 @@ public class AdversarialTesterAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String requirements = (String) context.payload().get("requirementsText");
         GeneratedTestCase initialTest = (GeneratedTestCase) context.payload().get("initialTestCase");
 
@@ -63,8 +64,8 @@ public class AdversarialTesterAgent implements ToolAgent {
             ));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(this::parseLlmResponse)
-                    .thenApply(adversarialCases -> {
+                    .map(this::parseLlmResponse)
+                    .map(adversarialCases -> {
                         log.info("AdversarialTesterAgent сгенерировал {} дополнительных тестов.", adversarialCases.size());
                         return new AgentResult(
                                 getName(),
@@ -74,13 +75,13 @@ public class AdversarialTesterAgent implements ToolAgent {
                         );
                     });
         } catch (JsonProcessingException e) {
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации исходного теста", e));
+            return Mono.error(new ProcessingException("Ошибка сериализации исходного теста", e));
         }
     }
 
     private List<GeneratedTestCase> parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, new TypeReference<>() {
             });
         } catch (JsonProcessingException e) {

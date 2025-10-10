@@ -5,10 +5,10 @@ import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.ToolAgent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Простой агент-гейт, который проверяет результаты работы {@link TestPrioritizerAgent}.
@@ -38,10 +38,6 @@ public class PRTestCoverageGateAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     * <p>
-     * Этот агент зависит от результатов предыдущего агента, которые передаются
-     * через {@link AgentContext}. Поэтому он всегда готов к выполнению в рамках
-     * правильно настроенного конвейера.
      */
     @Override
     public boolean canHandle(AgentContext context) {
@@ -52,9 +48,8 @@ public class PRTestCoverageGateAgent implements ToolAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        return CompletableFuture.supplyAsync(() -> {
-            // Читаем результаты предыдущего агента из обогащенного контекста
+    public Mono<AgentResult> execute(AgentContext context) {
+        return Mono.fromCallable(() -> {
             @SuppressWarnings("unchecked")
             List<String> prioritizedTests = (List<String>) context.payload()
                     .getOrDefault("prioritizedTests", List.of());

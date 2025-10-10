@@ -22,16 +22,20 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
+/**
+ * Агент для обогащения документов метаданными (summary, keywords).
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class DocumentEnhancerAgent implements ToolAgent {
+
     private final VectorStoreCurationRepository curationRepository;
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @Override
     public String getName() {
@@ -50,32 +54,29 @@ public class DocumentEnhancerAgent implements ToolAgent {
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        // Логика для обогащения одного документа по тексту
+    public Mono<AgentResult> execute(AgentContext context) {
         if (context.payload().containsKey("document_text")) {
             return enhanceSingleDocument(context);
         }
 
-        // Существующая логика для курирования по расписанию
         List<UUID> candidateIds = (List<UUID>) context.payload().get("candidateIds");
         if (candidateIds == null || candidateIds.isEmpty()) {
-            return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Нет документов для улучшения.", Map.of()));
+            return Mono.just(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Нет документов для улучшения.", Map.of()));
         }
 
         return Flux.fromIterable(candidateIds)
                 .flatMap(this::enhanceDocumentInDb)
                 .collectList()
-                .map(results -> new AgentResult(getName(), AgentResult.Status.SUCCESS, "Обработка " + results.size() + " документов завершена.", Map.of("processedDocs", results)))
-                .toFuture();
+                .map(results -> new AgentResult(getName(), AgentResult.Status.SUCCESS, "Обработка " + results.size() + " документов завершена.", Map.of("processedDocs", results)));
     }
 
-    private CompletableFuture<AgentResult> enhanceSingleDocument(AgentContext context) {
+    private Mono<AgentResult> enhanceSingleDocument(AgentContext context) {
         String fullText = (String) context.payload().get("document_text");
         String promptString = promptService.render("documentEnhancerPrompt", Map.of("document_text", fullText));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .thenApply(this::parseLlmResponse)
-                .thenApply(metadata -> new AgentResult(
+                .map(this::parseLlmResponse)
+                .map(metadata -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,
                         "Метаданные успешно сгенерированы.",
@@ -84,25 +85,25 @@ public class DocumentEnhancerAgent implements ToolAgent {
     }
 
     private Mono<String> enhanceDocumentInDb(UUID docId) {
-        String fullText = curationRepository.getFullTextByDocumentId(docId);
-        if (fullText.isBlank()) {
-            return Mono.just("SKIPPED (empty content)");
-        }
-        String promptString = promptService.render("documentEnhancerPrompt", Map.of("document_text", fullText));
+        return curationRepository.getFullTextByDocumentId(docId)
+                .flatMap(fullText -> {
+                    if (fullText.isBlank()) {
+                        return Mono.just("SKIPPED (empty content)");
+                    }
+                    String promptString = promptService.render("documentEnhancerPrompt", Map.of("document_text", fullText));
 
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
-                .map(this::parseLlmResponse)
-                .flatMap(metadata -> {
-                    Map<String, Object> updates = Map.of(
-                            "summary", metadata.summary(),
-                            "keywords", metadata.keywords(),
-                            "last_curated_at", OffsetDateTime.now().toString()
-                    );
-                    return Mono.fromCallable(() -> {
-                        curationRepository.updateMetadataByDocumentId(docId, updates);
-                        log.info("Метаданные для документа {} успешно обновлены.", docId);
-                        return "UPDATED";
-                    });
+                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
+                            .map(this::parseLlmResponse)
+                            .flatMap(metadata -> {
+                                Map<String, Object> updates = Map.of(
+                                        "summary", metadata.summary(),
+                                        "keywords", metadata.keywords(),
+                                        "last_curated_at", OffsetDateTime.now().toString()
+                                );
+                                return curationRepository.updateMetadataByDocumentId(docId, updates)
+                                        .doOnSuccess(count -> log.info("Метаданные для документа {} успешно обновлены ({} чанков).", docId, count))
+                                        .thenReturn("UPDATED");
+                            });
                 })
                 .onErrorResume(e -> {
                     log.error("Ошибка при улучшении документа {}", docId, e);
@@ -112,7 +113,7 @@ public class DocumentEnhancerAgent implements ToolAgent {
 
     private EnhancedMetadata parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, EnhancedMetadata.class);
         } catch (JsonProcessingException e) {
             throw new ProcessingException("DocumentEnhancerAgent LLM вернул невалидный JSON.", e);

@@ -1,19 +1,22 @@
 package com.example.ragollama.agent.autonomy;
 
 import com.example.ragollama.agent.AgentContext;
+import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.optimization.WorkflowExecutionService;
 import com.example.ragollama.optimization.WorkflowPlannerAgent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
+
+import java.util.List;
 
 /**
  * Сервис-фасад, предоставляющий единую точку входа для запуска
  * автономных, высокоуровневых задач.
  * <p>
- * Этот сервис является ключевым элементом в рефакторинге L5-агентов. Он инкапсулирует
- * взаимодействие с L4-уровнем (планировщик и исполнитель), позволяя
- * L5-агентам работать в декларативном стиле, просто формулируя цель.
+ * Эта версия полностью переведена на Project Reactor и возвращает {@link Mono},
+ * позволяя вызывающей стороне асинхронно дождаться результата.
  */
 @Slf4j
 @Service
@@ -28,14 +31,13 @@ public class AutonomousGoalExecutor {
      *
      * @param goal           Задача на естественном языке от L5-агента.
      * @param initialContext Начальный контекст с данными для выполнения.
+     * @return {@link Mono} со списком финальных результатов.
      */
-    public void executeGoal(String goal, AgentContext initialContext) {
+    public Mono<List<AgentResult>> executeGoal(String goal, AgentContext initialContext) {
         log.info("Автономный исполнитель получил новую цель: '{}'", goal);
-        plannerAgent.createWorkflow(goal, initialContext.payload())
+        return plannerAgent.createWorkflow(goal, initialContext.payload())
                 .flatMap(workflow -> executionService.executeWorkflow(workflow, initialContext))
-                .subscribe(
-                        results -> log.info("Автономная цель '{}' успешно выполнена. Результатов: {}", goal, results.size()),
-                        error -> log.error("Ошибка при выполнении автономной цели '{}'", goal, error)
-                );
+                .doOnSuccess(results -> log.info("Автономная цель '{}' успешно выполнена. Результатов: {}", goal, results.size()))
+                .doOnError(error -> log.error("Ошибка при выполнении автономной цели '{}'", goal, error));
     }
 }

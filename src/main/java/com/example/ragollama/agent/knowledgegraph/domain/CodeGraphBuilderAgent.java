@@ -9,9 +9,10 @@ import com.example.ragollama.agent.knowledgegraph.model.MethodDetails;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который строит подграф знаний на основе структурного анализа кода.
@@ -53,39 +54,38 @@ public class CodeGraphBuilderAgent implements ToolAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        return CompletableFuture.supplyAsync(() -> {
-            CodeAnalysisResult analysisResult = (CodeAnalysisResult) context.payload().get("codeAnalysis");
-            String filePath = analysisResult.filePath();
+    public Mono<AgentResult> execute(AgentContext context) {
+        return Mono.fromCallable(() -> {
+                    CodeAnalysisResult analysisResult = (CodeAnalysisResult) context.payload().get("codeAnalysis");
+                    String filePath = analysisResult.filePath();
 
-            GraphNode fileNode = new GraphNode(filePath, "CodeFile", Map.of("path", filePath));
-            graphStorageService.createNode(fileNode);
+                    GraphNode fileNode = new GraphNode(filePath, "CodeFile", Map.of("path", filePath));
+                    graphStorageService.createNode(fileNode);
 
-            int methodsProcessed = 0;
-            for (MethodDetails method : analysisResult.methods()) {
-                // Создаем узел для метода
-                String methodId = filePath + "#" + method.methodName();
-                GraphNode methodNode = new GraphNode(methodId, "Method", Map.of("name", method.methodName(), "startLine", method.startLine()));
-                graphStorageService.createNode(methodNode);
-                graphStorageService.createRelationship(fileNode, methodNode, "CONTAINS");
+                    int methodsProcessed = 0;
+                    for (MethodDetails method : analysisResult.methods()) {
+                        String methodId = filePath + "#" + method.methodName();
+                        GraphNode methodNode = new GraphNode(methodId, "Method", Map.of("name", method.methodName(), "startLine", method.startLine()));
+                        graphStorageService.createNode(methodNode);
+                        graphStorageService.createRelationship(fileNode, methodNode, "CONTAINS");
 
-                // Создаем узел для коммита и связь
-                if (method.lastCommitInfo() != null) {
-                    var commitInfo = method.lastCommitInfo();
-                    GraphNode commitNode = new GraphNode(commitInfo.commitHash(), "Commit", Map.of(
-                            "message", commitInfo.commitMessage(),
-                            "author", commitInfo.authorName(),
-                            "timestamp", commitInfo.commitTime().toString()
-                    ));
-                    graphStorageService.createNode(commitNode);
-                    graphStorageService.createRelationship(commitNode, methodNode, "MODIFIES");
-                }
-                methodsProcessed++;
-            }
+                        if (method.lastCommitInfo() != null) {
+                            var commitInfo = method.lastCommitInfo();
+                            GraphNode commitNode = new GraphNode(commitInfo.commitHash(), "Commit", Map.of(
+                                    "message", commitInfo.commitMessage(),
+                                    "author", commitInfo.authorName(),
+                                    "timestamp", commitInfo.commitTime().toString()
+                            ));
+                            graphStorageService.createNode(commitNode);
+                            graphStorageService.createRelationship(commitNode, methodNode, "MODIFIES");
+                        }
+                        methodsProcessed++;
+                    }
 
-            String summary = String.format("Граф знаний обновлен для файла %s. Обработано %d методов.", filePath, methodsProcessed);
-            log.info(summary);
-            return new AgentResult(getName(), AgentResult.Status.SUCCESS, summary, Map.of());
-        });
+                    String summary = String.format("Граф знаний обновлен для файла %s. Обработано %d методов.", filePath, methodsProcessed);
+                    log.info(summary);
+                    return new AgentResult(getName(), AgentResult.Status.SUCCESS, summary, Map.of());
+                })
+                .subscribeOn(Schedulers.boundedElastic());
     }
 }

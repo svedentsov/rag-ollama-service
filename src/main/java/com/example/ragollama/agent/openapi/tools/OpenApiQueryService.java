@@ -15,16 +15,23 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Сервис-оркестратор, реализующий RAG-конвейер "на лету" для OpenAPI спецификаций.
- * <p>Создает временное, изолированное векторное хранилище в памяти для каждой
- * анализируемой спецификации, обеспечивая высокую точность и производительность.
- * Эта версия адаптирована для работы с полиморфным источником {@link OpenApiSourceRequest}.
+ * <p>
+ * Этот сервис инкапсулирует весь сложный процесс:
+ * <ol>
+ *     <li>Парсинг OpenAPI спецификации из любого источника.</li>
+ *     <li>Динамическое разбиение спецификации на семантические чанки.</li>
+ *     <li>Создание временного векторного индекса в памяти.</li>
+ *     <li>Выполнение семантического поиска по этому индексу.</li>
+ *     <li>Сборка контекста и вызов LLM для генерации ответа.</li>
+ * </ol>
+ * Все операции выполняются асинхронно с использованием Project Reactor.
  */
 @Slf4j
 @Service
@@ -38,40 +45,47 @@ public class OpenApiQueryService {
     private final PromptService promptService;
 
     /**
-     * Выполняет RAG-запрос к спецификации из любого источника.
+     * Выполняет полный RAG-запрос к спецификации из любого источника.
      *
      * @param source Источник спецификации (URL или контент).
-     * @param query  Запрос пользователя.
-     * @return {@link CompletableFuture} с ответом.
+     * @param query  Запрос пользователя на естественном языке.
+     * @return {@link Mono} с текстовым ответом, сгенерированным LLM.
      */
-    public CompletableFuture<String> querySpec(OpenApiSourceRequest source, String query) {
+    public Mono<String> querySpec(OpenApiSourceRequest source, String query) {
         log.info("Парсинг OpenAPI спецификации из источника типа: {}", source.getClass().getSimpleName());
         OpenAPI openAPI = specParser.parse(source);
         return executeRagPipeline(openAPI, query);
     }
 
     /**
-     * Выполняет полный RAG-конвейер: чанкинг, индексация в памяти, поиск и генерация.
+     * Выполняет полный RAG-конвейер "на лету".
      *
-     * @param openAPI Распарсенный объект спецификации.
-     * @param query   Запрос пользователя.
-     * @return {@link CompletableFuture} с ответом от LLM.
+     * @param openApi Распарсенный объект OpenAPI.
+     * @param query   Вопрос пользователя.
+     * @return {@link Mono} с финальным ответом.
      */
-    private CompletableFuture<String> executeRagPipeline(OpenAPI openAPI, String query) {
-        List<Document> chunks = chunker.split(openAPI);
+    private Mono<String> executeRagPipeline(OpenAPI openApi, String query) {
+        // 1. Динамическое разбиение на чанки
+        List<Document> chunks = chunker.split(openApi);
         if (chunks.isEmpty()) {
-            throw new ProcessingException("Не удалось извлечь контент из OpenAPI спецификации.");
+            return Mono.error(new ProcessingException("Не удалось извлечь контент из OpenAPI спецификации."));
         }
         log.debug("Спецификация разделена на {} чанков.", chunks.size());
+
+        // 2. Создание временного векторного индекса в памяти
         VectorStore inMemoryVectorStore = SimpleVectorStore.builder(embeddingModel).build();
         inMemoryVectorStore.add(chunks);
         log.debug("Временное in-memory хранилище создано и заполнено.");
+
+        // 3. Семантический поиск
         SearchRequest searchRequest = SearchRequest.builder()
                 .query(query)
                 .topK(5)
                 .build();
         List<Document> similarDocs = inMemoryVectorStore.similaritySearch(searchRequest);
         log.debug("Найдено {} релевантных чанков для запроса.", similarDocs.size());
+
+        // 4. Сборка промпта и генерация ответа
         String promptString = promptService.render("ragPrompt", Map.of(
                 "documents", similarDocs,
                 "question", query,

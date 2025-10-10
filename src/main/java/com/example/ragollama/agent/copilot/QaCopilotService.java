@@ -47,15 +47,6 @@ public class QaCopilotService {
 
     /**
      * Обрабатывает сообщение от пользователя в рамках сессии.
-     * <p>
-     * Этот метод реализует полный асинхронный конвейер:
-     * 1. Получает или создает сессию.
-     * 2. Сохраняет сообщение пользователя в истории.
-     * 3. Определяет намерение пользователя: является ли это новой задачей или запросом на объяснение.
-     * 4. Для новой задачи: вызывает AI-планировщик, затем исполнитель, а затем суммирует результаты.
-     * 5. Для запроса на объяснение: вызывает AI-агента-интерпретатора.
-     * 6. Обновляет сессию: добавляет ответ ассистента в историю и обогащает накопленный контекст.
-     * 7. Возвращает финальный ответ и ID сессии пользователю.
      *
      * @param request DTO с запросом от пользователя.
      * @return {@link Mono} с ответом копайлота.
@@ -66,40 +57,27 @@ public class QaCopilotService {
 
         session.addMessage(new CopilotSession.ChatMessage(CopilotSession.Role.USER, request.message()));
 
-        // Проверяем, не является ли запрос просьбой об объяснении.
         if (isExplanationRequest(request.message())) {
             return handleExplanationRequest(request, session, sessionId);
         }
 
-        // Стандартный конвейер: Планирование -> Выполнение -> Суммирование
         return planningAgentService.createPlan(request.message(), session.getAccumulatedContext())
                 .flatMap(plan -> executionService.executePlan(plan, session.toAgentContext(), sessionId))
                 .flatMap(results -> {
                     Mono<String> summaryMono = summarizeResults(request.message(), results);
                     return summaryMono.map(summary -> {
-                        // Обновляем сессию, когда у нас есть и summary, и results
                         session.addMessage(new CopilotSession.ChatMessage(CopilotSession.Role.ASSISTANT, summary));
-                        // Обновляем накопленный контекст для будущих планов
                         results.forEach(result -> session.updateContext(result.details()));
-                        // Сохраняем последний результат для возможных объяснений
                         if (!results.isEmpty()) {
                             session.setLastAgentResult(results.get(results.size() - 1));
                         }
                         sessionService.updateSession(sessionId, session);
-                        return summary; // Возвращаем summary дальше по цепочке
+                        return summary;
                     });
                 })
                 .map(summary -> new CopilotResponse(summary, sessionId));
     }
 
-    /**
-     * Обрабатывает запрос на объяснение, вызывая {@link ExplainerAgent}.
-     *
-     * @param request   Исходный запрос пользователя.
-     * @param session   Текущая сессия диалога.
-     * @param sessionId Идентификатор сессии.
-     * @return {@link Mono} с ответом, содержащим объяснение.
-     */
     private Mono<CopilotResponse> handleExplanationRequest(CopilotRequest request, CopilotSession session, UUID sessionId) {
         log.info("Обнаружен запрос на объяснение в сессии {}.", sessionId);
         AgentResult lastResult = session.getLastAgentResult();
@@ -116,7 +94,7 @@ public class QaCopilotService {
                 "technicalContext", lastResult
         ));
 
-        return Mono.fromFuture(explainerAgent.execute(explainerContext))
+        return explainerAgent.execute(explainerContext)
                 .map(explanationResult -> (String) explanationResult.details().get("explanation"))
                 .doOnNext(explanation -> {
                     session.addMessage(new CopilotSession.ChatMessage(CopilotSession.Role.ASSISTANT, explanation));
@@ -125,25 +103,12 @@ public class QaCopilotService {
                 .map(explanation -> new CopilotResponse(explanation, sessionId));
     }
 
-    /**
-     * Простая эвристика для определения, является ли сообщение запросом на объяснение.
-     *
-     * @param message Сообщение пользователя.
-     * @return {@code true}, если сообщение похоже на запрос объяснения.
-     */
     private boolean isExplanationRequest(String message) {
         String lowerCaseMsg = message.toLowerCase().trim();
         return lowerCaseMsg.startsWith("объясни") || lowerCaseMsg.startsWith("почему") ||
                 lowerCaseMsg.startsWith("растолкуй") || lowerCaseMsg.contains("что это значит");
     }
 
-    /**
-     * Преобразует "сырые" технические результаты работы агентов в человекочитаемый ответ.
-     *
-     * @param userQuery Запрос пользователя, инициировавший выполнение.
-     * @param results   Список технических результатов от агентов.
-     * @return {@link Mono} со строкой ответа в формате Markdown.
-     */
     private Mono<String> summarizeResults(String userQuery, List<AgentResult> results) {
         if (results.isEmpty()) {
             return Mono.just("Я не смог выполнить эту задачу, так как не нашел подходящих инструментов или план выполнения был пуст.");
@@ -162,7 +127,7 @@ public class QaCopilotService {
                     "userQuery", userQuery,
                     "resultsJson", resultsAsJson
             ));
-            return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED));
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
         } catch (JsonProcessingException e) {
             log.error("Не удалось сериализовать результаты агентов в JSON", e);
             return Mono.just("Произошла внутренняя ошибка при форматировании ответа.");

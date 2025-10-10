@@ -2,7 +2,7 @@
 -- Является источником данных для FinOps-аналитики и контроля квот.
 CREATE TABLE IF NOT EXISTS llm_usage_log
 (
-    id                 UUID PRIMARY KEY,
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username           VARCHAR(255)             NOT NULL,
     model_name         VARCHAR(255)             NOT NULL,
     prompt_tokens      BIGINT                   NOT NULL,

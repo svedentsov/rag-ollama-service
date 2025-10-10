@@ -14,10 +14,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -54,7 +54,7 @@ public class RiskMatrixGeneratorAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         CodeQualityImpactReport qualityReport = (CodeQualityImpactReport) context.payload().get("qualityImpactReport");
         CustomerImpactReport customerImpactReport = (CustomerImpactReport) context.payload().get("customerImpactReport");
 
@@ -62,14 +62,13 @@ public class RiskMatrixGeneratorAgent implements ToolAgent {
                 .collect(Collectors.toMap(FileQualityImpact::filePath, Function.identity()));
 
         Map<String, CustomerImpactAnalysis> impactMap = customerImpactReport.analyses().stream()
-                .collect(Collectors.toMap(analysis -> "TODO: extract file path", Function.identity())); // TODO: Need a way to link impact to file
+                .collect(Collectors.toMap(analysis -> "TODO: extract file path", Function.identity()));
 
-        // Для простоты, сопоставим по первому файлу, но в идеале CustomerImpact должен содержать filePath
         List<RiskMatrixItem> riskItems = qualityMap.entrySet().stream()
                 .map(entry -> {
                     String filePath = entry.getKey();
                     FileQualityImpact quality = entry.getValue();
-                    CustomerImpactAnalysis impact = impactMap.values().stream().findFirst().orElse(null); // Simplified mapping
+                    CustomerImpactAnalysis impact = impactMap.values().stream().findFirst().orElse(null); // Simplified
 
                     int likelihood = riskScoringService.calculateLikelihood(quality);
                     int impactScore = riskScoringService.calculateImpact(impact);
@@ -79,22 +78,22 @@ public class RiskMatrixGeneratorAgent implements ToolAgent {
                 .sorted((a, b) -> Integer.compare(b.likelihoodScore() * b.impactScore(), a.likelihoodScore() * a.impactScore()))
                 .toList();
 
-        return summarize(riskItems).thenApply(summary -> {
+        return summarize(riskItems).map(summary -> {
             RiskMatrixReport finalReport = new RiskMatrixReport(summary, riskItems);
             return new AgentResult(getName(), AgentResult.Status.SUCCESS, "Матрица рисков успешно построена.", Map.of("riskMatrixReport", finalReport));
         });
     }
 
-    private CompletableFuture<String> summarize(List<RiskMatrixItem> items) {
+    private Mono<String> summarize(List<RiskMatrixItem> items) {
         if (items.isEmpty()) {
-            return CompletableFuture.completedFuture("Изменений, требующих анализа, не найдено. Риски отсутствуют.");
+            return Mono.just("Изменений, требующих анализа, не найдено. Риски отсутствуют.");
         }
         try {
             String itemsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(items);
             String promptString = promptService.render("riskMatrixSummaryPrompt", Map.of("matrixItemsJson", itemsJson));
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
         } catch (JsonProcessingException e) {
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации элементов матрицы риска", e));
+            return Mono.error(new ProcessingException("Ошибка сериализации элементов матрицы риска", e));
         }
     }
 }

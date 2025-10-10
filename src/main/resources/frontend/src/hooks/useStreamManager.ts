@@ -3,17 +3,21 @@ import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Message, UniversalStreamResponse } from '../types';
 import { streamChatResponse } from '../api';
-import { useAddNotification } from '../state/notificationStore';
+import { useNotificationStore } from '../state/notificationStore';
 import { useSessionStore } from '../state/sessionStore';
 
 /**
  * Хук для управления множественными, параллельными потоками ответов чата.
+ * @returns {object} Объект с функциями `startStream` и `stopStream`.
  */
 export function useStreamManager() {
   const queryClient = useQueryClient();
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
-  const addNotification = useAddNotification();
+  const { addNotification } = useNotificationStore();
 
+  /**
+   * Обновляет кэш React Query на основе входящего события из потока.
+   */
   const updateQueryCache = useCallback((sessionId: string, assistantMessageId: string, event: UniversalStreamResponse) => {
     const queryKey = ['messages', sessionId];
     queryClient.setQueryData<Message[]>(queryKey, (oldData = []) =>
@@ -40,6 +44,12 @@ export function useStreamManager() {
     );
   }, [queryClient]);
 
+  /**
+   * Запускает новый поток для генерации ответа.
+   * @param {string} sessionId - ID сессии.
+   * @param {string} query - Текст запроса пользователя.
+   * @param {string} assistantMessageId - ID сообщения-плейсхолдера для ассистента.
+   */
   const startStream = useCallback(async (
     sessionId: string,
     query: string,
@@ -74,6 +84,10 @@ export function useStreamManager() {
     }
   }, [queryClient, updateQueryCache, addNotification]);
 
+  /**
+   * Останавливает генерацию ответа для конкретного сообщения.
+   * @param {string} assistantMessageId - ID сообщения ассистента, генерацию которого нужно остановить.
+   */
   const stopStream = useCallback((assistantMessageId: string) => {
     const controller = abortControllersRef.current.get(assistantMessageId);
     if (controller) {

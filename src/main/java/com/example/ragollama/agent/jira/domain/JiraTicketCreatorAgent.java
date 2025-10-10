@@ -7,9 +7,9 @@ import com.example.ragollama.agent.jira.tool.JiraApiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, выполняющий "действие" - создание тикета в Jira.
@@ -47,12 +47,6 @@ public class JiraTicketCreatorAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     * <p>
-     * Создание тикетов во внешней системе является рискованной операцией,
-     * которая может привести к "спаму". Поэтому она требует явного
-     * утверждения человеком через механизм Human-in-the-Loop.
-     *
-     * @return всегда {@code true}.
      */
     @Override
     public boolean requiresApproval() {
@@ -63,13 +57,12 @@ public class JiraTicketCreatorAgent implements ToolAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String title = (String) context.payload().get("title");
         String description = (String) context.payload().get("description");
         log.info("Запрос на создание тикета в Jira: {}", title);
-        // ВАЖНО: В реальной системе здесь будет вызов jiraApiClient.createIssue(...)
-        // Для демонстрации возвращаем mock-результат.
-        return CompletableFuture.supplyAsync(() -> {
+
+        return Mono.fromCallable(() -> {
             String mockIssueKey = "PROJ-" + (new java.util.Random().nextInt(900) + 100);
             String summary = "Тикет '" + title + "' успешно создан с ключом " + mockIssueKey;
             log.info(summary);

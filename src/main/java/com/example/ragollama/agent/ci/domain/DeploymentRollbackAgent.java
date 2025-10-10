@@ -9,9 +9,9 @@ import com.example.ragollama.agent.config.CiProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент-инструмент, инкапсулирующий логику запуска задачи отката релиза.
@@ -82,10 +82,10 @@ public class DeploymentRollbackAgent implements ToolAgent {
      * параметра SHA коммита, который предположительно вызвал инцидент.
      *
      * @param context Контекст, содержащий `culpritCommitSha`.
-     * @return {@link CompletableFuture} с результатом запуска CI-задачи.
+     * @return {@link Mono} с результатом запуска CI-задачи.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String culpritCommitSha = (String) context.payload().get("culpritCommitSha");
         String jobName = ciProperties.rollbackJobName();
         log.info("DeploymentRollbackAgent: инициирован запуск отката. Проблемный коммит: {}", culpritCommitSha);
@@ -97,7 +97,6 @@ public class DeploymentRollbackAgent implements ToolAgent {
                         AgentResult.Status.SUCCESS,
                         "Задача отката '" + jobName + "' успешно запущена в CI/CD.",
                         Map.of("ciResponse", response)
-                ))
-                .toFuture();
+                ));
     }
 }

@@ -6,9 +6,9 @@ import com.example.ragollama.agent.ToolAgent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Специализированный агент-шлюз, реализующий механизм Human-in-the-Loop.
@@ -38,30 +38,24 @@ public class HumanInTheLoopGateAgent implements ToolAgent {
     }
 
     /**
-     * Этот метод не будет вызван напрямую, так как `DynamicPipelineExecutionService`
-     * имеет специальную логику для обработки `requiresApproval()`.
-     * Но для полноты контракта мы возвращаем фиктивный результат.
+     * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String action = (String) context.payload().getOrDefault("actionToApprove", "неизвестное действие");
         log.info("HITL Gate: Формирование запроса на утверждение для действия '{}'", action);
-        return CompletableFuture.completedFuture(
+        return Mono.just(
                 new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,
                         "Ожидание утверждения для: " + action,
-                        Map.of() // Детали будут добавлены самим исполнителем
+                        Map.of()
                 )
         );
     }
 
     /**
-     * Главная особенность этого агента — он всегда требует утверждения.
-     * `DynamicPipelineExecutionService` перехватит этот флаг и приостановит
-     * выполнение конвейера *перед* вызовом метода `execute`.
-     *
-     * @return всегда {@code true}.
+     * {@inheritDoc}
      */
     @Override
     public boolean requiresApproval() {

@@ -17,10 +17,11 @@ import java.util.Optional;
 
 /**
  * Инфраструктурный сервис, инкапсулирующий логику парсинга OpenAPI спецификаций.
- * <p>Использует библиотеку {@code swagger-parser} для надежного разбора
+ * <p>
+ * Использует библиотеку {@code swagger-parser} для надежного разбора
  * спецификаций из различных источников (URL, текст) в структурированный
  * Java-объект {@link OpenAPI}. Эта версия адаптирована для работы с
- * полиморфным DTO {@link OpenApiSourceRequest}.
+ * полиморфным DTO {@link OpenApiSourceRequest} и включает Javadoc.
  */
 @Slf4j
 @Service

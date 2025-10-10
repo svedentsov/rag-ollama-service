@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 /**
- * Шаг RAG-конвейера, отвечающий за извлечение релевантных документов.
+ * Шаг RAG-конвейера для извлечения документов, адаптированный для R2DBC.
  */
 @Slf4j
 @Component
@@ -26,9 +26,11 @@ public class RetrievalStep implements RagPipelineStep {
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
         log.info("Шаг [20] Retrieval: запуск рефлексивного поиска...");
-        taskLifecycleService.getActiveTaskForSession(context.sessionId()).ifPresent(task -> {
-            taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Ищу информацию в базе знаний..."));
-        });
+
+        taskLifecycleService.getActiveTaskForSession(context.sessionId())
+                .doOnNext(task -> taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Ищу информацию в базе знаний...")))
+                .subscribe();
+
         return reflectiveRetrieverAgent.retrieve(
                         context.processedQueries(),
                         context.originalQuery(),

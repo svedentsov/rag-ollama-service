@@ -14,14 +14,7 @@ import reactor.core.scheduler.Schedulers;
 import java.util.List;
 
 /**
- * Сервис, инкапсулирующий логику полнотекстового поиска (FTS).
- * *
- * <p>Этот сервис является отказоустойчивым и кэшируемым. Он защищен
- * от временных сбоев базы данных с помощью {@link ResilientDatabaseOperation}
- * и кэширует результаты для частых запросов с помощью {@code @Cacheable}.
- * *
- * <p>Логика поиска делегируется {@link DocumentFtsRepository}, а асинхронность
- * достигается за счет выполнения блокирующего вызова в выделенном пуле потоков.
+ * Сервис FTS, адаптированный для работы с реактивным репозиторием.
  */
 @Slf4j
 @Service
@@ -38,7 +31,7 @@ public class FtsSearchService {
      * @return {@link Mono} со списком найденных документов.
      */
     public Mono<List<Document>> search(String query) {
-        return Mono.fromCallable(() -> searchSync(query))
+        return searchAsync(query)
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -54,7 +47,7 @@ public class FtsSearchService {
      */
     @Cacheable("fts_search_results")
     @ResilientDatabaseOperation
-    public List<Document> searchSync(String query) {
+    public Mono<List<Document>> searchAsync(String query) {
         log.info("Промах кэша FTS. Выполнение полнотекстового поиска для: '{}'", query);
         int ftsTopK = retrievalProperties.hybrid().fts().topK();
         return ftsRepository.searchByKeywords(query, ftsTopK);

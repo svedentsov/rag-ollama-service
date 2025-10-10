@@ -11,10 +11,10 @@ import reactor.core.publisher.Mono;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
- * AI-агент, который оркестрирует A/B-тестирование для одной новой версии промпта.
+ * AI-агент, который оркестрирует запуск A/B-тестов для различных
+ * конфигураций RAG-конвейера, собирая результаты для последующего анализа.
  */
 @Slf4j
 @Component
@@ -49,17 +49,16 @@ public class PromptTestManagerAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     * <p>
-     * Асинхронно и параллельно запускает два прогона оценки: один для
-     * базовой версии промпта, другой для новой.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String promptName = (String) context.payload().get("promptName");
         String newPromptContent = (String) context.payload().get("newPromptContent");
         log.info("Запуск A/B-теста для промпта '{}'", promptName);
+
         Mono<EvaluationResult> baselineMono = evaluationRunner.runWithPromptOverride(promptName, null);
         Mono<EvaluationResult> variantMono = evaluationRunner.runWithPromptOverride(promptName, newPromptContent);
+
         return Mono.zip(baselineMono, variantMono)
                 .map(tuple -> {
                     Map<String, Object> results = new HashMap<>();
@@ -72,7 +71,6 @@ public class PromptTestManagerAgent implements ToolAgent {
                             "A/B-тестирование промпта завершено.",
                             Map.of("experimentResults", results)
                     );
-                })
-                .toFuture();
+                });
     }
 }

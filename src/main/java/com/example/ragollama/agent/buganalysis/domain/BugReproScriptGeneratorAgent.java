@@ -11,9 +11,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который генерирует исполняемый скрипт для воспроизведения бага.
@@ -51,7 +51,6 @@ public class BugReproScriptGeneratorAgent implements ToolAgent {
      */
     @Override
     public boolean canHandle(AgentContext context) {
-        // Этот агент зависит от результата работы Summarizer-агента
         return context.payload().get("bugReportSummary") instanceof BugReportSummary;
     }
 
@@ -59,17 +58,17 @@ public class BugReproScriptGeneratorAgent implements ToolAgent {
      * Асинхронно выполняет генерацию кода теста.
      *
      * @param context Контекст, содержащий структурированный {@link BugReportSummary}.
-     * @return {@link CompletableFuture} с результатом, содержащим сгенерированный Java-код.
+     * @return {@link Mono} с результатом, содержащим сгенерированный Java-код.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         BugReportSummary summary = (BugReportSummary) context.payload().get("bugReportSummary");
         log.info("BugReproScriptGeneratorAgent: запуск генерации скрипта для '{}'", summary.title());
 
         String promptString = promptService.render("bugReproScriptGeneratorPrompt", Map.of("summary", summary));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .thenApply(generatedCode -> new AgentResult(
+                .map(generatedCode -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,
                         "Скрипт для воспроизведения бага успешно сгенерирован.",

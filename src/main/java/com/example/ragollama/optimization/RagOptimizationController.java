@@ -8,10 +8,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для запуска AI-агентов, отвечающих за оптимизацию RAG-системы.
@@ -27,14 +27,11 @@ public class RagOptimizationController {
     /**
      * Запускает мета-агента для анализа производительности RAG и генерации предложений по оптимизации.
      *
-     * @return {@link CompletableFuture} с отчетом, содержащим рекомендации.
+     * @return {@link Mono} с отчетом, содержащим рекомендации.
      */
     @PostMapping("/rag/suggest-improvements")
-    @Operation(summary = "Проанализировать производительность RAG и предложить улучшения",
-            description = "Запускает 'rag-optimizer-pipeline', который собирает метрики, фидбэк, " +
-                    "анализирует их и генерирует конкретные предложения по тюнингу `application.yml`.")
-    public CompletableFuture<List<AgentResult>> suggestRagImprovements() {
-        // Начальный контекст пуст, так как агент сам собирает все необходимые данные.
+    @Operation(summary = "Проанализировать производительность RAG и предложить улучшения")
+    public Mono<List<AgentResult>> suggestRagImprovements() {
         return orchestratorService.invoke("rag-optimizer-pipeline", new com.example.ragollama.agent.AgentContext(Map.of()));
     }
 }

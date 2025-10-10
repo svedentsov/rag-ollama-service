@@ -1,25 +1,27 @@
 package com.example.ragollama.chat.domain;
 
+import com.example.ragollama.chat.domain.model.ChatMessage;
 import com.example.ragollama.chat.domain.model.ChatSession;
 import com.example.ragollama.shared.config.properties.AppProperties;
 import com.example.ragollama.shared.exception.AccessDeniedException;
+import com.example.ragollama.shared.exception.ResourceNotFoundException;
 import com.example.ragollama.shared.task.TaskLifecycleService;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Collections;
-import java.util.List;
 import java.util.UUID;
 
 /**
- * Доменный сервис для управления жизненным циклом сессий чата.
+ * Доменный сервис для управления жизненным циклом сессий чата, адаптированный для R2DBC.
+ * <p>
+ * Отвечает за создание, поиск, обновление и удаление сессий, а также за
+ * проверку прав доступа текущего пользователя к этим сессиям.
  */
 @Service
 @Transactional
@@ -32,17 +34,29 @@ public class ChatSessionService {
     private final AppProperties appProperties;
     private final TaskLifecycleService taskLifecycleService;
 
+    /**
+     * Получает все сессии чата для текущего пользователя, обогащая их
+     * информацией о последнем сообщении.
+     *
+     * @return {@link Flux} с DTO сессий чата.
+     */
     @Transactional(readOnly = true)
-    public List<ChatSession> getChatsForCurrentUser() {
-        List<ChatSession> sessions = chatSessionRepository.findByUserNameOrderByUpdatedAtDesc(getCurrentUsername());
-        sessions.forEach(session ->
-                chatMessageRepository.findTopBySessionSessionIdOrderByCreatedAtDesc(session.getSessionId())
-                        .ifPresent(session::setLastMessage)
-        );
-        return sessions;
+    public Flux<ChatSession> getChatsForCurrentUser() {
+        return chatSessionRepository.findByUserNameOrderByUpdatedAtDesc(getCurrentUsername())
+                .flatMap(session ->
+                        chatMessageRepository.findTopBySessionIdOrderByCreatedAtDesc(session.getSessionId())
+                                .doOnNext(session::setLastMessage)
+                                .thenReturn(session)
+                                .defaultIfEmpty(session)
+                );
     }
 
-    public ChatSession createNewChat() {
+    /**
+     * Создает новую сессию чата для текущего пользователя.
+     *
+     * @return {@link Mono} с созданной сущностью {@link ChatSession}.
+     */
+    public Mono<ChatSession> createNewChat() {
         String username = getCurrentUsername();
         String defaultName = "Новый чат от " + OffsetDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
         ChatSession newSession = ChatSession.builder()
@@ -52,66 +66,130 @@ public class ChatSessionService {
         return chatSessionRepository.save(newSession);
     }
 
-    public ChatSession findOrCreateSession(UUID sessionId) {
+    /**
+     * Находит существующую сессию по ID или создает новую, если ID не предоставлен.
+     *
+     * @param sessionId Опциональный ID сессии.
+     * @return {@link Mono} с найденной или созданной сессией.
+     */
+    public Mono<ChatSession> findOrCreateSession(UUID sessionId) {
         if (sessionId == null) {
             return createNewChat();
         }
         return findAndVerifyOwnership(sessionId);
     }
 
-    public void updateChatName(UUID sessionId, String newName) {
-        ChatSession session = findAndVerifyOwnership(sessionId);
-        session.setChatName(newName);
-        chatSessionRepository.save(session);
+    /**
+     * Обновляет имя сессии чата после проверки прав доступа.
+     *
+     * @param sessionId ID сессии.
+     * @param newName   Новое имя.
+     * @return {@link Mono}, завершающийся после сохранения.
+     */
+    public Mono<Void> updateChatName(UUID sessionId, String newName) {
+        return findAndVerifyOwnership(sessionId)
+                .flatMap(session -> {
+                    session.setChatName(newName);
+                    return chatSessionRepository.save(session);
+                })
+                .then();
     }
 
     /**
-     * Атомарно обновляет выбор активной ветки для сессии.
-     * @param sessionId ID сессии.
-     * @param parentMessageId ID родительского сообщения (вопроса).
-     * @param activeChildId ID выбранного дочернего сообщения (ответа).
+     * Устанавливает активную ветку для родительского сообщения в сессии.
+     *
+     * @param sessionId       ID сессии.
+     * @param parentMessageId ID родительского сообщения.
+     * @param activeChildId   ID выбранного дочернего сообщения.
+     * @return {@link Mono}, завершающийся после сохранения.
      */
-    public void setActiveBranch(UUID sessionId, UUID parentMessageId, UUID activeChildId) {
-        ChatSession session = findAndVerifyOwnership(sessionId);
-        session.getActiveBranches().put(parentMessageId.toString(), activeChildId.toString());
-        chatSessionRepository.save(session);
-        log.debug("В сессии {} для родителя {} выбрана активная ветка {}", sessionId, parentMessageId, activeChildId);
+    public Mono<Void> setActiveBranch(UUID sessionId, UUID parentMessageId, UUID activeChildId) {
+        return findAndVerifyOwnership(sessionId)
+                .flatMap(session -> {
+                    session.getActiveBranches().put(parentMessageId.toString(), activeChildId.toString());
+                    return chatSessionRepository.save(session);
+                })
+                .doOnSuccess(s -> log.debug("В сессии {} для родителя {} выбрана активная ветка {}", sessionId, parentMessageId, activeChildId))
+                .then();
     }
 
-    public void deleteChat(UUID sessionId) {
-        ChatSession session = chatSessionRepository.findByIdWithLock(sessionId)
-                .orElseThrow(() -> new EntityNotFoundException("Чат с ID " + sessionId + " не найден."));
-        if (!session.getUserName().equals(getCurrentUsername())) {
-            throw new AccessDeniedException("У вас нет доступа к этому чату.");
-        }
-        taskLifecycleService.getActiveTaskForSession(sessionId).ifPresent(task -> {
-            log.warn("Чат {} удаляется, отменяем связанную с ним активную задачу {}.", sessionId, task.getId());
-            taskLifecycleService.cancel(task.getId());
-        });
-        chatSessionRepository.delete(session);
-        log.info("Чат {} и все его сообщения были успешно удалены.", sessionId);
+    /**
+     * Удаляет сессию чата и все связанные с ней сообщения.
+     * <p>
+     * Перед удалением отменяет любую активную асинхронную задачу, связанную с этой сессией.
+     * Каскадное удаление сообщений делегировано базе данных через `ON DELETE CASCADE`.
+     *
+     * @param sessionId ID сессии для удаления.
+     * @return {@link Mono}, завершающийся после удаления.
+     */
+    public Mono<Void> deleteChat(UUID sessionId) {
+        return findAndVerifyOwnership(sessionId)
+                .flatMap(session ->
+                        taskLifecycleService.getActiveTaskForSession(sessionId)
+                                .doOnNext(task -> {
+                                    log.warn("Чат {} удаляется, отменяем связанную задачу {}.", sessionId, task.getId());
+                                    taskLifecycleService.cancel(task.getId()).subscribe();
+                                })
+                                .then(chatSessionRepository.delete(session))
+                                .doOnSuccess(v -> log.info("Чат {} и все связанные с ним сообщения были успешно удалены базой данных.", sessionId))
+                );
     }
 
+    /**
+     * Получает историю сообщений для указанной сессии после проверки прав доступа.
+     * <p>
+     * Этот метод сначала проверяет, существует ли сессия и принадлежит ли она
+     * пользователю, и только затем запрашивает сообщения. Если сообщений нет,
+     * он корректно возвращает пустой поток, а не ошибку.
+     *
+     * @param sessionId ID сессии.
+     * @return {@link Flux} сообщений, отсортированных от старых к новым.
+     */
     @Transactional(readOnly = true)
-    public List<com.example.ragollama.chat.domain.model.ChatMessage> getMessagesForSession(UUID sessionId) {
-        findAndVerifyOwnership(sessionId);
-        int historySize = appProperties.chat().history().maxMessages();
-        PageRequest pageRequest = PageRequest.of(0, historySize, Sort.by(Sort.Direction.DESC, "createdAt"));
-        List<com.example.ragollama.chat.domain.model.ChatMessage> recentMessages = chatMessageRepository.findBySessionId(sessionId, pageRequest);
-        Collections.reverse(recentMessages);
-        return recentMessages;
+    public Flux<ChatMessage> getMessagesForSession(UUID sessionId) {
+        return findAndVerifyOwnership(sessionId)
+                .thenMany(Flux.defer(() -> {
+                    int historySize = appProperties.chat().history().maxMessages();
+                    return chatMessageRepository.findRecentMessages(sessionId, historySize)
+                            .collectList()
+                            .flatMapMany(list -> {
+                                java.util.Collections.reverse(list); // findRecentMessages возвращает в DESC порядке
+                                return Flux.fromIterable(list);
+                            });
+                }));
     }
 
-    public ChatSession findAndVerifyOwnership(UUID sessionId) {
-        ChatSession session = chatSessionRepository.findById(sessionId)
-                .orElseThrow(() -> new EntityNotFoundException("Чат с ID " + sessionId + " не найден."));
-        if (!session.getUserName().equals(getCurrentUsername())) {
-            throw new AccessDeniedException("У вас нет доступа к этому чату.");
-        }
-        return session;
+    /**
+     * Находит сессию по ID и проверяет, что она принадлежит текущему пользователю.
+     * <p>
+     * Является ключевым методом для обеспечения безопасности и изоляции данных.
+     *
+     * @param sessionId ID сессии.
+     * @return {@link Mono} с сущностью сессии, если проверка пройдена. В противном
+     * случае завершается ошибкой {@link ResourceNotFoundException} или {@link AccessDeniedException}.
+     */
+    public Mono<ChatSession> findAndVerifyOwnership(UUID sessionId) {
+        return chatSessionRepository.findById(sessionId)
+                .switchIfEmpty(Mono.error(new ResourceNotFoundException("Чат с ID " + sessionId + " не найден.")))
+                .handle((session, sink) -> {
+                    if (!session.getUserName().equals(getCurrentUsername())) {
+                        sink.error(new AccessDeniedException("У вас нет доступа к этому чату."));
+                    } else {
+                        sink.next(session);
+                    }
+                });
     }
 
+    /**
+     * Возвращает имя текущего аутентифицированного пользователя.
+     * <p>
+     * ВАЖНО: В текущей реализации используется заглушка. В production-системе
+     * здесь должна быть интеграция с Spring Security для получения реального пользователя.
+     *
+     * @return Имя пользователя.
+     */
     private String getCurrentUsername() {
+        // TODO: Заменить на реальную логику аутентификации из Spring Security
         return "default-user";
     }
 }

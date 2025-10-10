@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агентов, отвечающих за анализ данных наблюдаемости.
@@ -30,12 +30,11 @@ public class ObservabilityController {
      * Запускает конвейер для сбора и анализа данных распределенной трассировки.
      *
      * @param request DTO с ID запроса для анализа.
-     * @return {@link CompletableFuture} с финальным отчетом о производительности.
+     * @return {@link Mono} с финальным отчетом о производительности.
      */
     @PostMapping("/analyze-trace")
-    @Operation(summary = "Проанализировать распределенный трейс для запроса",
-            description = "Имитирует сбор данных из Jaeger/Zipkin и использует AI для поиска узких мест.")
-    public CompletableFuture<List<AgentResult>> analyzeTrace(@Valid @RequestBody TraceAnalysisRequest request) {
+    @Operation(summary = "Проанализировать распределенный трейс для запроса")
+    public Mono<List<AgentResult>> analyzeTrace(@Valid @RequestBody TraceAnalysisRequest request) {
         return orchestratorService.invoke("observability-analysis-pipeline", request.toAgentContext());
     }
 }

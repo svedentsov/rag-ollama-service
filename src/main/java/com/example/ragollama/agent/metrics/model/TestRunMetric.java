@@ -1,20 +1,18 @@
 package com.example.ragollama.agent.metrics.model;
 
-import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * Сущность JPA, представляющая агрегированные метрики одного тестового прогона.
- * <p>
- * Каждая запись в таблице {@code test_run_metrics} является "слепком"
- * одного запуска тестов в CI/CD, содержащим ключевые показатели для
- * последующего анализа.
+ * Сущность TestRunMetric, адаптированная для R2DBC.
  */
-@Entity
-@Table(name = "test_run_metrics")
+@Table("test_run_metrics")
 @Getter
 @Setter
 @Builder
@@ -22,54 +20,34 @@ import java.util.UUID;
 @AllArgsConstructor
 public class TestRunMetric {
 
-    /**
-     * Уникальный идентификатор записи.
-     */
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    /**
-     * SHA-хэш коммита, для которого был выполнен запуск.
-     */
+    @Column("commit_hash")
     private String commitHash;
 
-    /**
-     * Имя ветки, для которой был выполнен запуск.
-     */
+    @Column("branch_name")
     private String branchName;
 
-    /**
-     * Общее количество выполненных тестов.
-     */
+    @Column("total_count")
     private int totalCount;
 
-    /**
-     * Количество успешно пройденных тестов.
-     */
+    @Column("passed_count")
     private int passedCount;
 
-    /**
-     * Количество упавших тестов.
-     */
+    @Column("failed_count")
     private int failedCount;
 
-    /**
-     * Количество пропущенных тестов.
-     */
+    @Column("skipped_count")
     private int skippedCount;
 
-    /**
-     * Общая продолжительность выполнения тестового набора в миллисекундах.
-     */
+    @Column("duration_ms")
     private long durationMs;
 
-    /**
-     * Временная метка завершения тестового прогона.
-     */
-    @Column(nullable = false, updatable = false)
+    @CreatedDate
+    @Column("run_timestamp")
     private OffsetDateTime runTimestamp;
 
-    @Column(nullable = false)
+    @Column("project_id")
     private String projectId;
 }

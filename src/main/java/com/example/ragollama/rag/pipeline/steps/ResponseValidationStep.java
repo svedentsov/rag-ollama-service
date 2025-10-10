@@ -25,7 +25,11 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Шаг RAG-конвейера, выполняющий роль "AI-Критика".
+ * Шаг RAG-конвейера "AI-Критик", отвечающий за валидацию сгенерированного ответа.
+ * <p>
+ * Этот шаг выполняется опционально (управляется через `application.yml`) и использует
+ * LLM для проверки ответа на предмет галлюцинаций, полноты и корректности цитат.
+ * Он добавляет отчет о валидации в финальный {@link RagAnswer}.
  */
 @Component
 @Order(70)
@@ -37,34 +41,61 @@ public class ResponseValidationStep implements RagPipelineStep {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
     private final TaskLifecycleService taskLifecycleService;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
-    public ResponseValidationStep(LlmClient llmClient, PromptService promptService, ObjectMapper objectMapper, AppProperties appProperties, TaskLifecycleService taskLifecycleService) {
+    /**
+     * Конструктор для внедрения всех необходимых зависимостей.
+     *
+     * @param llmClient              Клиент для взаимодействия с LLM.
+     * @param promptService          Сервис для рендеринга шаблонов промптов.
+     * @param objectMapper           Маппер для работы с JSON.
+     * @param appProperties          Конфигурация приложения для условной активации.
+     * @param taskLifecycleService   Сервис для управления задачами и отправки статусов.
+     * @param jsonExtractorUtil      Утилита для надежного извлечения JSON из текста.
+     */
+    public ResponseValidationStep(
+            LlmClient llmClient,
+            PromptService promptService,
+            ObjectMapper objectMapper,
+            AppProperties appProperties,
+            TaskLifecycleService taskLifecycleService,
+            JsonExtractorUtil jsonExtractorUtil
+    ) {
         this.llmClient = llmClient;
         this.promptService = promptService;
         this.objectMapper = objectMapper;
         this.taskLifecycleService = taskLifecycleService;
+        this.jsonExtractorUtil = jsonExtractorUtil;
         if (appProperties.rag().validation().enabled()) {
             log.info("Активирован шаг конвейера: ResponseValidationStep (AI-Критик)");
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
         if (context.finalAnswer() == null || context.finalAnswer().answer().isBlank() || context.rerankedDocuments().isEmpty()) {
             return Mono.just(context);
         }
         log.info("Шаг [70] Response Validation: запуск AI-критика...");
-        taskLifecycleService.getActiveTaskForSession(context.sessionId()).ifPresent(task ->
-                taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Проверяю ответ на галлюцинации...")));
+
+        taskLifecycleService.getActiveTaskForSession(context.sessionId())
+                .doOnNext(task -> taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Проверяю ответ на галлюцинации...")))
+                .subscribe();
+
         String contextForPrompt = context.rerankedDocuments().stream()
                 .map(doc -> String.format("<doc id=\"%s\">%s</doc>", doc.getMetadata().get("chunkId"), doc.getText()))
                 .collect(Collectors.joining("\n\n"));
+
         String promptString = promptService.render("responseValidatorPrompt", Map.of(
                 "question", context.originalQuery(),
                 "context", contextForPrompt,
                 "answer", context.finalAnswer().answer()
         ));
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true))
+
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
                 .map(this::parseLlmResponse)
                 .map(validationReport -> {
                     if (!validationReport.isValid()) {
@@ -85,7 +116,7 @@ public class ResponseValidationStep implements RagPipelineStep {
 
     private ValidationReport parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, ValidationReport.class);
         } catch (JsonProcessingException e) {
             throw new ProcessingException("Response Validator LLM вернул невалидный JSON.", e);

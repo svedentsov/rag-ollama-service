@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агентов, анализирующих инженерные процессы и производительность.
@@ -30,11 +30,11 @@ public class EngineeringController {
      * Запускает "Губернатора Инженерной Производительности" для анализа SDLC.
      *
      * @param request DTO с параметрами анализа.
-     * @return {@link CompletableFuture} с финальным отчетом об эффективности.
+     * @return {@link Mono} с финальным отчетом об эффективности.
      */
     @PostMapping("/analyze-velocity")
     @Operation(summary = "Проанализировать производительность SDLC (AI VP of Engineering)")
-    public CompletableFuture<List<AgentResult>> analyzeEngineeringVelocity(@Valid @RequestBody EngineeringVelocityRequest request) {
+    public Mono<List<AgentResult>> analyzeEngineeringVelocity(@Valid @RequestBody EngineeringVelocityRequest request) {
         return orchestratorService.invoke("engineering-velocity-pipeline", request.toAgentContext());
     }
 }

@@ -8,9 +8,9 @@ import com.example.ragollama.agent.git.tools.GitApiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент для инспекции Git-репозитория.
@@ -59,18 +59,17 @@ public class GitInspectorAgent implements ToolAgent {
      * Асинхронно выполняет анализ Git diff.
      *
      * @param context Контекст, содержащий `oldRef` и `newRef`.
-     * @return {@link CompletableFuture} с результатом, содержащим список измененных файлов.
+     * @return {@link Mono} с результатом, содержащим список измененных файлов.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String oldRef = (String) context.payload().get(OLD_REF_KEY);
         String newRef = (String) context.payload().get(NEW_REF_KEY);
 
         log.info("GitInspectorAgent: запуск анализа изменений между {} и {}", oldRef, newRef);
 
         return gitApiClient.getChangedFiles(oldRef, newRef)
-                .toFuture()
-                .thenApply(changedFiles -> {
+                .map(changedFiles -> {
                     String summary = String.format("Анализ завершен. Найдено %d измененных файлов между '%s' и '%s'.",
                             changedFiles.size(), oldRef, newRef);
                     log.info(summary);

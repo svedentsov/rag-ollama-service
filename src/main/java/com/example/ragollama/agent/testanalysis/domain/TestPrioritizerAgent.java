@@ -7,28 +7,20 @@ import com.example.ragollama.rag.domain.TestCaseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Интеллектуальный агент, который анализирует git diff и предлагает
  * приоритетный список тестов для запуска, используя семантический поиск.
- * <p>
- * Этот агент больше не использует примитивное сопоставление имен. Вместо этого,
- * он делегирует поиск специализированному {@link TestCaseService}, который
- * выполняет RAG-поиск по базе тест-кейсов, используя содержимое
- * измененного кода в качестве поискового запроса.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class TestPrioritizerAgent implements ToolAgent {
 
-    /**
-     * Константа для ключа в контексте агента, содержащего diff.
-     */
     public static final String GIT_DIFF_CONTENT_KEY = "gitDiffContent";
     private final TestCaseService testCaseService;
 
@@ -60,10 +52,10 @@ public class TestPrioritizerAgent implements ToolAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String diffContent = (String) context.payload().get(GIT_DIFF_CONTENT_KEY);
         if (diffContent == null || diffContent.isBlank()) {
-            return CompletableFuture.completedFuture(new AgentResult(
+            return Mono.just(new AgentResult(
                     getName(),
                     AgentResult.Status.SUCCESS,
                     "Изменения в коде не найдены, приоритизация тестов не требуется.",
@@ -71,7 +63,6 @@ public class TestPrioritizerAgent implements ToolAgent {
             ));
         }
 
-        // Используем наш RAG-сервис для поиска релевантных тест-кейсов
         return testCaseService.findRelevantTestCases(diffContent)
                 .map(foundDocuments -> {
                     List<String> testNames = foundDocuments.stream()
@@ -88,6 +79,6 @@ public class TestPrioritizerAgent implements ToolAgent {
                             summary,
                             Map.of("prioritizedTests", testNames)
                     );
-                }).toFuture();
+                });
     }
 }

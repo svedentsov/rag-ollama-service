@@ -8,12 +8,13 @@ import com.example.ragollama.optimization.model.WorkflowNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -41,43 +42,56 @@ public class WorkflowExecutionService {
         }
         Map<String, WorkflowNode> nodeMap = workflow.stream()
                 .collect(Collectors.toMap(WorkflowNode::id, Function.identity()));
-        Map<String, CompletableFuture<AgentResult>> memo = new HashMap<>();
-        List<CompletableFuture<AgentResult>> allFutures = workflow.stream()
+        // Мемоизация (кэширование) результатов выполнения каждого узла
+        Map<String, Mono<AgentResult>> memo = new HashMap<>();
+        // Запускаем выполнение для каждого узла графа
+        List<Mono<AgentResult>> allNodeMonos = workflow.stream()
                 .map(node -> executeNode(node, nodeMap, memo, initialContext))
                 .toList();
-        return Mono.fromFuture(CompletableFuture.allOf(allFutures.toArray(new CompletableFuture[0]))
-                .thenApply(v -> allFutures.stream()
-                        .map(CompletableFuture::join)
-                        .collect(Collectors.toList())));
+        // Собираем результаты всех узлов после их завершения
+        return Flux.merge(allNodeMonos).collectList();
     }
 
-    private CompletableFuture<AgentResult> executeNode(
+    private Mono<AgentResult> executeNode(
             WorkflowNode node,
             Map<String, WorkflowNode> nodeMap,
-            Map<String, CompletableFuture<AgentResult>> memo,
+            Map<String, Mono<AgentResult>> memo,
             AgentContext initialContext) {
+        // Проверяем кэш. Если Mono для этого узла уже создан, возвращаем его.
         if (memo.containsKey(node.id())) {
             return memo.get(node.id());
         }
-        List<CompletableFuture<AgentResult>> dependencyFutures = node.dependencies().stream()
+        // Собираем Mono's для всех зависимостей этого узла
+        List<Mono<AgentResult>> dependencyMonos = node.dependencies().stream()
                 .map(depId -> nodeMap.get(depId))
                 .map(depNode -> executeNode(depNode, nodeMap, memo, initialContext))
                 .toList();
-        CompletableFuture<Void> allDependencies = CompletableFuture.allOf(dependencyFutures.toArray(new CompletableFuture[0]));
-        CompletableFuture<AgentResult> currentNodeFuture = allDependencies.thenComposeAsync(v -> {
-            Map<String, Object> newContextPayload = new HashMap<>(initialContext.payload());
-            dependencyFutures.forEach(future -> {
-                AgentResult depResult = future.join();
-                newContextPayload.putAll(depResult.details());
-            });
-            newContextPayload.putAll(node.arguments());
-            AgentContext finalContext = new AgentContext(newContextPayload);
-            QaAgent agent = toolRegistryService.getAgent(node.agentName())
-                    .orElseThrow(() -> new IllegalStateException("Агент не найден: " + node.agentName()));
-            log.info("Запуск узла '{}' (агент: {})", node.id(), node.agentName());
-            return agent.execute(finalContext);
-        });
-        memo.put(node.id(), currentNodeFuture);
-        return currentNodeFuture;
+
+        // Создаем Mono, который будет выполнен только после завершения всех зависимостей
+        Mono<AgentResult> currentNodeMono = Mono.defer(() -> {
+            // Mono.when() ожидает завершения всех зависимостей
+            return Mono.when(dependencyMonos)
+                    .then(Mono.fromRunnable(() -> log.info("Все зависимости для узла '{}' выполнены. Запуск...", node.id())))
+                    .then(Mono.zip(Mono.just(dependencyMonos), Mono.just(initialContext)))
+                    .flatMap(data -> {
+                        // Собираем контекст из начального и результатов зависимостей
+                        Map<String, Object> newContextPayload = new HashMap<>(data.getT2().payload());
+                        data.getT1().forEach(depMono ->
+                                depMono.doOnNext(depResult -> newContextPayload.putAll(depResult.details())).block()
+                        );
+                        newContextPayload.putAll(node.arguments());
+                        AgentContext finalContext = new AgentContext(newContextPayload);
+
+                        QaAgent agent = toolRegistryService.getAgent(node.agentName())
+                                .orElseThrow(() -> new IllegalStateException("Агент не найден: " + node.agentName()));
+
+                        log.info("Выполнение узла '{}' (агент: {})", node.id(), node.agentName());
+                        return agent.execute(finalContext)
+                                .subscribeOn(Schedulers.boundedElastic()); // Выполняем на отдельном потоке
+                    });
+        }).cache(); // Кэшируем результат Mono, чтобы он не выполнялся повторно
+        // Сохраняем Mono в кэш
+        memo.put(node.id(), currentNodeMono);
+        return currentNodeMono;
     }
 }

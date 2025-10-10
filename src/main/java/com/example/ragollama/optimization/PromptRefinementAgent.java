@@ -15,10 +15,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, выступающий в роли "инженера по промптам".
@@ -63,14 +63,14 @@ public class PromptRefinementAgent implements ToolAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         InteractionAnalysisReport analysis = (InteractionAnalysisReport) context.payload().get("interactionAnalysis");
         String targetPromptName = "planningAgent";
         String originalPrompt;
         try {
             originalPrompt = new String(new ClassPathResource("prompts/planning-agent-prompt.ftl").getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         } catch (Exception e) {
-            return CompletableFuture.failedFuture(new ProcessingException("Не удалось прочитать исходный промпт.", e));
+            return Mono.error(new ProcessingException("Не удалось прочитать исходный промпт.", e));
         }
 
         try {
@@ -82,13 +82,13 @@ public class PromptRefinementAgent implements ToolAgent {
             ));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(diff -> new AgentResult(
+                    .map(diff -> new AgentResult(
                             getName(), AgentResult.Status.SUCCESS,
                             "Предложено улучшение для промпта '" + targetPromptName + "'.",
                             Map.of("promptDiff", diff)
                     ));
         } catch (JsonProcessingException e) {
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации анализа.", e));
+            return Mono.error(new ProcessingException("Ошибка сериализации анализа.", e));
         }
     }
 }

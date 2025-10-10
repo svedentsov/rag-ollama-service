@@ -8,11 +8,14 @@ import com.example.ragollama.rag.api.dto.RagQueryResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
+/**
+ * Оркестратор для адаптивного RAG, полностью переведенный на Project Reactor.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -21,9 +24,16 @@ public class AdaptiveRagOrchestrator {
     private final QueryProfilerAgent profilerAgent;
     private final RagApplicationService ragApplicationService;
 
-    public CompletableFuture<RagQueryResponse> processAdaptive(RagQueryRequest request, UUID taskId) {
+    /**
+     * Выполняет адаптивный RAG-запрос.
+     *
+     * @param request Запрос пользователя.
+     * @param taskId  ID задачи.
+     * @return {@link Mono} с финальным ответом.
+     */
+    public Mono<RagQueryResponse> processAdaptive(RagQueryRequest request, UUID taskId) {
         return profilerAgent.execute(new AgentContext(Map.of("query", request.query())))
-                .thenCompose(profilerResult -> {
+                .flatMap(profilerResult -> {
                     QueryProfile profile = (QueryProfile) profilerResult.details().get("queryProfile");
                     RagQueryRequest adjustedRequest = adjustRequestBasedOnProfile(request, profile);
                     return ragApplicationService.processRagRequestAsync(adjustedRequest, taskId);

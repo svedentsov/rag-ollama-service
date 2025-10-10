@@ -17,11 +17,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+import reactor.core.publisher.MonoSink;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Автономный AI-агент, который симулирует поведение пользователя в веб-браузере.
@@ -36,6 +37,7 @@ public class UserBehaviorSimulatorAgent implements ToolAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
     private static final int MAX_STEPS = 10;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @Override
     public String getName() {
@@ -53,7 +55,7 @@ public class UserBehaviorSimulatorAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String startUrl = (String) context.payload().get("startUrl");
         String goal = (String) context.payload().get("goal");
         List<AgentCommand> history = new ArrayList<>();
@@ -61,16 +63,13 @@ public class UserBehaviorSimulatorAgent implements ToolAgent {
         playwright.startSession();
         playwright.goTo(startUrl);
 
-        CompletableFuture<AgentResult> simulationFuture = new CompletableFuture<>();
-
-        runNextStep(goal, history, 0, simulationFuture);
-
-        return simulationFuture.whenComplete((res, err) -> playwright.closeSession());
+        return Mono.<AgentResult>create(sink -> runNextStep(goal, history, 0, sink))
+                .doFinally(signalType -> playwright.closeSession());
     }
 
-    private void runNextStep(String goal, List<AgentCommand> history, int step, CompletableFuture<AgentResult> future) {
+    private void runNextStep(String goal, List<AgentCommand> history, int step, MonoSink<AgentResult> sink) {
         if (step >= MAX_STEPS) {
-            finishSimulation(goal, history, "FAILURE", "Достигнут максимальный лимит шагов.", future);
+            finishSimulation(goal, history, "FAILURE", "Достигнут максимальный лимит шагов.", sink);
             return;
         }
 
@@ -80,26 +79,28 @@ public class UserBehaviorSimulatorAgent implements ToolAgent {
         ));
 
         llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .thenAccept(llmResponse -> {
-                    try {
-                        AgentCommand command = parseLlmResponse(llmResponse);
-                        history.add(command);
-                        executeCommand(command);
+                .subscribe(
+                        llmResponse -> {
+                            try {
+                                AgentCommand command = parseLlmResponse(llmResponse);
+                                history.add(command);
+                                executeCommand(command);
 
-                        if ("finish".equalsIgnoreCase(command.command())) {
-                            finishSimulation(goal, history, "SUCCESS", command.thought(), future);
-                        } else {
-                            runNextStep(goal, history, step + 1, future);
+                                if ("finish".equalsIgnoreCase(command.command())) {
+                                    finishSimulation(goal, history, "SUCCESS", command.thought(), sink);
+                                } else {
+                                    runNextStep(goal, history, step + 1, sink);
+                                }
+                            } catch (Exception e) {
+                                log.error("Ошибка на шаге {} симуляции: {}", step, e.getMessage(), e);
+                                finishSimulation(goal, history, "FAILURE", "Ошибка выполнения: " + e.getMessage(), sink);
+                            }
+                        },
+                        error -> {
+                            log.error("Ошибка при вызове LLM на шаге {}: {}", step, error.getMessage(), error);
+                            finishSimulation(goal, history, "FAILURE", "Ошибка AI: " + error.getMessage(), sink);
                         }
-                    } catch (Exception e) {
-                        log.error("Ошибка на шаге {} симуляции: {}", step, e.getMessage(), e);
-                        finishSimulation(goal, history, "FAILURE", "Ошибка выполнения: " + e.getMessage(), future);
-                    }
-                }).exceptionally(ex -> {
-                    log.error("Ошибка при вызове LLM на шаге {}: {}", step, ex.getMessage(), ex);
-                    finishSimulation(goal, history, "FAILURE", "Ошибка AI: " + ex.getMessage(), future);
-                    return null;
-                });
+                );
     }
 
     private void executeCommand(AgentCommand command) {
@@ -114,15 +115,15 @@ public class UserBehaviorSimulatorAgent implements ToolAgent {
         }
     }
 
-    private void finishSimulation(String goal, List<AgentCommand> history, String outcome, String summary, CompletableFuture<AgentResult> future) {
+    private void finishSimulation(String goal, List<AgentCommand> history, String outcome, String summary, MonoSink<AgentResult> sink) {
         SimulationReport report = new SimulationReport(goal, history, outcome, summary);
         AgentResult result = new AgentResult(getName(), "SUCCESS".equals(outcome) ? AgentResult.Status.SUCCESS : AgentResult.Status.FAILURE, summary, Map.of("simulationReport", report));
-        future.complete(result);
+        sink.success(result);
     }
 
     private AgentCommand parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, AgentCommand.class);
         } catch (JsonProcessingException e) {
             throw new ProcessingException("User Simulator LLM вернул невалидный JSON.", e);

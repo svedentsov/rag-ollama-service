@@ -11,7 +11,6 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Асинхронный сервис для проверки "обоснованности" (grounding) сгенерированных ответов.
@@ -43,17 +42,16 @@ public class GroundingService {
         }
 
         String promptString = promptService.render("groundingPrompt", Map.of("context", context, "answer", answer));
-        CompletableFuture<String> verificationFuture = llmClient.callChat(new Prompt(promptString), ModelCapability.FASTEST);
-
-        verificationFuture.thenAccept(response -> {
-            boolean isGrounded = response.trim().equalsIgnoreCase("GROUNDED");
-            metricService.recordGroundingResult(isGrounded);
-            if (!isGrounded) {
-                log.warn("Обнаружен потенциально необоснованный ответ (галлюцинация).");
-            }
-        }).exceptionally(ex -> {
-            log.error("Ошибка при проверке обоснованности ответа.", ex);
-            return null;
-        });
+        llmClient.callChat(new Prompt(promptString), ModelCapability.FASTEST)
+                .subscribe(
+                        response -> {
+                            boolean isGrounded = response.trim().equalsIgnoreCase("GROUNDED");
+                            metricService.recordGroundingResult(isGrounded);
+                            if (!isGrounded) {
+                                log.warn("Обнаружен потенциально необоснованный ответ (галлюцинация).");
+                            }
+                        },
+                        ex -> log.error("Ошибка при проверке обоснованности ответа.", ex)
+                );
     }
 }

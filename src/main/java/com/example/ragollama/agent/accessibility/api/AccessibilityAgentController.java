@@ -16,13 +16,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.concurrent.CompletableFuture;
+import reactor.core.publisher.Mono;
 
 /**
  * Контроллер для AI-агента, выполняющего аудит доступности (a11y).
  * <p>
- * Этот контроллер является эталонной реализацией Web-слоя в Clean Architecture.
+ * Эталонная реализация Web-слоя в Clean Architecture.
  * Его обязанности строго ограничены:
  * <ul>
  *     <li>Прием и валидация входящих DTO (Data Transfer Objects).</li>
@@ -30,7 +29,7 @@ import java.util.concurrent.CompletableFuture;
  *     <li>Преобразование внутреннего результата в публичный DTO ответа с помощью маппера.</li>
  * </ul>
  * <p>
- * Благодаря использованию {@link CompletableFuture}, контроллер работает в полностью
+ * Благодаря использованию {@link reactor.core.publisher.Mono}, контроллер работает в полностью
  * неблокирующем режиме, немедленно освобождая поток запроса и асинхронно
  * ожидая результат выполнения задачи.
  */
@@ -47,8 +46,8 @@ public class AccessibilityAgentController {
      * Запускает асинхронный аудит HTML-кода на предмет нарушений доступности.
      *
      * @param request DTO с HTML-кодом для анализа. Должен быть валидным.
-     * @return {@link CompletableFuture}, который по завершении будет содержать
-     * результат работы агента, преобразованный в DTO ответа. Spring MVC
+     * @return {@link Mono}, который по завершении будет содержать
+     * результат работы агента, преобразованный в DTO ответа. Spring WebFlux
      * автоматически обработает асинхронный ответ.
      */
     @PostMapping("/audit")
@@ -63,8 +62,8 @@ public class AccessibilityAgentController {
             content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = AccessibilityAuditResponse.class))
     )
     @ApiResponse(responseCode = "400", description = "Некорректный запрос (например, пустой HTML)")
-    public CompletableFuture<AccessibilityAuditResponse> auditAccessibility(@Valid @RequestBody AccessibilityAuditRequest request) {
-        return orchestratorService.invoke("accessibility-auditor", request.toAgentContext())
-                .thenApply(accessibilityMapper::toResponseDto);
+    public Mono<AccessibilityAuditResponse> auditAccessibility(@Valid @RequestBody AccessibilityAuditRequest request) {
+        return orchestratorService.invoke("accessibility-audit-pipeline", request.toAgentContext())
+                .map(accessibilityMapper::toResponseDto);
     }
 }

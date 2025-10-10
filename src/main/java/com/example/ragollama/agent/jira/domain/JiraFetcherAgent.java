@@ -8,9 +8,9 @@ import com.example.ragollama.agent.jira.tool.dto.JiraIssueDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, отвечающий за извлечение детальной информации о задаче из Jira API.
@@ -58,16 +58,15 @@ public class JiraFetcherAgent implements ToolAgent {
      * Асинхронно выполняет запрос к Jira API для получения деталей задачи.
      *
      * @param context Контекст, содержащий ключ задачи в {@code payload} по ключу {@code JIRA_ISSUE_KEY}.
-     * @return {@link CompletableFuture} с результатом, содержащим детали задачи.
+     * @return {@link Mono} с результатом, содержащим детали задачи.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String issueKey = (String) context.payload().get(JIRA_ISSUE_KEY);
         log.info("JiraFetcherAgent: запуск извлечения данных для задачи {}", issueKey);
 
         return jiraApiClient.getIssueDetails(issueKey)
-                .toFuture()
-                .thenApply(issueDto -> {
+                .map(issueDto -> {
                     JiraIssueDto.Fields fields = issueDto.fields();
                     String bugReportText = fields.summary() + "\n\n" + fields.description();
                     String summary = String.format("Успешно извлечены данные для задачи %s (Статус: %s)",

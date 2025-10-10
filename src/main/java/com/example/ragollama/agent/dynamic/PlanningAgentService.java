@@ -32,6 +32,7 @@ public class PlanningAgentService {
     private final ToolboxRegistryService toolboxRegistry;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     public Mono<List<PlanStep>> createPlan(String taskDescription, Map<String, Object> initialContext) {
         String toolboxesForPrompt = toolboxRegistry.getToolboxDescriptions().entrySet().stream()
@@ -45,7 +46,7 @@ public class PlanningAgentService {
 
         log.info("Запрос к AI-маршрутизатору для выбора Toolbox для задачи: '{}'", taskDescription);
 
-        return Mono.fromFuture(() -> llmClient.callChat(new Prompt(routerPrompt), ModelCapability.FAST_RELIABLE))
+        return llmClient.callChat(new Prompt(routerPrompt), ModelCapability.FAST_RELIABLE)
                 .flatMap(toolboxName -> {
                     String trimmedToolboxName = toolboxName.trim();
                     log.info("AI-маршрутизатор выбрал Toolbox: '{}'", trimmedToolboxName);
@@ -76,7 +77,7 @@ public class PlanningAgentService {
         log.info("Запрос к LLM-планировщику (с {} инструментами) для задачи: '{}'", tools.size(), taskDescription);
         Prompt prompt = new Prompt(new UserMessage(promptString));
 
-        return Mono.fromFuture(() -> llmClient.callChat(prompt, ModelCapability.BALANCED, true))
+        return llmClient.callChat(prompt, ModelCapability.BALANCED, true)
                 .map(this::parsePlanFromLlmResponse)
                 .doOnSuccess(plan -> log.info("LLM-планировщик сгенерировал план из {} шагов.", plan.size()))
                 .doOnError(e -> log.error("Ошибка при создании плана для задачи '{}'", taskDescription, e));
@@ -99,7 +100,7 @@ public class PlanningAgentService {
 
     private List<PlanStep> parsePlanFromLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             if (cleanedJson.isEmpty() || "[]".equals(cleanedJson)) {
                 return Collections.emptyList();
             }

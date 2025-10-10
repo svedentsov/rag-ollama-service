@@ -1,6 +1,8 @@
 package com.example.ragollama.agent.git.tools;
 
 import com.example.ragollama.agent.config.GitProperties;
+import com.example.ragollama.shared.exception.GitOperationException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.api.BlameCommand;
 import org.eclipse.jgit.api.Git;
@@ -8,8 +10,6 @@ import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.blame.BlameResult;
 import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.diff.DiffFormatter;
-import org.eclipse.jgit.internal.storage.dfs.DfsRepositoryDescription;
-import org.eclipse.jgit.internal.storage.dfs.InMemoryRepository;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectLoader;
 import org.eclipse.jgit.lib.ObjectReader;
@@ -35,58 +35,47 @@ import java.util.stream.Collectors;
 /**
  * Клиент для взаимодействия с удаленными Git-репозиториями с использованием JGit.
  * <p>
- * Инкапсулирует сложную и блокирующую логику JGit, предоставляя простой
- * асинхронный API для использования в QA-агентах. Использует
- * высокопроизводительный подход с in-memory репозиторием и частичной
- * выборкой (`fetch`) только необходимых объектов.
+ * Эта версия использует надежный подход с клонированием репозитория в память,
+ * асинхронное выполнение всех блокирующих I/O операций на отдельном пуле потоков
+ * и специфичную обработку ошибок с выбрасыванием кастомного исключения {@link GitOperationException}.
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class GitApiClient {
 
     private final GitProperties gitProperties;
     private final UsernamePasswordCredentialsProvider credentialsProvider;
 
     /**
-     * Конструктор, инициализирующий клиент и провайдер учетных данных.
-     *
-     * @param gitProperties Типобезопасная конфигурация для подключения к Git.
-     */
-    public GitApiClient(GitProperties gitProperties) {
-        this.gitProperties = gitProperties;
-        this.credentialsProvider = new UsernamePasswordCredentialsProvider(gitProperties.personalAccessToken(), "");
-    }
-
-    /**
      * Асинхронно получает содержимое файла из репозитория для указанной ссылки (ref).
      *
      * @param filePath Путь к файлу в репозитории.
-     * @param ref      Git-ссылка (коммит, ветка, тег).
-     * @return {@link Mono} со строковым содержимым файла.
+     * @param ref      Git-ссылка (коммит, ветка, тег), например, "main" или "a1b2c3d".
+     * @return {@link Mono} со строковым содержимым файла или пустой строкой, если файл не найден.
+     * @throws GitOperationException если происходит ошибка при доступе к репозиторию.
      */
     public Mono<String> getFileContent(String filePath, String ref) {
         return Mono.fromCallable(() -> {
-            try (Repository repo = new InMemoryRepository(new DfsRepositoryDescription("temp-repo-content"))) {
-                Git git = new Git(repo);
-                git.fetch()
-                        .setRemote(gitProperties.repositoryUrl())
-                        .setCredentialsProvider(credentialsProvider)
-                        .setRefSpecs(new org.eclipse.jgit.transport.RefSpec("+" + "refs/heads/" + ref + ":refs/remotes/origin/" + ref))
-                        .call();
-
-                ObjectId refId = repo.resolve("refs/remotes/origin/" + ref);
-                if (refId == null) throw new IOException("Ref not found: " + ref);
+            try (Git git = cloneInMemory()) {
+                Repository repo = git.getRepository();
+                ObjectId refId = resolveRef(repo, ref);
 
                 try (RevWalk revWalk = new RevWalk(repo)) {
                     RevCommit commit = revWalk.parseCommit(refId);
                     RevTree tree = commit.getTree();
                     try (TreeWalk treeWalk = TreeWalk.forPath(repo, filePath, tree)) {
-                        if (treeWalk == null) return "";
+                        if (treeWalk == null) {
+                            log.warn("Файл '{}' не найден в ref '{}'", filePath, ref);
+                            return "";
+                        }
                         ObjectId objectId = treeWalk.getObjectId(0);
                         ObjectLoader loader = repo.open(objectId);
                         return new String(loader.getBytes(), StandardCharsets.UTF_8);
                     }
                 }
+            } catch (GitAPIException | IOException e) {
+                throw new GitOperationException("Ошибка при получении содержимого файла '" + filePath + "'", e);
             }
         }).subscribeOn(Schedulers.boundedElastic());
     }
@@ -96,40 +85,27 @@ public class GitApiClient {
      *
      * @param oldRef Исходная ссылка (коммит, ветка, тег).
      * @param newRef Конечная ссылка.
-     * @return {@link Mono} со списком строк, описывающих изменения.
+     * @return {@link Mono} со списком путей к измененным файлам.
+     * @throws GitOperationException если происходит ошибка при доступе к репозиторию.
      */
     public Mono<List<String>> getChangedFiles(String oldRef, String newRef) {
         return Mono.fromCallable(() -> {
-                    try (Repository repo = new InMemoryRepository(new DfsRepositoryDescription("temp-repo"))) {
-                        Git git = new Git(repo);
+            try (Git git = cloneInMemory()) {
+                Repository repo = git.getRepository();
+                AbstractTreeIterator oldTree = getTreeIterator(repo, oldRef);
+                AbstractTreeIterator newTree = getTreeIterator(repo, newRef);
 
-                        log.debug("Выполнение fetch для refs: {} и {}", oldRef, newRef);
-                        git.fetch()
-                                .setRemote(gitProperties.repositoryUrl())
-                                .setCredentialsProvider(credentialsProvider)
-                                .setRefSpecs(
-                                        new org.eclipse.jgit.transport.RefSpec("+" + "refs/heads/" + oldRef + ":refs/remotes/origin/" + oldRef),
-                                        new org.eclipse.jgit.transport.RefSpec("+" + "refs/heads/" + newRef + ":refs/remotes/origin/" + newRef)
-                                )
-                                .call();
-
-                        AbstractTreeIterator oldTree = getTreeIterator(repo, "refs/remotes/origin/" + oldRef);
-                        AbstractTreeIterator newTree = getTreeIterator(repo, "refs/remotes/origin/" + newRef);
-
-                        ByteArrayOutputStream out = new ByteArrayOutputStream();
-                        try (DiffFormatter formatter = new DiffFormatter(out)) {
-                            formatter.setRepository(repo);
-                            List<DiffEntry> diffs = formatter.scan(oldTree, newTree);
-                            return diffs.stream()
-                                    .map(this::formatDiffEntry)
-                                    .collect(Collectors.toList());
-                        }
-                    } catch (IOException | GitAPIException e) {
-                        log.error("Ошибка при анализе Git-репозитория", e);
-                        throw new RuntimeException("Не удалось проанализировать Git-репозиторий.", e);
-                    }
-                })
-                .subscribeOn(Schedulers.boundedElastic());
+                try (DiffFormatter formatter = new DiffFormatter(new ByteArrayOutputStream())) {
+                    formatter.setRepository(repo);
+                    List<DiffEntry> diffs = formatter.scan(oldTree, newTree);
+                    return diffs.stream()
+                            .map(this::formatDiffEntry)
+                            .collect(Collectors.toList());
+                }
+            } catch (GitAPIException | IOException e) {
+                throw new GitOperationException("Ошибка при анализе diff между " + oldRef + " и " + newRef, e);
+            }
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     /**
@@ -138,26 +114,14 @@ public class GitApiClient {
      * @param oldRef Исходная ссылка (исключая).
      * @param newRef Конечная ссылка (включая).
      * @return {@link Mono} со списком сообщений коммитов.
+     * @throws GitOperationException если происходит ошибка при доступе к репозиторию.
      */
     public Mono<List<String>> getCommitMessages(String oldRef, String newRef) {
         return Mono.fromCallable(() -> {
-            try (Repository repo = new InMemoryRepository(new DfsRepositoryDescription("temp-repo-log"))) {
-                Git git = new Git(repo);
-                git.fetch()
-                        .setRemote(gitProperties.repositoryUrl())
-                        .setCredentialsProvider(credentialsProvider)
-                        .setRefSpecs(
-                                new org.eclipse.jgit.transport.RefSpec("+" + "refs/heads/" + oldRef + ":refs/remotes/origin/" + oldRef),
-                                new org.eclipse.jgit.transport.RefSpec("+" + "refs/heads/" + newRef + ":refs/remotes/origin/" + newRef)
-                        )
-                        .call();
-
-                ObjectId oldId = repo.resolve("refs/remotes/origin/" + oldRef);
-                ObjectId newId = repo.resolve("refs/remotes/origin/" + newRef);
-
-                if (oldId == null || newId == null) {
-                    throw new IOException("Одна из Git-ссылок не найдена в удаленном репозитории.");
-                }
+            try (Git git = cloneInMemory()) {
+                Repository repo = git.getRepository();
+                ObjectId oldId = resolveRef(repo, oldRef);
+                ObjectId newId = resolveRef(repo, newRef);
 
                 List<String> messages = new ArrayList<>();
                 Iterable<RevCommit> logs = git.log().addRange(oldId, newId).call();
@@ -165,6 +129,8 @@ public class GitApiClient {
                     messages.add(String.format("%s - %s", rev.getId().abbreviate(7).name(), rev.getShortMessage()));
                 }
                 return messages;
+            } catch (GitAPIException | IOException e) {
+                throw new GitOperationException("Ошибка при получении логов коммитов между " + oldRef + " и " + newRef, e);
             }
         }).subscribeOn(Schedulers.boundedElastic());
     }
@@ -175,22 +141,14 @@ public class GitApiClient {
      * @param oldRef Исходная ссылка.
      * @param newRef Конечная ссылка.
      * @return {@link Mono} со строковым представлением diff.
+     * @throws GitOperationException если происходит ошибка при доступе к репозиторию.
      */
     public Mono<String> getDiff(String oldRef, String newRef) {
         return Mono.fromCallable(() -> {
-            try (Repository repo = new InMemoryRepository(new DfsRepositoryDescription("temp-repo-diff"))) {
-                Git git = new Git(repo);
-                git.fetch()
-                        .setRemote(gitProperties.repositoryUrl())
-                        .setCredentialsProvider(credentialsProvider)
-                        .setRefSpecs(
-                                new org.eclipse.jgit.transport.RefSpec("+" + "refs/heads/" + oldRef + ":refs/remotes/origin/" + oldRef),
-                                new org.eclipse.jgit.transport.RefSpec("+" + "refs/heads/" + newRef + ":refs/remotes/origin/" + newRef)
-                        )
-                        .call();
-
-                AbstractTreeIterator oldTree = getTreeIterator(repo, "refs/remotes/origin/" + oldRef);
-                AbstractTreeIterator newTree = getTreeIterator(repo, "refs/remotes/origin/" + newRef);
+            try (Git git = cloneInMemory()) {
+                Repository repo = git.getRepository();
+                AbstractTreeIterator oldTree = getTreeIterator(repo, oldRef);
+                AbstractTreeIterator newTree = getTreeIterator(repo, newRef);
 
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
                 try (DiffFormatter formatter = new DiffFormatter(out)) {
@@ -198,46 +156,66 @@ public class GitApiClient {
                     formatter.format(oldTree, newTree);
                     return out.toString(StandardCharsets.UTF_8);
                 }
+            } catch (GitAPIException | IOException e) {
+                throw new GitOperationException("Ошибка при получении diff между " + oldRef + " и " + newRef, e);
             }
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
     /**
-     * Асинхронно выполняет `git blame` для файла и возвращает информацию о коммитах для каждой строки.
+     * Асинхронно выполняет `git blame` для файла.
      *
      * @param filePath Путь к файлу.
-     * @param ref      Git-ссылка (коммит, ветка, тег).
+     * @param ref      Git-ссылка.
      * @return {@link Mono} с результатом `blame`.
+     * @throws GitOperationException если происходит ошибка при доступе к репозиторию.
      */
     public Mono<BlameResult> blameFile(String filePath, String ref) {
         return Mono.fromCallable(() -> {
-            try (Repository repo = new InMemoryRepository(new DfsRepositoryDescription("temp-repo-blame"))) {
-                Git git = new Git(repo);
-                git.fetch()
-                        .setRemote(gitProperties.repositoryUrl())
-                        .setCredentialsProvider(credentialsProvider)
-                        .setRefSpecs(new org.eclipse.jgit.transport.RefSpec("+" + "refs/heads/" + ref + ":refs/remotes/origin/" + ref))
-                        .call();
-
-                ObjectId refId = repo.resolve("refs/remotes/origin/" + ref);
-                if (refId == null) throw new IOException("Ref not found: " + ref);
-
+            try (Git git = cloneInMemory()) {
+                Repository repo = git.getRepository();
+                ObjectId refId = resolveRef(repo, ref);
                 BlameCommand blameCommand = new BlameCommand(repo);
                 blameCommand.setStartCommit(refId);
                 blameCommand.setFilePath(filePath);
                 return blameCommand.call();
+            } catch (GitAPIException | IOException e) {
+                throw new GitOperationException("Ошибка при выполнении blame для файла '" + filePath + "'", e);
             }
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
-    private AbstractTreeIterator getTreeIterator(Repository repository, String ref) throws IOException {
-        final ObjectId id = repository.resolve(ref);
-        if (id == null) {
-            throw new IllegalArgumentException("Не удалось найти Git-ссылку: " + ref);
-        }
+    private Git cloneInMemory() throws GitAPIException {
+        log.debug("Клонирование репозитория {} в память...", gitProperties.repositoryUrl());
+        return Git.cloneRepository()
+                .setURI(gitProperties.repositoryUrl())
+                .setCredentialsProvider(credentialsProvider)
+                .setDirectory(null)
+                .setBare(true)
+                .call();
+    }
 
+    private ObjectId resolveRef(Repository repo, String ref) throws IOException {
+        ObjectId objectId = repo.resolve(ref);
+        if (objectId == null) {
+            objectId = repo.resolve("refs/remotes/origin/" + ref);
+        }
+        if (objectId == null) {
+            throw new IOException("Не удалось найти Git-ссылку (ref): " + ref);
+        }
+        return objectId;
+    }
+
+    private AbstractTreeIterator getTreeIterator(Repository repository, String ref) throws IOException {
+        final ObjectId id = resolveRef(repository, ref);
         try (ObjectReader reader = repository.newObjectReader()) {
-            return new CanonicalTreeParser(null, reader, new RevWalk(reader).parseTree(id));
+            RevWalk walk = new RevWalk(reader);
+            RevCommit commit = walk.parseCommit(id);
+            RevTree tree = walk.parseTree(commit.getTree().getId());
+            CanonicalTreeParser treeParser = new CanonicalTreeParser();
+            treeParser.reset(reader, tree.getId());
+            walk.dispose();
+            return treeParser;
         }
     }
 

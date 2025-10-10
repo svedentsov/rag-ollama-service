@@ -17,7 +17,8 @@ import java.util.stream.Collectors;
  * семантически значимые текстовые фрагменты (чанки).
  * <p>
  * Каждый эндпоинт и каждая схема преобразуются в отдельный {@link Document},
- * что позволяет выполнять по ним эффективный семантический поиск.
+ * что позволяет выполнять по ним эффективный семантический поиск. Это
+ * является основой для реализации "RAG на лету".
  */
 @Slf4j
 @Service
@@ -33,6 +34,7 @@ public class OpenApiChunker {
         List<Document> chunks = new ArrayList<>();
         chunks.addAll(createPathChunks(openApi));
         chunks.addAll(createSchemaChunks(openApi));
+        log.info("OpenAPI спецификация разделена на {} семантических чанков.", chunks.size());
         return chunks;
     }
 

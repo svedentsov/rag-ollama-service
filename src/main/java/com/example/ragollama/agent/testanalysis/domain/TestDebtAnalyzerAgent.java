@@ -14,11 +14,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который проводит комплексный анализ тестового технического долга.
@@ -54,41 +54,37 @@ public class TestDebtAnalyzerAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        // Шаг 1: Асинхронно собираем все виды техдолга
-        CompletableFuture<List<TestDebtItem>> flakyTestsFuture = findFlakyTests(context);
-        CompletableFuture<List<TestDebtItem>> slowTestsFuture = findSlowTests();
-        // Шаг 2: Объединяем результаты, когда оба завершатся
-        return CompletableFuture.allOf(flakyTestsFuture, slowTestsFuture)
-                .thenCompose(v -> {
+    public Mono<AgentResult> execute(AgentContext context) {
+        Mono<List<TestDebtItem>> flakyTestsMono = findFlakyTests(context);
+        Mono<List<TestDebtItem>> slowTestsMono = findSlowTests();
+
+        return Mono.zip(flakyTestsMono, slowTestsMono)
+                .flatMap(tuple -> {
                     List<TestDebtItem> allItems = new ArrayList<>();
-                    allItems.addAll(flakyTestsFuture.join());
-                    allItems.addAll(slowTestsFuture.join());
+                    allItems.addAll(tuple.getT1());
+                    allItems.addAll(tuple.getT2());
 
                     if (allItems.isEmpty()) {
-                        return CompletableFuture.completedFuture(
-                                new AgentResult(getName(), AgentResult.Status.SUCCESS, "Тестовый технический долг не обнаружен.", Map.of())
-                        );
+                        return Mono.just(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Тестовый технический долг не обнаружен.", Map.of()));
                     }
 
-                    // Шаг 3: Используем LLM для генерации резюме
                     try {
                         String debtJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(allItems);
                         String promptString = promptService.render("testDebtSummaryPrompt", Map.of("debtItemsJson", debtJson));
                         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                                .thenApply(summary -> {
+                                .map(summary -> {
                                     TestDebtReport report = new TestDebtReport(summary, allItems);
                                     return new AgentResult(getName(), AgentResult.Status.SUCCESS, "Отчет о тестовом техдолге успешно сгенерирован.", Map.of("testDebtReport", report));
                                 });
                     } catch (JsonProcessingException e) {
-                        return CompletableFuture.failedFuture(e);
+                        return Mono.error(e);
                     }
                 });
     }
 
-    private CompletableFuture<List<TestDebtItem>> findFlakyTests(AgentContext context) {
+    private Mono<List<TestDebtItem>> findFlakyTests(AgentContext context) {
         return flakinessTrackerAgent.execute(context)
-                .thenApply(agentResult -> {
+                .map(agentResult -> {
                     if (!agentResult.details().containsKey("flakinessReport")) {
                         return List.of();
                     }
@@ -105,8 +101,8 @@ public class TestDebtAnalyzerAgent implements ToolAgent {
                 });
     }
 
-    private CompletableFuture<List<TestDebtItem>> findSlowTests() {
-        return CompletableFuture.supplyAsync(() ->
+    private Mono<List<TestDebtItem>> findSlowTests() {
+        return Mono.fromCallable(() ->
                 analyticsService.findSlowestTests(5).stream()
                         .map(st -> new TestDebtItem(
                                 DebtType.SLOW_TEST,

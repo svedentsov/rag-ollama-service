@@ -1,16 +1,17 @@
 package com.example.ragollama.monitoring.model;
 
-import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * Сущность JPA, представляющая одну обучающую пару (запрос, документ)
- * для последующего дообучения моделей.
+ * Сущность TrainingDataPair, адаптированная для R2DBC.
  */
 @Getter
 @Builder
@@ -18,32 +19,28 @@ import java.util.UUID;
 @AllArgsConstructor
 @ToString
 @EqualsAndHashCode(of = "id")
-@Entity
-@Table(name = "training_data_pairs")
+@Table("training_data_pairs")
 public class TrainingDataPair {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @NotNull
-    @Lob
-    @Column(name = "query_text", nullable = false, columnDefinition = "TEXT")
+    @Column("query_text")
     private String queryText;
 
     @NotNull
-    @Column(name = "document_id", nullable = false)
+    @Column("document_id")
     private UUID documentId;
 
     @NotNull
-    @Column(nullable = false)
+    @Column
     private String label;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "source_feedback_id")
-    private FeedbackLog sourceFeedback;
+    @Column("source_feedback_id")
+    private UUID sourceFeedbackId;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @CreatedDate
+    @Column("created_at")
     private OffsetDateTime createdAt;
 }

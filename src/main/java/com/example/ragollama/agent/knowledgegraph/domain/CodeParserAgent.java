@@ -22,7 +22,6 @@ import reactor.core.publisher.Mono;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который выполняет структурный анализ Java-файла.
@@ -59,9 +58,6 @@ public class CodeParserAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     *
-     * @param context Контекст, который должен содержать 'filePath' и 'ref'.
-     * @return {@code true}, если все необходимые ключи присутствуют.
      */
     @Override
     public boolean canHandle(AgentContext context) {
@@ -70,15 +66,9 @@ public class CodeParserAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     *
-     * <p>Асинхронно выполняет конвейер: получает контент файла и `blame` из Git,
-     * затем парсит код и агрегирует результаты в {@link CodeAnalysisResult}.
-     *
-     * @param context Контекст с 'filePath' и 'ref'.
-     * @return {@link CompletableFuture} со структурированным результатом анализа.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String filePath = (String) context.payload().get("filePath");
         String ref = (String) context.payload().get("ref");
         log.info("CodeParserAgent: запуск анализа для файла {} в ref {}", filePath, ref);
@@ -97,18 +87,9 @@ public class CodeParserAgent implements ToolAgent {
                         AgentResult.Status.SUCCESS,
                         "Структурный анализ файла " + filePath + " успешно завершен.",
                         Map.of("codeAnalysis", analysisResult)
-                ))
-                .toFuture();
+                ));
     }
 
-    /**
-     * Выполняет основной парсинг кода и сопоставление с данными `blame`.
-     *
-     * @param filePath    Путь к файлу.
-     * @param code        Содержимое файла.
-     * @param blameResult Результат выполнения `git blame`.
-     * @return Объект {@link CodeAnalysisResult} с полной информацией.
-     */
     private CodeAnalysisResult parseCode(String filePath, String code, BlameResult blameResult) {
         CompilationUnit cu = javaParser.parse(code).getResult().orElseThrow(() ->
                 new IllegalStateException("Не удалось распарсить Java-файл: " + filePath));
@@ -126,15 +107,6 @@ public class CodeParserAgent implements ToolAgent {
         return new CodeAnalysisResult(filePath, methodDetails);
     }
 
-    /**
-     * Находит самый "свежий" коммит, который затрагивает строки,
-     * принадлежащие одному методу.
-     *
-     * @param blameResult Результат `git blame`.
-     * @param startLine   Начальная строка метода (0-индексированная).
-     * @param endLine     Конечная строка метода (0-индексированная).
-     * @return Объект {@link LastCommitInfo} или {@code null}, если информация не найдена.
-     */
     private LastCommitInfo findLastCommitForMethod(BlameResult blameResult, int startLine, int endLine) {
         if (blameResult == null || startLine == -1) {
             return null;

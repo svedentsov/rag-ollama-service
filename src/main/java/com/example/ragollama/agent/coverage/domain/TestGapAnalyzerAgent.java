@@ -7,11 +7,11 @@ import com.example.ragollama.shared.util.code.CodebaseMappingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -28,8 +28,6 @@ public class TestGapAnalyzerAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     *
-     * @return Уникальное имя агента.
      */
     @Override
     public String getName() {
@@ -38,8 +36,6 @@ public class TestGapAnalyzerAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     *
-     * @return Человекочитаемое описание назначения агента.
      */
     @Override
     public String getDescription() {
@@ -48,11 +44,6 @@ public class TestGapAnalyzerAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     * <p>
-     * Агент ожидает, что в контексте уже будет результат работы {@link GitInspectorAgent}.
-     *
-     * @param context Контекст, который должен содержать 'changedFiles'.
-     * @return {@code true}, если все необходимые ключи присутствуют.
      */
     @Override
     public boolean canHandle(AgentContext context) {
@@ -63,15 +54,14 @@ public class TestGapAnalyzerAgent implements ToolAgent {
      * Асинхронно выполняет анализ пробелов в тестовом покрытии.
      *
      * @param context Контекст, содержащий список измененных файлов от предыдущего агента.
-     * @return {@link CompletableFuture} с результатом, содержащим список "непокрытых" файлов.
+     * @return {@link Mono} с результатом, содержащим список "непокрытых" файлов.
      */
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        return CompletableFuture.supplyAsync(() -> {
+    public Mono<AgentResult> execute(AgentContext context) {
+        return Mono.fromCallable(() -> {
             List<String> changedFiles = (List<String>) context.payload().get("changedFiles");
 
-            // Шаг 1: Разделяем все измененные файлы на исходный код и тесты
             List<String> changedSourceFiles = changedFiles.stream()
                     .filter(file -> file.contains("src/main/java"))
                     .toList();
@@ -80,11 +70,10 @@ public class TestGapAnalyzerAgent implements ToolAgent {
                     .filter(file -> file.contains("src/test/java"))
                     .collect(Collectors.toSet());
 
-            // Шаг 2: Находим "пробелы" - исходные файлы без соответствующих изменений в тестах
             List<String> gaps = changedSourceFiles.stream()
                     .filter(sourceFile -> codebaseMappingService.findTestForAppFile(sourceFile)
                             .map(expectedTestFile -> !changedTestFiles.contains(expectedTestFile))
-                            .orElse(true)) // Если тест не найден, считаем это пробелом
+                            .orElse(true))
                     .distinct()
                     .toList();
 

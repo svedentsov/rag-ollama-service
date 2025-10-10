@@ -12,9 +12,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агентов, выполняющих анализ UI/UX.
@@ -31,11 +31,11 @@ public class UxAgentController {
      * Запускает агента для оценки HTML на соответствие эвристикам юзабилити Нильсена.
      *
      * @param request DTO с HTML-кодом.
-     * @return {@link CompletableFuture} с результатом анализа.
+     * @return {@link Mono} с результатом анализа.
      */
     @PostMapping("/evaluate-heuristics")
     @Operation(summary = "Оценить HTML на соответствие эвристикам юзабилити")
-    public CompletableFuture<List<AgentResult>> evaluateUxHeuristics(@Valid @RequestBody UxHeuristicsRequest request) {
+    public Mono<List<AgentResult>> evaluateUxHeuristics(@Valid @RequestBody UxHeuristicsRequest request) {
         return orchestratorService.invoke("ux-heuristics-evaluation-pipeline", request.toAgentContext());
     }
 
@@ -43,11 +43,11 @@ public class UxAgentController {
      * Запускает автономного AI-агента для симуляции поведения пользователя.
      *
      * @param request DTO с начальным URL и целью.
-     * @return {@link CompletableFuture} с отчетом о выполненной симуляции.
+     * @return {@link Mono} с отчетом о выполненной симуляции.
      */
     @PostMapping("/simulate-user-behavior")
     @Operation(summary = "Запустить AI-агента для симуляции E2E-сценария")
-    public CompletableFuture<List<AgentResult>> simulateUserBehavior(@Valid @RequestBody UserSimulationRequest request) {
+    public Mono<List<AgentResult>> simulateUserBehavior(@Valid @RequestBody UserSimulationRequest request) {
         return orchestratorService.invoke("user-behavior-simulation-pipeline", request.toAgentContext());
     }
 }

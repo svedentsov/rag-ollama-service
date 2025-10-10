@@ -22,11 +22,11 @@
     Никаких объяснений или markdown-разметки.
 
 --- СТРУКТУРИРОВАННЫЙ БАГ-РЕПОРТ ---
--   **Title:** ${summary.title}
+-   **Title:** ${summary.title()}
 -   **Steps to Reproduce:**
-    -   <#list summary.stepsToReproduce as step>${step}<#sep>, </#sep></#list>
--   **Expected Behavior:** ${summary.expectedBehavior}
--   **Actual Behavior:** ${summary.actualBehavior}
+    -   <#list summary.stepsToReproduce() as step>${step}<#sep>, </#sep></#list>
+-   **Expected Behavior:** ${summary.expectedBehavior()}
+-   **Actual Behavior:** ${summary.actualBehavior()}
 
 --- ПРИМЕР ---
 -   **Отчет:** Title: "API падает при запросе пользователя с ID -1", Steps: ["Отправить GET /api/users/-1"], Expected: "Должен вернуться статус 404 Not Found", Actual: "Возвращается статус 500 Internal Server Error".

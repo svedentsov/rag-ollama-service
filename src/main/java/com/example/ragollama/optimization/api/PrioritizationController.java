@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агента, отвечающего за автоматическую приоритизацию задач.
@@ -31,14 +31,12 @@ public class PrioritizationController {
      * приоритизированного бэклога на спринт.
      *
      * @param request DTO с бизнес-целью спринта и периодом для анализа.
-     * @return {@link CompletableFuture} с финальным отчетом, содержащим
+     * @return {@link Mono} с финальным отчетом, содержащим
      * приоритизированный список задач.
      */
     @PostMapping("/plan-sprint")
-    @Operation(summary = "Сгенерировать приоритизированный план на спринт",
-            description = "Запускает 'prioritization-pipeline', который собирает полную картину о состоянии проекта " +
-                    "(баги, техдолг, безопасность) и генерирует на ее основе приоритизированный бэклог.")
-    public CompletableFuture<List<AgentResult>> prioritizeBacklog(@Valid @RequestBody PrioritizationRequest request) {
+    @Operation(summary = "Сгенерировать приоритизированный план на спринт")
+    public Mono<List<AgentResult>> prioritizeBacklog(@Valid @RequestBody PrioritizationRequest request) {
         return orchestratorService.invoke("prioritization-pipeline", request.toAgentContext());
     }
 }

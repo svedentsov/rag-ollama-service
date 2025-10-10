@@ -15,8 +15,7 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 
 /**
- * Шаг RAG-конвейера, отвечающий за интеллектуальное переранжирование
- * извлеченных документов для повышения релевантности.
+ * Шаг RAG-конвейера для переранжирования, адаптированный для R2DBC.
  */
 @Component
 @Order(25)
@@ -30,11 +29,13 @@ public class RerankingStep implements RagPipelineStep {
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
         if (context.retrievedDocuments().isEmpty()) {
-            return Mono.just(context); // Пропускаем шаг, если нечего ранжировать
+            return Mono.just(context);
         }
         log.info("Шаг [25] Reranking: запуск переранжирования {} документов...", context.retrievedDocuments().size());
-        taskLifecycleService.getActiveTaskForSession(context.sessionId()).ifPresent(task ->
-                taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Оцениваю релевантность найденного...")));
+
+        taskLifecycleService.getActiveTaskForSession(context.sessionId())
+                .doOnNext(task -> taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Оцениваю релевантность найденного...")))
+                .subscribe();
 
         return Mono.fromCallable(() -> {
             List<Document> reranked = rerankingService.rerank(

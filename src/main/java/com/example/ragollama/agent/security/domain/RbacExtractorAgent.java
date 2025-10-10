@@ -22,11 +22,14 @@ import reactor.core.publisher.Mono;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент для извлечения правил контроля доступа (RBAC/ACL) из исходного кода.
  * Использует LLM для парсинга аннотаций Spring Security и других паттернов авторизации.
+ * <p>
+ * Этот компонент является эталоном реализации принципа инверсии зависимостей:
+ * все необходимые сервисы (LLM-клиент, парсеры) внедряются через конструктор,
+ * что обеспечивает максимальную тестируемость и соответствие парадигме Spring.
  */
 @Slf4j
 @Component
@@ -37,6 +40,7 @@ public class RbacExtractorAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     /**
      * {@inheritDoc}
@@ -64,10 +68,13 @@ public class RbacExtractorAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
+     *
+     * @param context Контекст, содержащий `changedFiles` и `newRef`.
+     * @return {@link Mono} с результатом, содержащим список извлеченных правил.
      */
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         List<String> changedFiles = (List<String>) context.payload().get("changedFiles");
         String newRef = (String) context.payload().get("newRef");
 
@@ -96,16 +103,15 @@ public class RbacExtractorAgent implements ToolAgent {
                             summary,
                             Map.of("extractedRules", flattenedRules)
                     );
-                })
-                .toFuture();
+                });
     }
 
     /**
-     * Вызывает LLM для анализа одного файла и извлечения правил.
+     * Вызывает LLM для извлечения правил из одного файла.
      *
      * @param code     Содержимое Java-файла.
-     * @param filePath Путь к файлу для контекста.
-     * @return {@link Mono} со списком извлеченных правил.
+     * @param filePath Путь к файлу (для контекста).
+     * @return {@link Mono} со списком карт, где каждая карта - одно правило.
      */
     private Mono<List<Map<String, String>>> extractRulesFromCode(String code, String filePath) {
         if (code == null || code.isBlank()) {
@@ -113,17 +119,21 @@ public class RbacExtractorAgent implements ToolAgent {
         }
 
         String promptString = promptService.render("rbacExtractorPrompt", Map.of("code", code, "filePath", filePath));
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .map(this::parseLlmResponse);
     }
 
     /**
-     * Безопасно парсит JSON-ответ от LLM.
+     * Безопасно парсит JSON-ответ от LLM в список правил.
+     *
+     * @param llmResponse Сырой строковый ответ от LLM.
+     * @return Список правил или пустой список в случае ошибки.
+     * @throws ProcessingException если LLM вернула невалидный JSON.
      */
     private List<Map<String, String>> parseLlmResponse(String llmResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(llmResponse);
-            if (cleanedJson.isEmpty() || "[]".equals(cleanedJson) || !cleanedJson.contains("resource")) {
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(llmResponse);
+            if (cleanedJson.isEmpty() || "[]".equals(cleanedJson)) {
                 return Collections.emptyList();
             }
             return objectMapper.readValue(cleanedJson, new TypeReference<>() {

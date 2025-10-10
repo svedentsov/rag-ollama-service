@@ -19,7 +19,6 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который проверяет изменения в DTO на обратную совместимость.
@@ -33,6 +32,7 @@ public class DataContractEnforcerAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @Override
     public String getName() {
@@ -52,7 +52,7 @@ public class DataContractEnforcerAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String oldRef = (String) context.payload().get("oldRef");
         String newRef = (String) context.payload().get("newRef");
         String filePath = (String) context.payload().get("filePath");
@@ -68,7 +68,7 @@ public class DataContractEnforcerAgent implements ToolAgent {
                             "old_dto_code", contents.getT1(),
                             "new_dto_code", contents.getT2()
                     ));
-                    return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED));
+                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
                 })
                 .map(this::parseLlmResponse)
                 .map(result -> new AgentResult(
@@ -76,13 +76,12 @@ public class DataContractEnforcerAgent implements ToolAgent {
                         AgentResult.Status.SUCCESS,
                         "Проверка контракта завершена. Статус: " + result.validationStatus(),
                         Map.of("contractValidationResult", result)
-                ))
-                .toFuture();
+                ));
     }
 
     private ContractValidationResult parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, ContractValidationResult.class);
         } catch (JsonProcessingException e) {
             log.error("Не удалось распарсить JSON-ответ от Data Contract LLM: {}", jsonResponse, e);

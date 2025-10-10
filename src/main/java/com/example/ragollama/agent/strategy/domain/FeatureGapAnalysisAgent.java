@@ -20,7 +20,6 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -35,6 +34,7 @@ public class FeatureGapAnalysisAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     /**
      * {@inheritDoc}
@@ -64,21 +64,19 @@ public class FeatureGapAnalysisAgent implements ToolAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String competitorText = (String) context.payload().get("scrapedText");
 
-        // Шаг 1: Параллельно извлекаем списки фич для нас и для конкурента
         Mono<String> ourFeaturesMono = extractFeaturesFromOurKnowledgeBase();
         Mono<String> competitorFeaturesMono = extractFeaturesFromText(competitorText);
 
-        // Шаг 2: Когда оба списка фичей готовы, передаем их на финальный анализ
         return Mono.zip(ourFeaturesMono, competitorFeaturesMono)
                 .flatMap(tuple -> {
                     String promptString = promptService.render("featureGapAnalysisPrompt", Map.of(
                             "our_features_json", tuple.getT1(),
                             "competitor_features_json", tuple.getT2()
                     ));
-                    return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED));
+                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
                 })
                 .map(this::parseLlmResponse)
                 .map(report -> new AgentResult(
@@ -86,15 +84,9 @@ public class FeatureGapAnalysisAgent implements ToolAgent {
                         AgentResult.Status.SUCCESS,
                         report.summary(),
                         Map.of("featureGapReport", report)
-                ))
-                .toFuture();
+                ));
     }
 
-    /**
-     * Извлекает фичи нашего продукта, используя RAG по собственной базе знаний.
-     *
-     * @return {@link Mono} со строкой, содержащей JSON-массив фичей.
-     */
     private Mono<String> extractFeaturesFromOurKnowledgeBase() {
         return testCaseService.findRelevantTestCases("Все возможности продукта")
                 .flatMap(contextDocs -> {
@@ -103,26 +95,14 @@ public class FeatureGapAnalysisAgent implements ToolAgent {
                 });
     }
 
-    /**
-     * Вызывает LLM для извлечения структурированного списка фич из произвольного текста.
-     *
-     * @param text Текст для анализа.
-     * @return {@link Mono} со строкой, содержащей JSON-массив фичей.
-     */
     private Mono<String> extractFeaturesFromText(String text) {
         String promptString = promptService.render("featureExtractionPrompt", Map.of("context", text));
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED));
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
     }
 
-    /**
-     * Безопасно парсит JSON-ответ от LLM в {@link FeatureGapReport}.
-     *
-     * @param jsonResponse Ответ от LLM.
-     * @return Десериализованный объект {@link FeatureGapReport}.
-     */
     private FeatureGapReport parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, FeatureGapReport.class);
         } catch (JsonProcessingException e) {
             throw new ProcessingException("Feature Gap Analyzer LLM вернул невалидный JSON.", e);

@@ -12,9 +12,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Мета-агент L4-уровня, выступающий в роли "AI Incident Commander".
@@ -54,9 +54,6 @@ public class IncidentCommanderAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     *
-     * @param context Контекст, который должен содержать `incidentReport`.
-     * @return {@code true} если отчет об инциденте присутствует.
      */
     @Override
     public boolean canHandle(AgentContext context) {
@@ -65,23 +62,17 @@ public class IncidentCommanderAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     *
-     * @param context Контекст, содержащий {@link IncidentReport}.
-     * @return {@link CompletableFuture} с результатом запуска рабочего процесса.
-     * @throws ProcessingException если происходит ошибка при сериализации отчета.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         IncidentReport report = (IncidentReport) context.payload().get("incidentReport");
         try {
             String reportJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(report);
-            // Формулируем высокоуровневую цель для планировщика
             String goal = "Произошел инцидент. Проанализируй отчет и спланируй действия по сдерживанию: откати проблемное изменение и создай тикет P1 для расследования.";
             log.info("IncidentCommander: цель '{}'. Запуск планировщика...", goal);
-            // 1. Создаем Workflow (DAG)
+
             return plannerAgent.createWorkflow(goal, Map.of("incidentReport", reportJson))
                     .flatMap(workflow -> {
-                        // 2. Выполняем созданный Workflow
                         log.info("IncidentCommander: план из {} шагов получен. Запуск исполнителя...", workflow.size());
                         return executionService.executeWorkflow(workflow, context);
                     })
@@ -90,10 +81,9 @@ public class IncidentCommanderAgent implements ToolAgent {
                             AgentResult.Status.SUCCESS,
                             "План реагирования на инцидент успешно запущен.",
                             Map.of("incidentResponsePlan", results)
-                    ))
-                    .toFuture();
+                    ));
         } catch (JsonProcessingException e) {
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации отчета об инциденте.", e));
+            return Mono.error(new ProcessingException("Ошибка сериализации отчета об инциденте.", e));
         }
     }
 }

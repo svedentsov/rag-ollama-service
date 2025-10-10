@@ -3,8 +3,8 @@ package com.example.ragollama.agent.analytics.domain;
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.ToolAgent;
-import com.example.ragollama.agent.git.tools.GitApiClient;
 import com.example.ragollama.agent.analytics.model.CodeQualityImpactReport;
+import com.example.ragollama.agent.git.tools.GitApiClient;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
@@ -22,7 +22,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который оценивает влияние качества кода измененных файлов
@@ -39,6 +38,7 @@ public class CodeQualityImpactEstimatorAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @Override
     public String getName() {
@@ -57,12 +57,11 @@ public class CodeQualityImpactEstimatorAgent implements ToolAgent {
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         List<String> changedFiles = (List<String>) context.payload().get("changedFiles");
         String newRef = (String) context.payload().get("newRef");
         Map<String, Long> historicalFailures = historicalDefectService.getFailureCountsByClass(90);
 
-        // Асинхронно собираем "досье" на каждый измененный файл
         return Flux.fromIterable(changedFiles)
                 .filter(file -> file.endsWith(".java") && file.startsWith("src/main/java"))
                 .flatMap(file -> gitApiClient.getFileContent(file, newRef)
@@ -80,7 +79,7 @@ public class CodeQualityImpactEstimatorAgent implements ToolAgent {
                     try {
                         String profilesJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(profiles);
                         String promptString = promptService.render("codeQualityImpactPrompt", Map.of("riskDataJson", profilesJson));
-                        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                                 .map(this::parseLlmResponse)
                                 .map(report -> new AgentResult(
                                         getName(),
@@ -91,13 +90,12 @@ public class CodeQualityImpactEstimatorAgent implements ToolAgent {
                     } catch (JsonProcessingException e) {
                         return Mono.error(new ProcessingException("Ошибка сериализации профилей риска", e));
                     }
-                })
-                .toFuture();
+                });
     }
 
     private CodeQualityImpactReport parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, CodeQualityImpactReport.class);
         } catch (JsonProcessingException e) {
             throw new ProcessingException("LLM вернула невалидный JSON для отчета о качестве кода.", e);

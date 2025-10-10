@@ -1,7 +1,7 @@
 -- Таблица для хранения истории прогонов оценки RAG
 CREATE TABLE IF NOT EXISTS evaluation_history
 (
-    id                   UUID PRIMARY KEY,
+    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     f1_score             DOUBLE PRECISION         NOT NULL,
     recall               DOUBLE PRECISION         NOT NULL,
     precision            DOUBLE PRECISION         NOT NULL,

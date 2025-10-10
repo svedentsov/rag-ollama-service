@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агентов, отвечающих за проверку консистентности базы знаний.
@@ -30,13 +30,11 @@ public class ConsistencyController {
      * Запускает полный конвейер для проверки одного утверждения на консистентность.
      *
      * @param request DTO с утверждением для проверки.
-     * @return {@link CompletableFuture} с финальным отчетом о консистентности.
+     * @return {@link Mono} с финальным отчетом о консистентности.
      */
     @PostMapping("/check")
-    @Operation(summary = "Проверить утверждение на консистентность по всем источникам",
-            description = "Запускает 'consistency-check-pipeline', который сначала собирает " +
-                    "доказательства из разных источников, а затем сравнивает их на предмет противоречий.")
-    public CompletableFuture<List<AgentResult>> checkConsistency(@Valid @RequestBody ConsistencyCheckRequest request) {
+    @Operation(summary = "Проверить утверждение на консистентность по всем источникам")
+    public Mono<List<AgentResult>> checkConsistency(@Valid @RequestBody ConsistencyCheckRequest request) {
         return orchestratorService.invoke("consistency-check-pipeline", request.toAgentContext());
     }
 }

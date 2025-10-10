@@ -5,7 +5,7 @@ import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
 import com.example.ragollama.shared.util.JsonExtractorUtil;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties; // ИМПОРТ
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +30,7 @@ public class RouterAgentService {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record IntentResponse(QueryIntent intent) {
@@ -44,7 +45,7 @@ public class RouterAgentService {
     public Mono<QueryIntent> route(String query) {
         String promptString = promptService.render("routerAgentPrompt", Map.of("query", query));
         Prompt prompt = new Prompt(promptString);
-        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FAST_RELIABLE, true))
+        return llmClient.callChat(prompt, ModelCapability.FAST_RELIABLE, true)
                 .map(this::parseIntentFromLlmResponse)
                 .doOnSuccess(intent -> log.info("Запрос '{}' классифицирован с намерением: {}", query, intent))
                 .onErrorResume(e -> {
@@ -53,16 +54,9 @@ public class RouterAgentService {
                 });
     }
 
-    /**
-     * Безопасно парсит JSON-ответ от LLM в {@link QueryIntent}.
-     *
-     * @param jsonResponse Ответ от LLM.
-     * @return Распознанный {@link QueryIntent}.
-     * @throws ProcessingException если парсинг JSON не удался.
-     */
     private QueryIntent parseIntentFromLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             if (cleanedJson.isEmpty()) {
                 log.warn("LLM-маршрутизатор вернул пустой JSON. Ответ: {}", jsonResponse);
                 throw new ProcessingException("LLM-маршрутизатор вернул пустой JSON.");
@@ -75,9 +69,6 @@ public class RouterAgentService {
         }
     }
 
-    /**
-     * Улучшенная Fallback-стратегия.
-     */
     private QueryIntent fallbackLogic(String query) {
         String lowerCaseQuery = query.toLowerCase();
         if (lowerCaseQuery.matches(".*\\b(код|code|пример|example|sample|java|python|javascript|selenide)\\b.*")) {

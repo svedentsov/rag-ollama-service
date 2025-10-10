@@ -12,22 +12,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Специализированный сервис, инкапсулирующий логику анализа нарушений
  * доступности (a11y) с помощью языковой модели (LLM).
  * <p>
- * Этот класс является эталонной реализацией Принципа Единственной Ответственности (SRP).
- * Его единственная задача — принять список технических нарушений,
- * взаимодействовать с LLM для их анализа и обогащения, и вернуть
- * структурированный, человекочитаемый отчет.
- * <p>
- * Он полностью отделен от логики оркестрации агента, что упрощает его
- * тестирование в изоляции и переиспользование. Все операции выполняются асинхронно.
+ * Эта версия использует полностью декларативный, идиоматичный реактивный стиль,
+ * инкапсулируя потенциально блокирующие операции в {@link Mono#fromCallable}.
  */
 @Service
 @Slf4j
@@ -43,22 +38,25 @@ public class LlmAccessibilityAnalyzer {
      * Асинхронно анализирует список технических нарушений доступности с помощью LLM.
      *
      * @param violations Список технических нарушений, обнаруженных сканером.
-     * @return {@link CompletableFuture}, который по завершении будет содержать
+     * @return {@link Mono}, который по завершении будет содержать
      * полностью сформированный {@link AccessibilityReport}.
      * @throws ProcessingException если происходит критическая ошибка при сериализации данных в JSON.
      */
-    public CompletableFuture<AccessibilityReport> analyze(List<AccessibilityViolation> violations) {
-        try {
-            String violationsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(violations);
-            String promptString = promptService.render("accessibilityAudit", Map.of("violationsJson", violationsJson));
-            log.debug("Отправка запроса к LLM для анализа {} нарушений доступности.", violations.size());
-
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(llmResponse -> reportParser.parse(llmResponse, violations));
-
-        } catch (JsonProcessingException e) {
-            log.error("Критическая ошибка: не удалось сериализовать список нарушений a11y в JSON.", e);
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации нарушений a11y", e));
-        }
+    public Mono<AccessibilityReport> analyze(List<AccessibilityViolation> violations) {
+        return Mono.fromCallable(() -> {
+                    // Эта операция потенциально блокирующая, поэтому инкапсулируем ее.
+                    try {
+                        return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(violations);
+                    } catch (JsonProcessingException e) {
+                        log.error("Критическая ошибка: не удалось сериализовать список нарушений a11y в JSON.", e);
+                        throw new ProcessingException("Ошибка сериализации нарушений a11y", e);
+                    }
+                })
+                .flatMap(violationsJson -> {
+                    String promptString = promptService.render("accessibilityAudit", Map.of("violationsJson", violationsJson));
+                    log.debug("Отправка запроса к LLM для анализа {} нарушений доступности.", violations.size());
+                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true);
+                })
+                .map(llmResponse -> reportParser.parse(llmResponse, violations));
     }
 }

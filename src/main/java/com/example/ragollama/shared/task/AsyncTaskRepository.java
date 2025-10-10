@@ -1,33 +1,34 @@
 package com.example.ragollama.shared.task;
 
 import com.example.ragollama.shared.task.model.AsyncTask;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.r2dbc.repository.Query;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Репозиторий для управления сущностями AsyncTask.
+ * Реактивный репозиторий для AsyncTask.
  */
 @Repository
-public interface AsyncTaskRepository extends JpaRepository<AsyncTask, UUID> {
-    /**
-     * Находит активную (в статусе RUNNING) задачу для указанной сессии.
-     *
-     * @param sessionId ID сессии.
-     * @return Optional с найденной задачей.
-     */
-    Optional<AsyncTask> findBySessionIdAndStatus(UUID sessionId, TaskStatus status);
+public interface AsyncTaskRepository extends ReactiveCrudRepository<AsyncTask, UUID> {
 
     /**
-     * Находит все задачи, которые остались в статусе RUNNING, но были созданы
-     * до момента запуска приложения. Это "зависшие" задачи.
+     * Находит активную задачу для сессии.
      *
-     * @return Список зависших задач.
+     * @param sessionId ID сессии.
+     * @param status    Статус.
+     * @return Mono с задачей.
      */
-    @Query("SELECT t FROM AsyncTask t WHERE t.status = 'RUNNING'")
-    List<AsyncTask> findStuckTasks();
+    Mono<AsyncTask> findBySessionIdAndStatus(UUID sessionId, TaskStatus status);
+
+    /**
+     * Находит все "зависшие" задачи.
+     *
+     * @return Поток задач.
+     */
+    @Query("SELECT * FROM async_tasks WHERE status = 'RUNNING'")
+    Flux<AsyncTask> findStuckTasks();
 }

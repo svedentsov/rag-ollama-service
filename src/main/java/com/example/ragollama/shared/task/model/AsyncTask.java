@@ -1,73 +1,49 @@
 package com.example.ragollama.shared.task.model;
 
 import com.example.ragollama.shared.task.TaskStatus;
-import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * Сущность JPA для персистентного хранения состояния асинхронной задачи.
- * Является источником истины о жизненном цикле фоновых операций.
+ * Сущность AsyncTask, адаптированная для R2DBC.
  */
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Entity
-@Table(name = "async_tasks")
+@Table("async_tasks")
 public class AsyncTask {
 
-    /**
-     * Уникальный идентификатор задачи.
-     */
     @Id
     private UUID id;
 
-    /**
-     * ID сессии чата, инициировавшей задачу. Может быть null.
-     */
-    @Column(name = "session_id")
+    @Column("session_id")
     private UUID sessionId;
 
-    /**
-     * Текущий статус выполнения задачи.
-     */
     @NotNull
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column
     private TaskStatus status;
 
-    /**
-     * Сообщение об ошибке, если задача завершилась неудачно.
-     */
-    @Lob
-    @Column(name = "error_message", columnDefinition = "TEXT")
+    @Column("error_message")
     private String errorMessage;
 
-    /**
-     * Временная метка создания задачи.
-     */
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @CreatedDate
+    @Column("created_at")
     private OffsetDateTime createdAt;
 
-    /**
-     * Временная метка последнего обновления статуса задачи.
-     */
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
+    @LastModifiedDate
+    @Column("updated_at")
     private OffsetDateTime updatedAt;
 
-    /**
-     * Бизнес-метод для перевода задачи в статус FAILED.
-     * @param message Сообщение об ошибке.
-     */
     public void markAsFailed(String message) {
         this.status = TaskStatus.FAILED;
         this.errorMessage = message;

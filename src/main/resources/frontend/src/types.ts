@@ -10,7 +10,22 @@ export interface SourceCitation {
 }
 
 /**
- * Представляет одно сообщение в чате.
+ * @interface ServerMessageDto
+ * @description Data Transfer Object (DTO), представляющий структуру сообщения, как она приходит с сервера.
+ * Это явный контракт между фронтендом и бэкендом.
+ */
+export interface ServerMessageDto {
+  id: string;
+  parentId: string | null;
+  role: 'USER' | 'ASSISTANT';
+  content: string;
+  taskId?: string;
+}
+
+/**
+ * @interface Message
+ * @description Клиентская модель сообщения. Может содержать дополнительные поля для UI-логики,
+ * которых нет на сервере (например, `isStreaming`).
  */
 export interface Message {
   /** Уникальный идентификатор сообщения (клиентский или серверный). */

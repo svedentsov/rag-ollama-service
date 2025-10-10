@@ -1,25 +1,23 @@
-package com.example.ragollama.agent.buganalysis.api.dto;
+package com.example.ragollama.agent.buganalysis.model;
 
-import com.example.ragollama.agent.buganalysis.model.BugReportSummary;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
 
 /**
- * DTO для структурированного ответа от агента анализа багов.
+ * Публичный DTO для структурированного результата анализа бага.
  * <p>
- * Эта версия принимает улучшенное описание бага в виде структурированного
- * объекта {@link BugReportSummary}, что соответствует более качественному
- * выводу от LLM и обогащает контракт API.
+ * Этот record является стабильным API-контрактом, который возвращается
+ * клиенту после работы конвейера анализа баг-репортов.
  *
  * @param improvedDescription Улучшенное, структурированное описание бага.
- * @param isDuplicate         Вердикт LLM, является ли отчет дубликатом.
+ * @param isDuplicate         Вердикт, является ли отчет дубликатом.
  * @param duplicateCandidates Список ID потенциальных дубликатов.
  */
 @Schema(description = "Структурированный результат анализа бага")
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record BugAnalysisResponse(
+public record BugAnalysisReport(
         @Schema(description = "Улучшенное и структурированное описание бага")
         BugReportSummary improvedDescription,
         @Schema(description = "Вердикт: является ли отчет дубликатом")

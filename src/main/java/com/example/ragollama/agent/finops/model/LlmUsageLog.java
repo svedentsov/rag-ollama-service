@@ -1,20 +1,20 @@
 package com.example.ragollama.agent.finops.model;
 
-import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * Сущность JPA для логирования каждого вызова LLM.
- * Является источником данных для FinOps-аналитики и контроля квот.
+ * Сущность для хранения логов использования LLM.
  */
-@Entity
-@Table(name = "llm_usage_log")
+@Table("llm_usage_log")
 @Getter
 @Builder
 @NoArgsConstructor
@@ -23,30 +23,29 @@ import java.util.UUID;
 public class LlmUsageLog {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @NotBlank
-    @Column(nullable = false, updatable = false)
+    @Column( "username")
     private String username;
 
     @NotBlank
-    @Column(nullable = false, updatable = false)
+    @Column("model_name")
     private String modelName;
 
     @NotNull
-    @Column(nullable = false, updatable = false)
-    private Long promptTokens;
+    @Column("prompt_tokens")
+    private long promptTokens;
 
     @NotNull
-    @Column(nullable = false, updatable = false)
-    private Long completionTokens;
+    @Column("completion_tokens")
+    private long completionTokens;
 
     @NotNull
-    @Column(nullable = false, updatable = false)
-    private Long totalTokens;
+    @Column("total_tokens")
+    private long totalTokens;
 
-    @CreationTimestamp
-    @Column(nullable = false, updatable = false)
+    @CreatedDate
+    @Column("created_at")
     private OffsetDateTime createdAt;
 }

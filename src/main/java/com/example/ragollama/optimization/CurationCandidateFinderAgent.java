@@ -6,12 +6,13 @@ import com.example.ragollama.agent.ToolAgent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
+/**
+ * Агент, который находит кандидатов для курирования (улучшения метаданных).
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -34,16 +35,17 @@ public class CurationCandidateFinderAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        return CompletableFuture.supplyAsync(() -> {
-            List<UUID> candidates = curationRepository.findDocumentsForCuration(10); // Обрабатываем по 10 за раз
-            log.info("Найдено {} кандидатов для курирования.", candidates.size());
-            return new AgentResult(
-                    getName(),
-                    AgentResult.Status.SUCCESS,
-                    "Найдено кандидатов для курирования: " + candidates.size(),
-                    Map.of("candidateIds", candidates)
-            );
-        });
+    public Mono<AgentResult> execute(AgentContext context) {
+        return curationRepository.findDocumentsForCuration(10)
+                .collectList()
+                .map(candidates -> {
+                    log.info("Найдено {} кандидатов для курирования.", candidates.size());
+                    return new AgentResult(
+                            getName(),
+                            AgentResult.Status.SUCCESS,
+                            "Найдено кандидатов для курирования: " + candidates.size(),
+                            Map.of("candidateIds", candidates)
+                    );
+                });
     }
 }

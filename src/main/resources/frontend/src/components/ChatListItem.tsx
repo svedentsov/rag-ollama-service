@@ -2,31 +2,33 @@ import React, { useRef, useState, FC, useEffect } from 'react';
 import { ChatSession } from '../types';
 import { useContextMenu } from '../hooks/useContextMenu';
 import { NotificationDot } from './NotificationDot';
-import { Trash, Edit } from 'lucide-react';
+import { Trash, Edit, MoreHorizontal } from 'lucide-react';
 import styles from '../ChatSidebar.module.css';
 
 /**
- * Пропсы для компонента ChatListItem.
+ * @interface ChatListItemProps
+ * @description Пропсы для компонента элемента списка чатов.
  */
 interface ChatListItemProps {
-  /** @param session - Объект сессии чата для отображения. */
+  /** @param {ChatSession} session - Объект сессии чата для отображения. */
   session: ChatSession;
-  /** @param isActive - Флаг, является ли данный чат активным в UI. */
+  /** @param {boolean} isActive - Флаг, является ли данный чат активным в UI. */
   isActive: boolean;
-  /** @param hasNotification - Флаг, есть ли для этого чата уведомление. */
+  /** @param {boolean} hasNotification - Флаг, есть ли для этого чата уведомление. */
   hasNotification: boolean;
-  /** @param onNavigate - Колбэк для навигации к этому чату. */
+  /** @param {(sessionId: string) => void} onNavigate - Колбэк для навигации к этому чату. */
   onNavigate: (sessionId: string) => void;
-  /** @param onRename - Колбэк для переименования чата. */
+  /** @param {(newName: string) => void} onRename - Колбэк для переименования чата. */
   onRename: (newName: string) => void;
-  /** @param onDelete - Колбэк для удаления чата. */
+  /** @param {() => void} onDelete - Колбэк для удаления чата. */
   onDelete: () => void;
 }
 
 /**
  * Отображает один элемент в списке чатов, инкапсулируя логику
- * редактирования, удаления и контекстного меню.
+ * редактирования, удаления и вызова меню действий.
  * @param {ChatListItemProps} props - Пропсы компонента.
+ * @returns {React.ReactElement} Отрендеренный компонент.
  */
 export const ChatListItem: FC<ChatListItemProps> = ({
   session,
@@ -40,7 +42,7 @@ export const ChatListItem: FC<ChatListItemProps> = ({
   const [editingName, setEditingName] = useState(session.chatName);
   const editInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { menuState, handleContextMenu, closeMenu } = useContextMenu<ChatSession>(menuRef);
+  const { menuState, openMenu, closeMenu } = useContextMenu<ChatSession>(menuRef);
 
   useEffect(() => {
     if (isEditing && editInputRef.current) {
@@ -70,10 +72,11 @@ export const ChatListItem: FC<ChatListItemProps> = ({
 
   return (
     <>
-      <button
+      <div
         onClick={(e) => { e.preventDefault(); onNavigate(session.sessionId); }}
-        onContextMenu={(e) => handleContextMenu(e, session)}
         className={`${styles.navLink} ${isActive && !isEditing ? styles.active : ''}`}
+        role="button"
+        tabIndex={0}
         aria-current={isActive ? 'page' : undefined}
       >
         {isEditing ? (
@@ -92,10 +95,22 @@ export const ChatListItem: FC<ChatListItemProps> = ({
         ) : (
           <>
             <span className={styles.chatTitle}>{session.chatName}</span>
-            {hasNotification && <NotificationDot />}
+            <div className={styles.chatItemActions}>
+              {hasNotification && <NotificationDot />}
+              <button
+                className={styles.moreButton}
+                onClick={(e) => {
+                  e.stopPropagation(); // Предотвращаем навигацию при клике на меню
+                  openMenu(e, session);
+                }}
+                aria-label={`Действия для чата ${session.chatName}`}
+              >
+                <MoreHorizontal size={16} />
+              </button>
+            </div>
           </>
         )}
-      </button>
+      </div>
 
       {menuState.show && menuState.item?.sessionId === session.sessionId && (
         <div ref={menuRef} className={styles.contextMenu} style={{ top: menuState.y, left: menuState.x }} role="menu" aria-label={`Действия для чата ${session.chatName}`}>

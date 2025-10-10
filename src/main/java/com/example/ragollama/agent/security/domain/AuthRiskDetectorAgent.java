@@ -16,11 +16,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который анализирует извлеченные правила доступа на предмет
@@ -35,6 +35,7 @@ public class AuthRiskDetectorAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     /**
      * {@inheritDoc}
@@ -65,12 +66,12 @@ public class AuthRiskDetectorAgent implements ToolAgent {
      */
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         List<Map<String, String>> extractedRules = (List<Map<String, String>>) context.payload()
                 .getOrDefault("extractedRules", Collections.emptyList());
 
         if (extractedRules.isEmpty()) {
-            return CompletableFuture.completedFuture(new AgentResult(
+            return Mono.just(new AgentResult(
                     getName(),
                     AgentResult.Status.SUCCESS,
                     "Анализ рисков не проводился, так как не было найдено правил доступа.",
@@ -83,8 +84,8 @@ public class AuthRiskDetectorAgent implements ToolAgent {
             String promptString = promptService.render("authRiskDetectorPrompt", Map.of("rulesAsJson", rulesAsJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(this::parseLlmResponse)
-                    .thenApply(risks -> {
+                    .map(this::parseLlmResponse)
+                    .map(risks -> {
                         String summary = String.format("Анализ рисков завершен. Найдено %d потенциальных проблем.", risks.size());
                         log.info(summary);
                         return new AgentResult(
@@ -96,17 +97,14 @@ public class AuthRiskDetectorAgent implements ToolAgent {
                     });
         } catch (JsonProcessingException e) {
             log.error("Не удалось сериализовать правила доступа в JSON", e);
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации правил RBAC.", e));
+            return Mono.error(new ProcessingException("Ошибка сериализации правил RBAC.", e));
         }
     }
 
-    /**
-     * Безопасно парсит JSON-ответ от LLM в список объектов {@link AuthRisk}.
-     */
     private List<AuthRisk> parseLlmResponse(String llmResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(llmResponse);
-            if (cleanedJson.isEmpty() || cleanedJson.equals("[]")) {
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(llmResponse);
+            if (cleanedJson.isEmpty() || "[]".equals(cleanedJson)) {
                 return Collections.emptyList();
             }
             return objectMapper.readValue(cleanedJson, new TypeReference<>() {

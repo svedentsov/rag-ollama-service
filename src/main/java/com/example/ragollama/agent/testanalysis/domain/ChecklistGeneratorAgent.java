@@ -10,29 +10,22 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
  * QA-агент, который генерирует чек-лист для ручного тестирования
  * на основе описания функциональности.
- * <p>
- * Этот агент принимает текстовое описание требований, использует LLM для
- * анализа и декомпозиции, и возвращает структурированный список
- * конкретных, проверяемых шагов для QA-инженера.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class ChecklistGeneratorAgent implements ToolAgent {
 
-    /**
-     * Ключ в {@link AgentContext}, по которому агент ищет описание функциональности.
-     */
     public static final String FEATURE_DESCRIPTION_KEY = "featureDescription";
 
     private final LlmClient llmClient;
@@ -40,8 +33,6 @@ public class ChecklistGeneratorAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     *
-     * @return Уникальное имя агента.
      */
     @Override
     public String getName() {
@@ -50,8 +41,6 @@ public class ChecklistGeneratorAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     *
-     * @return Человекочитаемое описание назначения агента.
      */
     @Override
     public String getDescription() {
@@ -60,9 +49,6 @@ public class ChecklistGeneratorAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     *
-     * @param context Контекст, который должен содержать 'featureDescription'.
-     * @return {@code true}, если все необходимые ключи присутствуют.
      */
     @Override
     public boolean canHandle(AgentContext context) {
@@ -73,15 +59,15 @@ public class ChecklistGeneratorAgent implements ToolAgent {
      * Асинхронно выполняет генерацию чек-листа.
      *
      * @param context Контекст, содержащий описание функциональности.
-     * @return {@link CompletableFuture} с результатом, содержащим сгенерированный чек-лист.
+     * @return {@link Mono} с результатом, содержащим сгенерированный чек-лист.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String featureDescription = (String) context.payload().get(FEATURE_DESCRIPTION_KEY);
         String promptString = promptService.render("checklistGeneratorPrompt", Map.of("feature_description", featureDescription));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .thenApply(llmResponse -> {
+                .map(llmResponse -> {
                     List<String> checklistItems = parseToList(llmResponse);
                     String summary = "Чек-лист успешно сгенерирован. Найдено " + checklistItems.size() + " пунктов для проверки.";
                     log.info("ChecklistGeneratorAgent: сгенерирован чек-лист из {} пунктов.", checklistItems.size());
@@ -95,12 +81,6 @@ public class ChecklistGeneratorAgent implements ToolAgent {
                 });
     }
 
-    /**
-     * Безопасно парсит многострочный ответ от LLM в список строк.
-     *
-     * @param llmResponse Сырой ответ от LLM.
-     * @return Список очищенных от лишних пробелов строк.
-     */
     private List<String> parseToList(String llmResponse) {
         if (llmResponse == null || llmResponse.isBlank()) {
             return List.of();

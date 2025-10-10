@@ -21,7 +21,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который проверяет измененный код на соответствие
@@ -36,6 +35,7 @@ public class GeoLegalNavigatorAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     /**
      * {@inheritDoc}
@@ -67,7 +67,7 @@ public class GeoLegalNavigatorAgent implements ToolAgent {
      */
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String jurisdiction = (String) context.payload().get("jurisdiction");
         List<String> changedFiles = (List<String>) context.payload().get("changedFiles");
         String ref = (String) context.payload().getOrDefault("newRef", "main");
@@ -88,7 +88,7 @@ public class GeoLegalNavigatorAgent implements ToolAgent {
                                 "jurisdiction", jurisdiction,
                                 "changed_code_json", codeJson
                         ));
-                        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                                 .map(this::parseLlmResponse)
                                 .map(report -> new AgentResult(
                                         getName(),
@@ -99,13 +99,12 @@ public class GeoLegalNavigatorAgent implements ToolAgent {
                     } catch (JsonProcessingException e) {
                         return Mono.error(new ProcessingException("Ошибка сериализации кода для Geo-Legal анализа", e));
                     }
-                })
-                .toFuture();
+                });
     }
 
     private GeoLegalReport parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, GeoLegalReport.class);
         } catch (JsonProcessingException e) {
             log.error("Не удалось распарсить JSON-ответ от Geo-Legal Navigator LLM: {}", jsonResponse, e);

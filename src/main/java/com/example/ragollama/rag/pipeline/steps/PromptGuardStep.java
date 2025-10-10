@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Шаг RAG-конвейера, выполняющий роль "стража" на входе.
+ * Шаг RAG-конвейера "Prompt Guard", адаптированный для R2DBC.
  */
 @Component
 @Order(1)
@@ -36,9 +36,11 @@ public class PromptGuardStep implements RagPipelineStep {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
     private final TaskLifecycleService taskLifecycleService;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record SecurityCheckResponse(boolean is_safe, Object reasoning) {}
+    private record SecurityCheckResponse(boolean is_safe, Object reasoning) {
+    }
 
     private static final Set<String> WHITELISTED_KEYWORDS = Set.of(
             "что", "где", "когда", "кто", "как", "почему", "сколько", "какой", "расскажи", "опиши",
@@ -53,8 +55,11 @@ public class PromptGuardStep implements RagPipelineStep {
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
         log.info("Шаг [01] Prompt Guard: проверка запроса на безопасность...");
-        taskLifecycleService.getActiveTaskForSession(context.sessionId()).ifPresent(task ->
-                taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Проверяю запрос...")));
+
+        taskLifecycleService.getActiveTaskForSession(context.sessionId())
+                .doOnNext(task -> taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Проверяю запрос...")))
+                .subscribe();
+
         String query = context.originalQuery();
         if (isBlacklisted(query)) {
             log.warn("Обнаружен потенциально вредоносный ключ в запросе: '{}'. Запрос заблокирован.", query);
@@ -67,7 +72,7 @@ public class PromptGuardStep implements RagPipelineStep {
         log.debug("Запрос '{}' отправлен на глубокий AI-анализ безопасности.", query);
         String promptString = promptService.render("promptGuardPrompt", Map.of("query", query));
         Prompt prompt = new Prompt(promptString);
-        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FASTEST, true))
+        return llmClient.callChat(prompt, ModelCapability.FASTEST, true)
                 .flatMap(responseJson -> {
                     SecurityCheckResponse checkResponse = parseLlmResponse(responseJson);
                     if (!checkResponse.is_safe()) {
@@ -95,7 +100,7 @@ public class PromptGuardStep implements RagPipelineStep {
 
     private SecurityCheckResponse parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, SecurityCheckResponse.class);
         } catch (JsonProcessingException e) {
             log.error("Не удалось распарсить JSON-ответ от PromptGuard LLM: {}", jsonResponse, e);

@@ -14,9 +14,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, выполняющий роль стратегического аналитика на уровне всей организации.
@@ -60,18 +61,19 @@ public class FederatedInsightsAgent implements QaAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        return CompletableFuture.supplyAsync(analyticsService::getProjectHealthSummaries, applicationTaskExecutor)
-                .thenCompose(healthSummaries -> {
+    public Mono<AgentResult> execute(AgentContext context) {
+        return Mono.fromCallable(analyticsService::getProjectHealthSummaries)
+                .subscribeOn(Schedulers.fromExecutor(applicationTaskExecutor))
+                .flatMap(healthSummaries -> {
                     if (healthSummaries.isEmpty()) {
-                        return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Нет данных для федеративного анализа.", Map.of()));
+                        return Mono.just(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Нет данных для федеративного анализа.", Map.of()));
                     }
                     try {
                         String summariesJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(healthSummaries);
                         String promptString = promptService.render("federatedInsightsPrompt", Map.of("healthDataJson", summariesJson));
 
                         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                                .thenApply(summary -> {
+                                .map(summary -> {
                                     FederatedReport report = new FederatedReport(summary, healthSummaries);
                                     return new AgentResult(
                                             getName(),
@@ -81,7 +83,7 @@ public class FederatedInsightsAgent implements QaAgent {
                                     );
                                 });
                     } catch (JsonProcessingException e) {
-                        return CompletableFuture.failedFuture(e);
+                        return Mono.error(e);
                     }
                 });
     }

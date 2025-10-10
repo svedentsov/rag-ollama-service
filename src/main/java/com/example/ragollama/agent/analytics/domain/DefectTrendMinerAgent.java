@@ -22,7 +22,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -39,6 +38,7 @@ public class DefectTrendMinerAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     /**
      * {@inheritDoc}
@@ -68,13 +68,13 @@ public class DefectTrendMinerAgent implements ToolAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         Integer days = (Integer) context.payload().get("days");
         Double threshold = (Double) context.payload().get("clusterThreshold");
         List<Document> defects = defectRepository.findRecentDefects(days);
 
         if (defects.isEmpty()) {
-            return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Дефекты за указанный период не найдены.", Map.of()));
+            return Mono.just(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Дефекты за указанный период не найдены.", Map.of()));
         }
 
         List<DefectCluster> clusters = clusterDefects(defects, threshold);
@@ -87,8 +87,7 @@ public class DefectTrendMinerAgent implements ToolAgent {
                         AgentResult.Status.SUCCESS,
                         "Анализ трендов дефектов завершен. Найдено " + summarizedClusters.size() + " кластеров.",
                         Map.of("defectClusters", summarizedClusters)
-                ))
-                .toFuture();
+                ));
     }
 
     private List<DefectCluster> clusterDefects(List<Document> defects, double threshold) {
@@ -132,10 +131,10 @@ public class DefectTrendMinerAgent implements ToolAgent {
 
         String promptString = promptService.render("defectTrendAnalyzerPrompt", Map.of("defectsText", defectsText));
 
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .map(summaryJson -> {
                     try {
-                        String extractedJson = JsonExtractorUtil.extractJsonBlock(summaryJson);
+                        String extractedJson = jsonExtractorUtil.extractJsonBlock(summaryJson);
                         Map<String, String> summaryMap = objectMapper.readValue(extractedJson, new TypeReference<>() {
                         });
                         cluster.setSummary(summaryMap.getOrDefault("theme", "Не удалось определить тему"));

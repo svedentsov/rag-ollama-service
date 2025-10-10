@@ -1,52 +1,42 @@
 import React, { useState, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { v4 as uuidv4 } from 'uuid';
 import { ChatMessage } from './components/ChatMessage';
 import { ChatInput } from './components/ChatInput';
-import { Message } from './types';
 import { useChatMessages } from './hooks/useChatMessages';
-import { useStreamManager } from './hooks/useStreamManager';
 import { useScrollManager } from './hooks/useScrollManager';
 import { useVisibleMessages } from './hooks/useVisibleMessages';
+import { useStreamingStore } from './state/streamingStore';
+import { useChatInteraction } from './hooks/useChatInteraction';
+import { useStreamManager } from './hooks/useStreamManager';
 import styles from './App.module.css';
 
+/**
+ * @interface AppProps
+ * @description Пропсы для корневого компонента приложения чата.
+ */
 interface AppProps {
+  /** @param {string} sessionId - ID текущей активной сессии чата. */
   sessionId: string;
 }
 
 /**
  * Главный компонент-контейнер для чата.
+ * Теперь он максимально "глупый": вся логика вынесена в кастомные хуки.
+ * Его задача - композиция UI-компонентов и передача им пропсов из хуков.
+ * @param {AppProps} props - Пропсы компонента.
+ * @returns {React.ReactElement} Отрендеренный компонент чата.
  */
 const App: React.FC<AppProps> = ({ sessionId }) => {
-  const queryClient = useQueryClient();
   const { messages, isLoading: isLoadingHistory, error: historyError, updateMessage, deleteMessage } = useChatMessages(sessionId);
-  const { startStream, stopStream } = useStreamManager();
+  const { handleSendMessage, handleRegenerate } = useChatInteraction(sessionId);
+  const { stopStream } = useStreamManager();
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
   const { visibleMessages, messageBranchInfo } = useVisibleMessages(sessionId, messages);
   const { containerRef, messagesEndRef, showScrollButton, scrollToBottom } = useScrollManager([visibleMessages]);
-  const isAnyMessageStreaming = messages.some(m => m.isStreaming);
 
-  const handleSendMessage = useCallback((inputText: string) => {
-    if (!inputText.trim() || isAnyMessageStreaming) return;
-    const userMessage: Message = { id: uuidv4(), type: 'user', text: inputText };
-    const assistantMessage: Message = { id: uuidv4(), type: 'assistant', text: '', parentId: userMessage.id, isStreaming: true };
-
-    queryClient.setQueryData<Message[]>(['messages', sessionId], (old = []) => [...old, userMessage, assistantMessage]);
-    startStream(sessionId, inputText, assistantMessage.id);
-  }, [isAnyMessageStreaming, queryClient, sessionId, startStream]);
-
-  const handleRegenerate = useCallback((assistantMessage: Message) => {
-    if (!assistantMessage.parentId || isAnyMessageStreaming) return;
-
-    const parentMessage = messages.find(m => m.id === assistantMessage.parentId);
-    if (parentMessage) {
-      const newAssistantMessage: Message = { id: uuidv4(), type: 'assistant', text: '', parentId: parentMessage.id, isStreaming: true };
-
-      queryClient.setQueryData<Message[]>(['messages', sessionId], (old = []) => [...old, newAssistantMessage]);
-      startStream(sessionId, parentMessage.text, newAssistantMessage.id);
-    }
-  }, [isAnyMessageStreaming, messages, queryClient, sessionId, startStream]);
+  // Подписываемся на легковесный стор для определения статуса загрузки
+  const isAnyMessageStreaming = useStreamingStore((state) => state.streamingMessageIds.size > 0);
+  const streamingMessageIds = useStreamingStore((state) => state.streamingMessageIds);
 
   const handleUpdateMessage = useCallback((messageId: string, newContent: string) => {
     updateMessage({ messageId, newContent });
@@ -54,22 +44,15 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
   }, [updateMessage]);
 
   const handleDeleteMessage = useCallback((messageId: string) => {
-    const idsToDelete = new Set<string>([messageId]);
-    let newChildrenFound = true;
-    while(newChildrenFound) {
-        newChildrenFound = false;
-        messages.forEach(msg => {
-            if (msg.parentId && idsToDelete.has(msg.parentId) && !idsToDelete.has(msg.id)) {
-                idsToDelete.add(msg.id);
-                newChildrenFound = true;
-            }
-        });
-    }
-    queryClient.setQueryData<Message[]>(['messages', sessionId], (old = []) =>
-        old.filter(msg => !idsToDelete.has(msg.id))
-    );
     deleteMessage(messageId);
-  }, [deleteMessage, messages, queryClient, sessionId]);
+  }, [deleteMessage]);
+
+  const handleStopGenerating = useCallback(() => {
+    const streamingId = Array.from(streamingMessageIds)[0];
+    if (streamingId) {
+      stopStream(streamingId);
+    }
+  }, [streamingMessageIds, stopStream]);
 
   const isLastMessage = (msgId: string) => visibleMessages.length > 0 && visibleMessages[visibleMessages.length - 1].id === msgId;
 
@@ -102,10 +85,7 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
       <ChatInput
         onSendMessage={handleSendMessage}
         isLoading={isAnyMessageStreaming}
-        onStopGenerating={() => {
-            const streamingMessage = messages.find(m => m.isStreaming);
-            if (streamingMessage) stopStream(streamingMessage.id);
-        }}
+        onStopGenerating={handleStopGenerating}
         showScrollButton={showScrollButton}
         onScrollToBottom={() => scrollToBottom('smooth')}
       />

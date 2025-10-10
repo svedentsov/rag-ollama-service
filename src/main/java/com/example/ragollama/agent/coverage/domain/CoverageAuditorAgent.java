@@ -8,10 +8,10 @@ import com.example.ragollama.agent.coverage.tool.JacocoReportParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который выполняет аудит тестового покрытия для измененных файлов.
@@ -43,8 +43,8 @@ public class CoverageAuditorAgent implements ToolAgent {
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        return CompletableFuture.supplyAsync(() -> {
+    public Mono<AgentResult> execute(AgentContext context) {
+        return Mono.fromCallable(() -> {
             List<String> changedFiles = (List<String>) context.payload().get("changedFiles");
             String jacocoReport = (String) context.payload().get("jacocoReportContent");
             Map<String, Double> coverageData = jacocoReportParser.parse(jacocoReport);

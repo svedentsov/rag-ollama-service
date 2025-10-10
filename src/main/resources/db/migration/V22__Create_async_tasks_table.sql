@@ -1,7 +1,7 @@
 -- Таблица для персистентного хранения состояния асинхронных задач
 CREATE TABLE IF NOT EXISTS async_tasks
 (
-    id            UUID PRIMARY KEY,
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id    UUID,
     status        VARCHAR(50)              NOT NULL,
     error_message TEXT,

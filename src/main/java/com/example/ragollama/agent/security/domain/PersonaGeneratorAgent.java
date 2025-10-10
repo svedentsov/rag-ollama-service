@@ -15,14 +15,18 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который синтезирует "персоны" для тестирования
  * на основе извлеченных правил контроля доступа.
+ * <p>
+ * Этот компонент является эталоном реализации принципа инверсии зависимостей:
+ * все необходимые сервисы (LLM-клиент, парсеры) внедряются через конструктор,
+ * что обеспечивает максимальную тестируемость и соответствие парадигме Spring.
  */
 @Slf4j
 @Component
@@ -32,28 +36,45 @@ public class PersonaGeneratorAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "persona-generator";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Генерирует набор атакующих и легитимных персон на основе правил RBAC.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey("extractedRules");
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param context Контекст, содержащий `extractedRules`.
+     * @return {@link Mono} с результатом, содержащим сгенерированные {@link AttackPersonas}.
+     * @throws ProcessingException если происходит ошибка сериализации данных для LLM.
+     */
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         List<Map<String, String>> rbacRules = (List<Map<String, String>>) context.payload().get("extractedRules");
         if (rbacRules.isEmpty()) {
-            return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Правила RBAC не найдены, генерация персон пропущена.", Map.of()));
+            return Mono.just(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Правила RBAC не найдены, генерация персон пропущена.", Map.of()));
         }
 
         try {
@@ -61,21 +82,28 @@ public class PersonaGeneratorAgent implements ToolAgent {
             String promptString = promptService.render("personaGeneratorPrompt", Map.of("rbac_rules_json", rbacJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(this::parseLlmResponse)
-                    .thenApply(attackPersonas -> new AgentResult(
+                    .map(this::parseLlmResponse)
+                    .map(attackPersonas -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,
                             "Персоны для атаки успешно сгенерированы.",
                             Map.of("attackPersonas", attackPersonas)
                     ));
         } catch (JsonProcessingException e) {
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации правил RBAC", e));
+            return Mono.error(new ProcessingException("Ошибка сериализации правил RBAC", e));
         }
     }
 
+    /**
+     * Безопасно парсит JSON-ответ от LLM в строго типизированный DTO.
+     *
+     * @param jsonResponse Сырой строковый ответ от LLM.
+     * @return Объект {@link AttackPersonas}.
+     * @throws ProcessingException если LLM вернула невалидный JSON.
+     */
     private AttackPersonas parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, AttackPersonas.class);
         } catch (JsonProcessingException e) {
             log.error("Не удалось распарсить JSON-ответ от Persona Generator LLM: {}", jsonResponse, e);

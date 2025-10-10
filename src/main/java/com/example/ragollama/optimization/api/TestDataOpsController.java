@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агента, оркестрирующего операции с тестовыми данными.
@@ -31,11 +31,11 @@ public class TestDataOpsController {
      * конвейер для их генерации.
      *
      * @param request DTO с целью и контекстом.
-     * @return {@link CompletableFuture} с результатом, содержащим сгенерированные данные.
+     * @return {@link Mono} с результатом, содержащим сгенерированные данные.
      */
     @PostMapping("/request")
     @Operation(summary = "Запросить тестовые данные на естественном языке")
-    public CompletableFuture<List<AgentResult>> requestTestData(@Valid @RequestBody TestDataRequest request) {
+    public Mono<List<AgentResult>> requestTestData(@Valid @RequestBody TestDataRequest request) {
         return orchestratorService.invoke("test-data-ops-pipeline", request.toAgentContext());
     }
 }

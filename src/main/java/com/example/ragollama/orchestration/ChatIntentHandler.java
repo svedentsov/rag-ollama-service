@@ -8,10 +8,14 @@ import com.example.ragollama.orchestration.handlers.IntentHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Обработчик для намерения "Чат", адаптированный для реактивного стека.
+ */
 @Service
 @RequiredArgsConstructor
 public class ChatIntentHandler implements IntentHandler {
@@ -31,7 +35,8 @@ public class ChatIntentHandler implements IntentHandler {
     @Override
     public CompletableFuture<UniversalSyncResponse> handleSync(UniversalRequest request, UUID taskId) {
         return chatApplicationService.processChatRequestAsync(request.toChatRequest(), taskId)
-                .thenApply(response -> UniversalSyncResponse.from(response, canHandle()));
+                .map(response -> UniversalSyncResponse.from(response, canHandle()))
+                .toFuture();
     }
 
     @Override

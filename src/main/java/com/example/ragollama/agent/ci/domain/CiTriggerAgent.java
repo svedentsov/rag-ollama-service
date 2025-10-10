@@ -7,9 +7,9 @@ import com.example.ragollama.agent.ci.tool.CiApiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, выполняющий "действие" - запуск задачи в CI/CD системе.
@@ -53,7 +53,7 @@ public class CiTriggerAgent implements ToolAgent {
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String jobName = (String) context.payload().get("jobName");
         Map<String, Object> parameters = (Map<String, Object>) context.payload()
                 .getOrDefault("parameters", Map.of());
@@ -66,7 +66,6 @@ public class CiTriggerAgent implements ToolAgent {
                         AgentResult.Status.SUCCESS,
                         "Задача '" + jobName + "' успешно запущена в CI/CD. Ответ системы: " + response,
                         Map.of("ciResponse", response)
-                ))
-                .toFuture();
+                ));
     }
 }

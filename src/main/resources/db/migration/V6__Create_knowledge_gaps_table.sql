@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS knowledge_gaps (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     query_text TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL
 );

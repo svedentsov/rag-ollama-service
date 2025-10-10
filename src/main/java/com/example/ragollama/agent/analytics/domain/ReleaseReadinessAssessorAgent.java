@@ -15,9 +15,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который выполняет комплексную оценку готовности релиза.
@@ -33,6 +33,7 @@ public class ReleaseReadinessAssessorAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @Override
     public String getName() {
@@ -46,17 +47,15 @@ public class ReleaseReadinessAssessorAgent implements ToolAgent {
 
     @Override
     public boolean canHandle(AgentContext context) {
-        // Этот агент зависит от результатов работы других аналитических агентов
         return context.payload().containsKey("coverageRisks") &&
                 context.payload().containsKey("qualityImpactReport") &&
                 context.payload().containsKey("flakinessReport");
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         log.info("ReleaseReadinessAssessorAgent: запуск финальной оценки релиза.");
         try {
-            // Собираем все отчеты из контекста в одну карту для передачи в промпт
             Map<String, Object> reports = Map.of(
                     "coverageReport", context.payload().get("coverageRisks"),
                     "qualityReport", context.payload().get("qualityImpactReport"),
@@ -66,8 +65,8 @@ public class ReleaseReadinessAssessorAgent implements ToolAgent {
             String promptString = promptService.render("releaseReadinessPrompt", Map.of("reportsJson", reportsJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(this::parseLlmResponse)
-                    .thenApply(report -> new AgentResult(
+                    .map(this::parseLlmResponse)
+                    .map(report -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,
                             report.executiveSummary(),
@@ -75,13 +74,13 @@ public class ReleaseReadinessAssessorAgent implements ToolAgent {
                     ));
 
         } catch (JsonProcessingException e) {
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации отчетов для LLM", e));
+            return Mono.error(new ProcessingException("Ошибка сериализации отчетов для LLM", e));
         }
     }
 
     private ReleaseReadinessReport parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, ReleaseReadinessReport.class);
         } catch (JsonProcessingException e) {
             throw new ProcessingException("LLM вернула невалидный JSON для отчета о готовности релиза.", e);

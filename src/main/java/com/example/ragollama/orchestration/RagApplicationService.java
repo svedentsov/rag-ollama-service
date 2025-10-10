@@ -4,18 +4,18 @@ import com.example.ragollama.chat.domain.model.MessageRole;
 import com.example.ragollama.rag.api.dto.RagQueryRequest;
 import com.example.ragollama.rag.api.dto.RagQueryResponse;
 import com.example.ragollama.rag.api.dto.StreamingResponsePart;
-import com.example.ragollama.rag.pipeline.RagPipelineOrchestrator;
+import com.example.ragollama.rag.pipeline.steps.RagPipelineOrchestrator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
+/**
+ * Сервис-фасад для RAG, адаптированный для реактивного стека.
+ */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -24,9 +24,16 @@ public class RagApplicationService {
     private final RagPipelineOrchestrator ragPipelineOrchestrator;
     private final DialogManager dialogManager;
 
-    public CompletableFuture<RagQueryResponse> processRagRequestAsync(RagQueryRequest request, UUID taskId) {
+    /**
+     * Асинхронно обрабатывает RAG-запрос.
+     *
+     * @param request DTO с запросом.
+     * @param taskId  ID задачи.
+     * @return {@link Mono} с полным ответом.
+     */
+    public Mono<RagQueryResponse> processRagRequestAsync(RagQueryRequest request, UUID taskId) {
         return dialogManager.startTurn(request.sessionId(), request.query(), MessageRole.USER)
-                .thenCompose(turnContext ->
+                .flatMap(turnContext ->
                         ragPipelineOrchestrator.queryAsync(
                                         request.query(),
                                         turnContext.history(),
@@ -34,9 +41,9 @@ public class RagApplicationService {
                                         request.similarityThreshold(),
                                         turnContext.sessionId()
                                 )
-                                .thenCompose(ragAnswer ->
+                                .flatMap(ragAnswer ->
                                         dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), ragAnswer.answer(), MessageRole.ASSISTANT, taskId)
-                                                .thenApply(v -> new RagQueryResponse(
+                                                .thenReturn(new RagQueryResponse(
                                                         ragAnswer.answer(),
                                                         ragAnswer.sourceCitations(),
                                                         turnContext.sessionId(),
@@ -47,8 +54,15 @@ public class RagApplicationService {
                 );
     }
 
+    /**
+     * Обрабатывает RAG-запрос в потоковом режиме.
+     *
+     * @param request DTO с запросом.
+     * @param taskId  ID задачи.
+     * @return {@link Flux} с частями ответа.
+     */
     public Flux<StreamingResponsePart> processRagRequestStream(RagQueryRequest request, UUID taskId) {
-        return Mono.fromFuture(() -> dialogManager.startTurn(request.sessionId(), request.query(), MessageRole.USER))
+        return dialogManager.startTurn(request.sessionId(), request.query(), MessageRole.USER)
                 .flatMapMany(turnContext -> {
                     final StringBuilder fullResponseBuilder = new StringBuilder();
                     return ragPipelineOrchestrator.queryStream(
@@ -66,7 +80,7 @@ public class RagApplicationService {
                             .doOnComplete(() -> {
                                 String fullResponse = fullResponseBuilder.toString();
                                 if (!fullResponse.isBlank()) {
-                                    dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), fullResponse, MessageRole.ASSISTANT, taskId);
+                                    dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), fullResponse, MessageRole.ASSISTANT, taskId).subscribe();
                                 }
                             });
                 });

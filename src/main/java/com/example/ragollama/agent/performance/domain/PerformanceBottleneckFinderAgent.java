@@ -23,7 +23,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -45,6 +44,7 @@ public class PerformanceBottleneckFinderAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     /**
      * {@inheritDoc}
@@ -75,11 +75,10 @@ public class PerformanceBottleneckFinderAgent implements ToolAgent {
      */
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         List<String> changedFiles = (List<String>) context.payload().get("changedFiles");
         String newRef = (String) context.payload().get("newRef");
 
-        // Асинхронно анализируем каждый измененный файл
         return Flux.fromIterable(changedFiles)
                 .filter(file -> file.endsWith(".java") && file.startsWith("src/main/java"))
                 .flatMap(file -> gitApiClient.getFileContent(file, newRef)
@@ -94,24 +93,15 @@ public class PerformanceBottleneckFinderAgent implements ToolAgent {
                     PerformanceBottleneckReport report = new PerformanceBottleneckReport(flattenedFindings);
                     String summary = "Анализ производительности завершен. Найдено потенциальных проблем: " + flattenedFindings.size();
                     return new AgentResult(getName(), AgentResult.Status.SUCCESS, summary, Map.of("performanceReport", report));
-                })
-                .toFuture();
+                });
     }
 
-    /**
-     * Анализирует один файл, находит анти-паттерны и запрашивает их оценку у LLM.
-     *
-     * @param filePath Путь к файлу.
-     * @param code     Содержимое файла.
-     * @return {@link Mono} со списком {@link PerformanceFinding}.
-     */
     private Mono<List<PerformanceFinding>> analyzeFileForBottlenecks(String filePath, String code) {
         List<PerformanceAntiPatternDetector.AntiPatternOccurrence> antiPatterns = antiPatternDetector.detectDbCallsInLoops(code);
         if (antiPatterns.isEmpty()) {
             return Mono.just(List.of());
         }
 
-        // Для каждого найденного анти-паттерна, просим LLM дать оценку
         return Flux.fromIterable(antiPatterns)
                 .flatMap(pattern -> {
                     String promptString = promptService.render("performanceBottleneckPrompt", Map.of(
@@ -119,21 +109,15 @@ public class PerformanceBottleneckFinderAgent implements ToolAgent {
                             "antiPatternType", pattern.getType(),
                             "codeSnippet", pattern.getCodeSnippet()
                     ));
-                    return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                             .map(this::parseLlmResponse);
                 })
                 .collectList();
     }
 
-    /**
-     * Безопасно парсит JSON-ответ от LLM в {@link PerformanceFinding}.
-     *
-     * @param jsonResponse Ответ от LLM.
-     * @return Десериализованный объект {@link PerformanceFinding}.
-     */
     private PerformanceFinding parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, PerformanceFinding.class);
         } catch (JsonProcessingException e) {
             throw new ProcessingException("LLM вернула невалидный JSON для отчета о производительности.", e);

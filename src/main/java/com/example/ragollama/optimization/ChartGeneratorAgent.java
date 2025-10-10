@@ -14,9 +14,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Component
@@ -43,7 +43,7 @@ public class ChartGeneratorAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         JsonNode summarizedData = (JsonNode) context.payload().get("summarizedData");
         String chartType = (String) context.payload().get("chartType");
 
@@ -55,14 +55,14 @@ public class ChartGeneratorAgent implements ToolAgent {
             ));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(mermaidCode -> new AgentResult(
+                    .map(mermaidCode -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,
                             "Код для диаграммы Mermaid.js успешно сгенерирован.",
                             Map.of("visualizationCode", mermaidCode, "language", "mermaid")
                     ));
         } catch (JsonProcessingException e) {
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации агрегированных данных.", e));
+            return Mono.error(new ProcessingException("Ошибка сериализации агрегированных данных.", e));
         }
     }
 }

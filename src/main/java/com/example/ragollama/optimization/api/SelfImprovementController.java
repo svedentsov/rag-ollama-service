@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для запуска конвейера самосовершенствования AI-агентов.
@@ -30,11 +30,11 @@ public class SelfImprovementController {
      * Запускает полный конвейер для анализа работы агентов и генерации предложений по улучшению промптов.
      *
      * @param request DTO с параметрами анализа.
-     * @return {@link CompletableFuture} с результатом, содержащим diff для улучшения промпта.
+     * @return {@link Mono} с результатом, содержащим diff для улучшения промпта.
      */
     @PostMapping("/analyze-and-suggest")
     @Operation(summary = "Проанализировать работу агентов и предложить улучшения промптов")
-    public CompletableFuture<List<AgentResult>> analyzeAndSuggest(@Valid @RequestBody SelfImprovementRequest request) {
+    public Mono<List<AgentResult>> analyzeAndSuggest(@Valid @RequestBody SelfImprovementRequest request) {
         return orchestratorService.invoke("self-improvement-pipeline", request.toAgentContext());
     }
 }

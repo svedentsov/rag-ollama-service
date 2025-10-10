@@ -1,7 +1,7 @@
 package com.example.ragollama.orchestration;
 
-import com.example.ragollama.chat.domain.ChatMessageRepository;
 import com.example.ragollama.chat.domain.ChatHistoryService;
+import com.example.ragollama.chat.domain.ChatMessageRepository;
 import com.example.ragollama.chat.domain.ChatSessionService;
 import com.example.ragollama.chat.domain.model.ChatMessage;
 import com.example.ragollama.chat.domain.model.ChatSession;
@@ -12,15 +12,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 /**
- * Сервис-оркестратор, управляющий жизненным циклом одного "хода" в диалоге.
+ * Сервис-оркестратор для управления "ходом" в диалоге, адаптированный для R2DBC.
  */
 @Service
 @Slf4j
@@ -34,53 +33,44 @@ public class DialogManager {
     private final ChatMessageRepository chatMessageRepository;
     private final AppProperties appProperties;
 
-    /**
-     * Начинает новый "ход" диалога: сохраняет или переиспользует сообщение пользователя и загружает историю.
-     *
-     * @param sessionId ID сессии (может быть null для новой).
-     * @param userMessage Текст сообщения от пользователя.
-     * @param role Роль (всегда USER).
-     * @return CompletableFuture с TurnContext.
-     */
-    public CompletableFuture<TurnContext> startTurn(UUID sessionId, String userMessage, MessageRole role) {
-        final ChatSession session = chatSessionService.findOrCreateSession(sessionId);
-        final UUID finalSessionId = session.getSessionId();
-        final UserMessage currentMessage = new UserMessage(userMessage);
+    public Mono<TurnContext> startTurn(UUID sessionId, String userMessage, MessageRole role) {
+        Mono<ChatSession> sessionMono = chatSessionService.findOrCreateSession(sessionId);
+        UserMessage currentMessage = new UserMessage(userMessage);
 
-        Optional<ChatMessage> lastMessageOpt = chatMessageRepository.findTopBySessionSessionIdOrderByCreatedAtDesc(finalSessionId);
+        return sessionMono.flatMap(session -> {
+            final UUID finalSessionId = session.getSessionId();
+            Mono<ChatMessage> userMessageMono = chatMessageRepository.findTopBySessionIdOrderByCreatedAtDesc(finalSessionId)
+                    .filter(lastMessage -> lastMessage.getRole() == MessageRole.USER && lastMessage.getContent().equals(userMessage))
+                    .doOnNext(reused -> log.debug("Переиспользование сообщения (ID: {}) для сессии {}", reused.getId(), finalSessionId))
+                    .switchIfEmpty(saveMessage(session, role, userMessage, null, null));
 
-        CompletableFuture<ChatMessage> userMessageFuture;
-        if (lastMessageOpt.isPresent() && lastMessageOpt.get().getRole() == MessageRole.USER && lastMessageOpt.get().getContent().equals(userMessage)) {
-            log.debug("Переиспользование существующего сообщения пользователя (ID: {}) для сессии {}", lastMessageOpt.get().getId(), finalSessionId);
-            userMessageFuture = CompletableFuture.completedFuture(lastMessageOpt.get());
-        } else {
-            userMessageFuture = saveMessageAsync(session, role, userMessage, null, null);
-        }
+            Mono<List<Message>> historyMono = getHistory(finalSessionId);
 
-        CompletableFuture<List<Message>> historyFuture = getHistoryAsync(finalSessionId);
-
-        return userMessageFuture.thenCombine(historyFuture, (userMessageEntity, history) -> {
-            List<Message> fullHistory = new ArrayList<>(history);
-            fullHistory.add(currentMessage);
-            return new TurnContext(finalSessionId, userMessageEntity.getId(), fullHistory);
+            return Mono.zip(userMessageMono, historyMono)
+                    .map(tuple -> {
+                        List<Message> fullHistory = new ArrayList<>(tuple.getT2());
+                        fullHistory.add(currentMessage);
+                        return new TurnContext(finalSessionId, tuple.getT1().getId(), fullHistory);
+                    });
         });
     }
 
-    public CompletableFuture<Void> endTurn(UUID sessionId, UUID parentMessageId, String content, MessageRole role, UUID taskId) {
-        ChatSession session = chatSessionService.findAndVerifyOwnership(sessionId);
-        return saveMessageAsync(session, role, content, parentMessageId, taskId).thenApply(v -> null);
+    public Mono<Void> endTurn(UUID sessionId, UUID parentMessageId, String content, MessageRole role, UUID taskId) {
+        return chatSessionService.findAndVerifyOwnership(sessionId)
+                .flatMap(session -> saveMessage(session, role, content, parentMessageId, taskId))
+                .then();
     }
 
-    private CompletableFuture<ChatMessage> saveMessageAsync(ChatSession session, MessageRole role, String content, UUID parentId, UUID taskId) {
-        return chatHistoryService.saveMessageAsync(session, role, content, parentId, taskId)
-                .exceptionally(ex -> {
+    private Mono<ChatMessage> saveMessage(ChatSession session, MessageRole role, String content, UUID parentId, UUID taskId) {
+        return chatHistoryService.saveMessage(session, role, content, parentId, taskId)
+                .onErrorMap(ex -> {
                     log.error("Не удалось сохранить сообщение для сессии {}. Роль: {}", session.getSessionId(), role, ex);
-                    throw new RuntimeException("Ошибка сохранения сообщения", ex);
+                    return new RuntimeException("Ошибка сохранения сообщения", ex);
                 });
     }
 
-    private CompletableFuture<List<Message>> getHistoryAsync(UUID sessionId) {
+    private Mono<List<Message>> getHistory(UUID sessionId) {
         int maxHistory = appProperties.chat().history().maxMessages();
-        return chatHistoryService.getLastNMessagesAsync(sessionId, maxHistory - 1);
+        return chatHistoryService.getLastNMessages(sessionId, maxHistory - 1);
     }
 }

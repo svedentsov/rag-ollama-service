@@ -13,9 +13,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агентов, выполняющих архитектурный надзор и анализ.
@@ -32,11 +32,11 @@ public class ArchitectureAgentController {
      * Запускает агента для проверки соответствия измененного кода эталонной архитектуре.
      *
      * @param request DTO с описанием архитектуры и списком измененных файлов.
-     * @return {@link CompletableFuture} с результатом анализа.
+     * @return {@link Mono} с результатом анализа.
      */
     @PostMapping("/check-consistency")
     @Operation(summary = "Проверить измененный код на соответствие эталонной архитектуре")
-    public CompletableFuture<List<AgentResult>> checkArchitectureConsistency(@Valid @RequestBody ArchConsistencyRequest request) {
+    public Mono<List<AgentResult>> checkArchitectureConsistency(@Valid @RequestBody ArchConsistencyRequest request) {
         return orchestratorService.invoke("arch-consistency-mapping-pipeline", request.toAgentContext());
     }
 
@@ -44,11 +44,11 @@ public class ArchitectureAgentController {
      * Запускает мета-агента "AI Architecture Governor" для проведения полного ревью.
      *
      * @param request DTO с Git-ссылками и политиками.
-     * @return {@link CompletableFuture} с финальным отчетом-ревью.
+     * @return {@link Mono} с финальным отчетом-ревью.
      */
     @PostMapping("/full-review")
     @Operation(summary = "Получить полное архитектурное ревью для изменений (AI Governor)")
-    public CompletableFuture<List<AgentResult>> getFullArchitecturalReview(@Valid @RequestBody ArchitecturalGuidanceRequest request) {
+    public Mono<List<AgentResult>> getFullArchitecturalReview(@Valid @RequestBody ArchitecturalGuidanceRequest request) {
         return orchestratorService.invoke("architectural-guardian-pipeline", request.toAgentContext());
     }
 
@@ -56,11 +56,11 @@ public class ArchitectureAgentController {
      * Запускает конвейер для анализа зависимостей и генерации диаграммы.
      *
      * @param request DTO с Git-ссылками, определяющими диапазон анализа.
-     * @return {@link CompletableFuture} с результатом, содержащим код диаграммы в формате Mermaid.js.
+     * @return {@link Mono} с результатом, содержащим код диаграммы в формате Mermaid.js.
      */
     @PostMapping("/visualize")
     @Operation(summary = "Сгенерировать диаграмму зависимостей для изменений")
-    public CompletableFuture<List<AgentResult>> visualizeDependencies(@Valid @RequestBody VisualizationRequest request) {
+    public Mono<List<AgentResult>> visualizeDependencies(@Valid @RequestBody VisualizationRequest request) {
         return orchestratorService.invoke("architecture-visualization-pipeline", request.toAgentContext());
     }
 }

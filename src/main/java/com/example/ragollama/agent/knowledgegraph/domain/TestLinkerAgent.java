@@ -10,9 +10,10 @@ import com.github.javaparser.ParserConfiguration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который связывает тесты с производственным кодом.
@@ -43,34 +44,34 @@ public class TestLinkerAgent implements ToolAgent {
 
     @Override
     public boolean canHandle(AgentContext context) {
-        // Запускается для измененных тестовых файлов
         return context.payload().containsKey("filePath") &&
                 ((String) context.payload().get("filePath")).contains("src/test/java");
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String testFilePath = (String) context.payload().get("filePath");
         String ref = (String) context.payload().get("ref");
 
-        return gitApiClient.getFileContent(testFilePath, ref).map(content -> {
-            GraphNode testNode = new GraphNode(testFilePath, "TestCase", Map.of("path", testFilePath));
-            graphStorageService.createNode(testNode);
-            int linksCreated = 0;
+        return gitApiClient.getFileContent(testFilePath, ref)
+                .map(content -> {
+                    GraphNode testNode = new GraphNode(testFilePath, "TestCase", Map.of("path", testFilePath));
+                    graphStorageService.createNode(testNode);
 
-            javaParser.parse(content).getResult().ifPresent(cu -> {
-                cu.getImports().forEach(imp -> {
-                    String importedClass = imp.getNameAsString();
-                    if (importedClass.startsWith("com.example.ragollama") && !importedClass.contains(".qaagent.")) {
-                        String sourceFilePath = "src/main/java/" + importedClass.replace('.', '/') + ".java";
-                        GraphNode sourceNode = new GraphNode(sourceFilePath, "CodeFile", Map.of("path", sourceFilePath));
-                        graphStorageService.createNode(sourceNode);
-                        graphStorageService.createRelationship(testNode, sourceNode, "TESTS");
-                    }
-                });
-            });
-            String summary = "Анализ связей для теста " + testFilePath + " завершен.";
-            return new AgentResult(getName(), AgentResult.Status.SUCCESS, summary, Map.of());
-        }).toFuture();
+                    javaParser.parse(content).getResult().ifPresent(cu -> {
+                        cu.getImports().forEach(imp -> {
+                            String importedClass = imp.getNameAsString();
+                            if (importedClass.startsWith("com.example.ragollama") && !importedClass.contains(".qaagent.")) {
+                                String sourceFilePath = "src/main/java/" + importedClass.replace('.', '/') + ".java";
+                                GraphNode sourceNode = new GraphNode(sourceFilePath, "CodeFile", Map.of("path", sourceFilePath));
+                                graphStorageService.createNode(sourceNode);
+                                graphStorageService.createRelationship(testNode, sourceNode, "TESTS");
+                            }
+                        });
+                    });
+                    String summary = "Анализ связей для теста " + testFilePath + " завершен.";
+                    return new AgentResult(getName(), AgentResult.Status.SUCCESS, summary, Map.of());
+                })
+                .subscribeOn(Schedulers.boundedElastic());
     }
 }

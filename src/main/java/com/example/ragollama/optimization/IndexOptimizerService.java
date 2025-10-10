@@ -3,21 +3,18 @@ package com.example.ragollama.optimization;
 import com.example.ragollama.ingestion.domain.DocumentJobRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Mono;
 
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 
 /**
- * Сервис-агент, выполняющий фоновые задачи по оптимизации и очистке
- * векторного индекса. Этот "Memory Manager" обеспечивает долгосрочное
- * здоровье и актуальность базы знаний.
+ * Сервис-агент для оптимизации индекса, адаптированный для R2DBC.
  */
 @Slf4j
 @Service
@@ -26,70 +23,66 @@ public class IndexOptimizerService {
 
     private final DocumentJobRepository documentJobRepository;
     private final VectorStoreRepository vectorStoreRepository;
-    private final JdbcTemplate jdbcTemplate;
+    private final DatabaseClient databaseClient;
     private final IndexOptimizerProperties properties;
     private final AtomicBoolean isOptimizationRunning = new AtomicBoolean(false);
 
     /**
      * Асинхронно запускает полный цикл оптимизации индекса.
-     * <p>
-     * Включает в себя удаление "осиротевших" чанков и выполнение `VACUUM` на таблице.
-     * Использует атомарную блокировку для предотвращения одновременного запуска
-     * нескольких экземпляров задачи.
      */
     @Async("applicationTaskExecutor")
     public void runOptimizationAsync() {
         if (!isOptimizationRunning.compareAndSet(false, true)) {
-            log.warn("Задача оптимизации индекса уже запущена. Пропуск текущего вызова.");
+            log.warn("Задача оптимизации уже запущена. Пропуск.");
             return;
         }
         log.info("Начало задачи оптимизации индекса.");
-        try {
-            if (properties.getStaleDocumentDetection().isEnabled()) {
-                cleanupStaleDocuments();
-            }
-            vacuumVectorStore();
-            log.info("Задача оптимизации индекса успешно завершена.");
-        } catch (Exception e) {
-            log.error("Произошла ошибка во время оптимизации индекса.", e);
-        } finally {
-            isOptimizationRunning.set(false);
-        }
+        Mono.just(properties.getStaleDocumentDetection().isEnabled())
+                .filter(Boolean::booleanValue)
+                .flatMap(enabled -> cleanupStaleDocuments())
+                .then(vacuumVectorStore())
+                .doOnSuccess(v -> log.info("Задача оптимизации индекса успешно завершена."))
+                .doOnError(e -> log.error("Ошибка во время оптимизации индекса.", e))
+                .doFinally(signal -> isOptimizationRunning.set(false))
+                .subscribe();
     }
 
     /**
-     * Обнаруживает и удаляет документы, которые были удалены из источника правды
-     * (в данном примере - из таблицы `document_jobs`).
+     * Выполняет очистку устаревших документов и связанных с ними чанков.
+     *
+     * @return {@link Mono}, завершающийся после выполнения операции.
      */
     @Transactional
-    public void cleanupStaleDocuments() {
-        log.info("Запуск этапа очистки устаревших документов...");
+    public Mono<Void> cleanupStaleDocuments() {
+        log.info("Запуск очистки устаревших документов...");
         OffsetDateTime threshold = OffsetDateTime.now().minusDays(7);
-        List<UUID> staleJobIds = documentJobRepository.findCompletedJobsBefore(threshold);
-        if (staleJobIds.isEmpty()) {
-            log.info("Устаревшие документы для удаления не найдены.");
-            return;
-        }
-        log.warn("Обнаружено {} устаревших документов для удаления. IDs: {}",
-                staleJobIds.size(), staleJobIds.stream().map(UUID::toString).collect(Collectors.joining(", ")));
-        for (UUID jobId : staleJobIds) {
-            int deletedChunks = vectorStoreRepository.deleteByDocumentId(jobId.toString());
-            documentJobRepository.deleteById(jobId);
-            log.info("Удалено {} чанков для документа с Job ID: {}", deletedChunks, jobId);
-        }
-        log.info("Очистка устаревших документов завершена.");
+        return documentJobRepository.findCompletedJobsBefore(threshold)
+                .map(java.util.UUID::toString)
+                .collectList()
+                .flatMap(staleJobIds -> {
+                    if (staleJobIds.isEmpty()) {
+                        log.info("Устаревшие документы не найдены.");
+                        return Mono.empty();
+                    }
+                    log.warn("Обнаружено {} устаревших документов для удаления.", staleJobIds.size());
+                    return documentJobRepository.deleteAllById(staleJobIds.stream().map(UUID::fromString).toList())
+                            .then(vectorStoreRepository.deleteByDocumentIds(staleJobIds))
+                            .doOnSuccess(deletedCount -> log.info("Удалено {} чанков для {} документов.", deletedCount, staleJobIds.size()));
+                })
+                .doOnSuccess(v -> log.info("Очистка устаревших документов завершена."))
+                .then();
     }
 
     /**
-     * Выполняет команду `VACUUM` на таблице `vector_store`.
+     * Выполняет команду VACUUM для таблицы vector_store.
+     *
+     * @return {@link Mono}, завершающийся после выполнения операции.
      */
-    public void vacuumVectorStore() {
-        log.info("Выполнение команды VACUUM для таблицы 'vector_store'...");
-        try {
-            jdbcTemplate.execute("VACUUM (VERBOSE, ANALYZE) vector_store;");
-            log.info("Команда VACUUM для 'vector_store' успешно выполнена.");
-        } catch (Exception e) {
-            log.error("Ошибка при выполнении VACUUM для 'vector_store'.", e);
-        }
+    public Mono<Void> vacuumVectorStore() {
+        log.info("Выполнение VACUUM для 'vector_store'...");
+        return databaseClient.sql("VACUUM (VERBOSE, ANALYZE) vector_store;")
+                .then()
+                .doOnSuccess(v -> log.info("VACUUM для 'vector_store' успешно выполнен."))
+                .doOnError(e -> log.error("Ошибка при выполнении VACUUM.", e));
     }
 }

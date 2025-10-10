@@ -19,10 +19,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Мета-агент (L4), выступающий в роли "Test DataOps Orchestrator".
@@ -41,6 +41,7 @@ public class TestDataOpsOrchestratorAgent implements ToolAgent {
     private final ObjectMapper objectMapper;
     private final ObjectProvider<ToolRegistryService> toolRegistryProvider;
     private final DynamicPipelineExecutionService executionService;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     /**
      * {@inheritDoc}
@@ -70,7 +71,7 @@ public class TestDataOpsOrchestratorAgent implements ToolAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String goal = (String) context.payload().get("goal");
 
         ToolRegistryService toolRegistry = toolRegistryProvider.getObject();
@@ -85,15 +86,14 @@ public class TestDataOpsOrchestratorAgent implements ToolAgent {
             ));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
-                    .thenCompose(llmResponse -> {
+                    .flatMap(llmResponse -> {
                         PlanStep stepToExecute = parseLlmResponse(llmResponse);
                         return executionService.executePlan(List.of(stepToExecute), context, null)
-                                .toFuture()
-                                .thenApply(results -> results.get(0));
+                                .map(results -> results.get(0));
                     });
 
         } catch (JsonProcessingException e) {
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации контекста для TestDataOps", e));
+            return Mono.error(new ProcessingException("Ошибка сериализации контекста для TestDataOps", e));
         }
     }
 
@@ -103,7 +103,7 @@ public class TestDataOpsOrchestratorAgent implements ToolAgent {
 
     private PlanStep parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, new TypeReference<>() {
             });
         } catch (JsonProcessingException e) {

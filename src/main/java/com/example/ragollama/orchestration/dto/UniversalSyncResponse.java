@@ -1,6 +1,6 @@
 package com.example.ragollama.orchestration.dto;
 
-import com.example.ragollama.agent.buganalysis.api.dto.BugAnalysisResponse;
+import com.example.ragollama.agent.buganalysis.model.BugAnalysisReport;
 import com.example.ragollama.agent.codegeneration.api.dto.CodeGenerationResponse;
 import com.example.ragollama.agent.routing.QueryIntent;
 import com.example.ragollama.chat.api.dto.ChatResponse;
@@ -28,7 +28,7 @@ public record UniversalSyncResponse(
         List<SourceCitation> sourceCitations,
         UUID sessionId,
         QueryIntent intent,
-        BugAnalysisResponse bugAnalysisResponse
+        BugAnalysisReport bugAnalysisResponse
 ) {
     /**
      * Фабричный метод для создания ответа на основе RAG-результата.
@@ -54,7 +54,7 @@ public record UniversalSyncResponse(
     /**
      * Фабричный метод для создания ответа на основе результата анализа бага.
      */
-    public static UniversalSyncResponse from(BugAnalysisResponse response, QueryIntent intent) {
+    public static UniversalSyncResponse from(BugAnalysisReport response, QueryIntent intent) {
         return new UniversalSyncResponse(null, null, null, null, null, intent, response);
     }
 
@@ -88,7 +88,7 @@ public record UniversalSyncResponse(
                 .map(p -> (UniversalResponse.Code) p)
                 .findFirst().orElse(null);
 
-        BugAnalysisResponse bugAnalysis = parts.stream()
+        BugAnalysisReport bugAnalysis = parts.stream()
                 .filter(p -> p instanceof UniversalResponse.BugAnalysis)
                 .map(p -> ((UniversalResponse.BugAnalysis) p).analysis())
                 .findFirst().orElse(null);

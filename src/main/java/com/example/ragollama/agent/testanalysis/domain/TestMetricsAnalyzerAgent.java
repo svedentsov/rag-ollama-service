@@ -3,6 +3,7 @@ package com.example.ragollama.agent.testanalysis.domain;
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.ToolAgent;
+import com.example.ragollama.agent.analytics.domain.AnalyticsService;
 import com.example.ragollama.agent.analytics.domain.AnalyticsService.DailyTestMetrics;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
@@ -11,10 +12,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -29,7 +30,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TestMetricsAnalyzerAgent implements ToolAgent {
 
-    private final com.example.ragollama.agent.analytics.domain.AnalyticsService analyticsService;
+    private final AnalyticsService analyticsService;
     private final LlmClient llmClient;
     private final PromptService promptService;
 
@@ -61,15 +62,14 @@ public class TestMetricsAnalyzerAgent implements ToolAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         Integer days = (Integer) context.payload().get("days");
         List<DailyTestMetrics> metrics = analyticsService.getDailyTestMetrics(days);
 
         if (metrics.isEmpty()) {
-            return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Нет данных для анализа за указанный период.", Map.of()));
+            return Mono.just(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Нет данных для анализа за указанный период.", Map.of()));
         }
 
-        // Преобразуем данные в простой текстовый формат для передачи в LLM
         String dataForLlm = metrics.stream()
                 .map(m -> String.format("date: %s, failures: %d, total_tests: %d, pass_rate: %.2f%%",
                         m.date(), m.totalFailures(), m.totalTests(), m.passRate()))
@@ -78,7 +78,7 @@ public class TestMetricsAnalyzerAgent implements ToolAgent {
         String promptString = promptService.render("testTrendAnalyzerPrompt", Map.of("days", days, "metricsData", dataForLlm));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .thenApply(analysis -> new AgentResult(
+                .map(analysis -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,
                         "Анализ метрик тестирования завершен.",

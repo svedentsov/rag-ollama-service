@@ -21,7 +21,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который проверяет соответствие измененного кода
@@ -36,6 +35,7 @@ public class ArchConsistencyMapperAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @Override
     public String getName() {
@@ -55,10 +55,9 @@ public class ArchConsistencyMapperAgent implements ToolAgent {
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String principles = (String) context.payload().get("architecturePrinciples");
         List<String> changedFiles = (List<String>) context.payload().get("changedFiles");
-        // Предполагаем, что newRef будет в контексте от git-inspector, для простоты берем main
         String ref = (String) context.payload().getOrDefault("newRef", "main");
 
         // Асинхронно получаем контент всех измененных файлов
@@ -78,7 +77,7 @@ public class ArchConsistencyMapperAgent implements ToolAgent {
                                 "architecture_principles", principles,
                                 "changed_code_json", codeJson
                         ));
-                        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                                 .map(this::parseLlmResponse)
                                 .map(report -> new AgentResult(
                                         getName(),
@@ -89,13 +88,12 @@ public class ArchConsistencyMapperAgent implements ToolAgent {
                     } catch (JsonProcessingException e) {
                         return Mono.error(new ProcessingException("Ошибка сериализации кода для анализа", e));
                     }
-                })
-                .toFuture();
+                });
     }
 
     private ArchValidationReport parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, ArchValidationReport.class);
         } catch (JsonProcessingException e) {
             log.error("Не удалось распарсить JSON-ответ от Arch Mapper LLM: {}", jsonResponse, e);

@@ -12,10 +12,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который создает безопасные, репрезентативные подмножества
@@ -51,7 +52,6 @@ public class DataSubsetMaskerAgent implements ToolAgent {
      */
     @Override
     public boolean requiresApproval() {
-        // Выполнение сгенерированного SQL - рискованная операция, требующая подтверждения.
         return true;
     }
 
@@ -67,46 +67,41 @@ public class DataSubsetMaskerAgent implements ToolAgent {
      * Асинхронно выполняет создание подмножества данных.
      *
      * @param context Контекст, содержащий схему таблицы и цель.
-     * @return {@link CompletableFuture} с результатом, содержащим сгенерированный SQL и замаскированные данные.
+     * @return {@link Mono} с результатом, содержащим сгенерированный SQL и замаскированные данные.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String tableSchema = (String) context.payload().get("tableSchema");
         String goal = (String) context.payload().get("goal");
         Integer limit = (Integer) context.payload().getOrDefault("limit", 100);
 
-        // Шаг 1: Используем LLM для генерации SQL-запроса
         return generateSql(tableSchema, goal, limit)
-                .thenApply(generatedSql -> {
-                    // Шаг 2: Выполняем SQL и маскируем данные
-                    List<Map<String, Object>> maskedData = dataSubsetService.executeAndMask(generatedSql);
+                .flatMap(generatedSql -> Mono.fromCallable(() -> {
+                            // Выполняем блокирующую JDBC-операцию на отдельном потоке
+                            List<Map<String, Object>> maskedData = dataSubsetService.executeAndMask(generatedSql);
+                            int rowsSelected = maskedData.size();
+                            List<Map<String, Object>> returnedData = maskedData.stream().limit(limit).toList();
+                            int rowsReturned = returnedData.size();
 
-                    int rowsSelected = maskedData.size();
-                    List<Map<String, Object>> returnedData = maskedData.stream().limit(limit).toList();
-                    int rowsReturned = returnedData.size();
+                            DataSubsetResult result = new DataSubsetResult(generatedSql, rowsSelected, rowsReturned, returnedData);
+                            String summary = String.format(
+                                    "Успешно сгенерирован SQL и создано подмножество из %d строк (%d возвращено).",
+                                    rowsSelected, rowsReturned
+                            );
 
-                    DataSubsetResult result = new DataSubsetResult(generatedSql, rowsSelected, rowsReturned, returnedData);
-
-                    String summary = String.format(
-                            "Успешно сгенерирован SQL и создано подмножество из %d строк (%d возвращено).",
-                            rowsSelected, rowsReturned
-                    );
-
-                    return new AgentResult(getName(), AgentResult.Status.SUCCESS, summary, Map.of("subsetResult", result));
-                });
+                            return new AgentResult(getName(), AgentResult.Status.SUCCESS, summary, Map.of("subsetResult", result));
+                        }).subscribeOn(Schedulers.boundedElastic())
+                );
     }
 
-    /**
-     * Вызывает LLM для генерации SQL-запроса на основе схемы и цели.
-     */
-    private CompletableFuture<String> generateSql(String schema, String goal, int limit) {
+    private Mono<String> generateSql(String schema, String goal, int limit) {
         String promptString = promptService.render("dataSubsetSqlGeneratorPrompt", Map.of(
                 "table_schema", schema,
                 "goal", goal,
-                "limit", limit * 5 // Запрашиваем с запасом, чтобы потом обрезать
+                "limit", limit * 5
         ));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .thenApply(response -> response.replaceAll("(?i)```sql|```", "").trim());
+                .map(response -> response.replaceAll("(?i)```sql|```", "").trim());
     }
 }

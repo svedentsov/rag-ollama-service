@@ -15,6 +15,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Сервис для выполнения поиска в графе знаний.
+ */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -24,8 +27,14 @@ public class GraphSearchService {
     private final GraphQueryService graphQueryService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * Выполняет поиск в графе на основе вопроса на естественном языке.
+     *
+     * @param query Вопрос пользователя.
+     * @return {@link Mono} со списком документов, представляющих результаты.
+     */
     public Mono<List<Document>> search(String query) {
-        return Mono.fromFuture(cypherQueryGeneratorAgent.execute(new AgentContext(Map.of("question", query))))
+        return cypherQueryGeneratorAgent.execute(new AgentContext(Map.of("question", query)))
                 .map(agentResult -> (String) agentResult.details().get("cypherQuery"))
                 .flatMap(cypherQuery -> Mono.fromCallable(() -> graphQueryService.executeQuery(cypherQuery)))
                 .map(this::convertGraphResultsToDocuments);
@@ -38,9 +47,9 @@ public class GraphSearchService {
                         String content = objectMapper.writeValueAsString(row);
                         Map<String, Object> metadata = Map.of(
                                 "source", "KnowledgeGraph",
-                                "doc_type", "graph_result"
+                                "doc_type", "graph_result",
+                                "chunkId", "graph-" + row.hashCode()
                         );
-                        // ID документа должен быть уникальным, можно использовать хэш от контента
                         return new Document(content, metadata);
                     } catch (JsonProcessingException e) {
                         log.warn("Не удалось преобразовать результат графа в JSON", e);

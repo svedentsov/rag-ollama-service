@@ -26,11 +26,6 @@ import java.util.stream.Collectors;
 
 /**
  * Сервис-обработчик, который является ядром асинхронного конвейера.
- * <p>
- * Все публичные методы этого сервиса аннотированы {@code @Async}, что
- * заставляет Spring выполнять их в отдельном потоке из пула `applicationTaskExecutor`.
- * Это позволяет вызывающим компонентам (например, {@link com.example.ragollama.agent.events.api.WebhookController})
- * немедленно вернуть ответ, не дожидаясь завершения долгой операции.
  */
 @Slf4j
 @Service
@@ -76,7 +71,7 @@ public class EventProcessingService {
             gitHubApiClient.getPullRequestDiff(owner, repo, prNumber)
                     .flatMap(diff -> {
                         AgentContext context = new AgentContext(Map.of(TestPrioritizerAgent.GIT_DIFF_CONTENT_KEY, diff));
-                        return Mono.fromFuture(agentOrchestratorService.invoke("github-pr-pipeline", context));
+                        return agentOrchestratorService.invoke("github-pr-pipeline", context);
                     })
                     .flatMap(results -> {
                         String comment = formatPipelineResultAsGithubComment(results);
@@ -163,8 +158,11 @@ public class EventProcessingService {
         AgentContext context = new AgentContext(Map.of("bugReportText", bugText));
 
         agentOrchestratorService.invoke("jira-bug-creation-pipeline", context)
-                .thenCompose(results -> postJiraComment(issueKey, results))
-                .whenComplete((result, ex) -> logPipelineCompletion("Jira-задачи " + issueKey, ex));
+                .flatMap(results -> postJiraComment(issueKey, results))
+                .subscribe(
+                        v -> logPipelineCompletion("Jira-задачи " + issueKey, null),
+                        ex -> logPipelineCompletion("Jira-задачи " + issueKey, ex)
+                );
     }
 
     /**
@@ -175,16 +173,19 @@ public class EventProcessingService {
         AgentContext context = new AgentContext(Map.of(JiraFetcherAgent.JIRA_ISSUE_KEY, issueKey));
 
         agentOrchestratorService.invoke("jira-update-analysis-pipeline", context)
-                .thenCompose(results -> postJiraComment(issueKey, results))
-                .whenComplete((result, ex) -> logPipelineCompletion("Jira-задачи " + issueKey, ex));
+                .flatMap(results -> postJiraComment(issueKey, results))
+                .subscribe(
+                        v -> logPipelineCompletion("Jira-задачи " + issueKey, null),
+                        ex -> logPipelineCompletion("Jira-задачи " + issueKey, ex)
+                );
     }
 
-    private CompletableFuture<Void> postJiraComment(String issueKey, List<AgentResult> results) {
+    private Mono<Void> postJiraComment(String issueKey, List<AgentResult> results) {
         if (results.isEmpty()) {
-            return CompletableFuture.completedFuture(null);
+            return Mono.empty();
         }
         String comment = formatPipelineResultAsJiraComment(results);
-        return jiraApiClient.postCommentToIssue(issueKey, comment).toFuture();
+        return jiraApiClient.postCommentToIssue(issueKey, comment);
     }
 
     private void logPipelineCompletion(String entity, Throwable ex) {

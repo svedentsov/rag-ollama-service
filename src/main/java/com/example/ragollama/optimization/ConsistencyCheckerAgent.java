@@ -8,10 +8,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который координирует сбор "доказательств" из различных
@@ -50,15 +50,12 @@ public class ConsistencyCheckerAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     *
-     * @return {@link CompletableFuture} с результатом, содержащим карту "источник" -> "доказательства".
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String claim = (String) context.payload().get("claim");
         log.info("Запуск сбора доказательств для утверждения: '{}'", claim);
 
-        // Параллельно запрашиваем доказательства из всех источников
         return Flux.fromIterable(knowledgeSources)
                 .flatMap(source -> source.findEvidence(claim)
                         .map(evidenceList -> Map.entry(source.getSourceName(), evidenceList)))
@@ -71,6 +68,6 @@ public class ConsistencyCheckerAgent implements ToolAgent {
                             "Сбор доказательств завершен.",
                             Map.of("allEvidence", allEvidence)
                     );
-                }).toFuture();
+                });
     }
 }

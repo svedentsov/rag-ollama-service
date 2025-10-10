@@ -30,7 +30,7 @@ public class HyDEAgent implements QueryEnhancementAgent {
     public Mono<List<String>> enhance(String originalQuery) {
         String promptString = promptService.render("hydePrompt", Map.of("query", originalQuery));
         Prompt prompt = new Prompt(promptString);
-        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FASTEST))
+        return llmClient.callChat(prompt, ModelCapability.FASTEST)
                 .map(hypotheticalDocument -> {
                     log.info("HyDE: сгенерирован гипотетический документ для запроса '{}'", originalQuery);
                     return List.of(hypotheticalDocument);

@@ -10,9 +10,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который переводит вопрос на естественном языке в исполняемый Cypher-запрос.
@@ -25,7 +25,6 @@ public class CypherQueryGeneratorAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
 
-    // Схема нашего графа. В реальном проекте она могла бы загружаться динамически.
     private static final String GRAPH_SCHEMA = """
             Узлы (Nodes):
             - (:Commit {message: string, author: string, hash: string})
@@ -57,7 +56,7 @@ public class CypherQueryGeneratorAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String question = (String) context.payload().get("question");
 
         String promptString = promptService.render("cypherQueryGeneratorPrompt", Map.of(
@@ -65,8 +64,8 @@ public class CypherQueryGeneratorAgent implements ToolAgent {
                 "question", question
         ));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .thenApply(cypherQuery -> {
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, false)
+                .map(cypherQuery -> {
                     String cleanedQuery = cypherQuery.replaceAll("(?i)```cypher|```", "").trim();
                     log.info("Сгенерирован Cypher-запрос для вопроса: '{}'", question);
                     return new AgentResult(

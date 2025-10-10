@@ -6,9 +6,9 @@ import com.example.ragollama.agent.ToolAgent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который находит семантические дубликаты для заданного тест-кейса.
@@ -26,8 +26,6 @@ public class TestCaseDeduplicatorAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     *
-     * @return Уникальное имя агента.
      */
     @Override
     public String getName() {
@@ -36,8 +34,6 @@ public class TestCaseDeduplicatorAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     *
-     * @return Человекочитаемое описание назначения агента.
      */
     @Override
     public String getDescription() {
@@ -46,9 +42,6 @@ public class TestCaseDeduplicatorAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     *
-     * @param context Контекст, который должен содержать 'testCaseId' и 'testCaseContent'.
-     * @return {@code true}, если все необходимые ключи присутствуют.
      */
     @Override
     public boolean canHandle(AgentContext context) {
@@ -59,10 +52,10 @@ public class TestCaseDeduplicatorAgent implements ToolAgent {
      * Асинхронно выполняет поиск дубликатов.
      *
      * @param context Контекст, содержащий ID и контент тест-кейса.
-     * @return {@link CompletableFuture} с результатом, содержащим список найденных дубликатов.
+     * @return {@link Mono} с результатом, содержащим список найденных дубликатов.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String testCaseId = (String) context.payload().get("testCaseId");
         String testCaseContent = (String) context.payload().get("testCaseContent");
 
@@ -78,7 +71,6 @@ public class TestCaseDeduplicatorAgent implements ToolAgent {
                             summary,
                             Map.of("duplicates", duplicates)
                     );
-                })
-                .toFuture();
+                });
     }
 }

@@ -21,12 +21,9 @@ public class KnowledgeCurationScheduler {
     public void runScheduledCuration() {
         log.info("Планировщик запускает фоновую задачу курирования базы знаний...");
         orchestratorService.invoke("knowledge-curation-pipeline", new AgentContext(Map.of()))
-                .whenComplete((result, ex) -> {
-                    if (ex != null) {
-                        log.error("Задача курирования завершилась с ошибкой.", ex);
-                    } else {
-                        log.info("Задача курирования успешно завершена.");
-                    }
-                });
+                .subscribe(
+                        result -> log.info("Задача курирования успешно завершена."),
+                        ex -> log.error("Задача курирования завершилась с ошибкой.", ex)
+                );
     }
 }

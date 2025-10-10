@@ -8,10 +8,10 @@ import com.example.ragollama.agent.architecture.model.DependencyLink;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Агент-инструмент, который преобразует структурированное представление графа
@@ -51,8 +51,8 @@ public class MermaidDiagramGeneratorAgent implements ToolAgent {
      */
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        return CompletableFuture.supplyAsync(() -> {
+    public Mono<AgentResult> execute(AgentContext context) {
+        return Mono.fromCallable(() -> {
             Map<String, Object> graph = (Map<String, Object>) context.payload().get("dependencyGraph");
             List<ComponentNode> nodes = (List<ComponentNode>) graph.get("nodes");
             List<DependencyLink> links = (List<DependencyLink>) graph.get("links");

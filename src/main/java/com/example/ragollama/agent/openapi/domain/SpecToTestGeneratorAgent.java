@@ -12,10 +12,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который генерирует исполняемый код API-тестов
@@ -47,7 +47,7 @@ public class SpecToTestGeneratorAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         OpenAPI openAPI = getOpenApi(context);
         String targetEndpoint = (String) context.payload().get("targetEndpoint");
         log.info("SpecToTestGeneratorAgent: запуск генерации теста для эндпоинта '{}'", targetEndpoint);
@@ -55,7 +55,7 @@ public class SpecToTestGeneratorAgent implements ToolAgent {
         Optional<String> endpointDetails = specParser.formatOperationDetails(openAPI, targetEndpoint);
 
         if (endpointDetails.isEmpty()) {
-            return CompletableFuture.completedFuture(new AgentResult(
+            return Mono.just(new AgentResult(
                     getName(),
                     AgentResult.Status.FAILURE,
                     "Эндпоинт '" + targetEndpoint + "' не найден в предоставленной спецификации.",
@@ -65,7 +65,7 @@ public class SpecToTestGeneratorAgent implements ToolAgent {
 
         String promptString = promptService.render("specToTestPrompt", Map.of("endpointDetails", endpointDetails.get()));
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .thenApply(generatedCode -> new AgentResult(
+                .map(generatedCode -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,
                         "Код теста для эндпоинта '" + targetEndpoint + "' успешно сгенерирован.",

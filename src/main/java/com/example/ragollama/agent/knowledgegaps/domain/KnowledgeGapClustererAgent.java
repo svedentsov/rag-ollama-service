@@ -15,10 +15,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который кластеризует запросы пользователей по темам и предлагает
@@ -32,6 +32,7 @@ public class KnowledgeGapClustererAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     /**
      * {@inheritDoc}
@@ -62,10 +63,10 @@ public class KnowledgeGapClustererAgent implements ToolAgent {
      */
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         List<String> gapQueries = (List<String>) context.payload().get("gapQueries");
         if (gapQueries == null || gapQueries.isEmpty()) {
-            return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Нет запросов для анализа.", Map.of()));
+            return Mono.just(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Нет запросов для анализа.", Map.of()));
         }
 
         try {
@@ -73,21 +74,21 @@ public class KnowledgeGapClustererAgent implements ToolAgent {
             String promptString = promptService.render("knowledgeGapAnalyzer", Map.of("gap_queries_json", queriesJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(this::parseLlmResponse)
-                    .thenApply(report -> new AgentResult(
+                    .map(this::parseLlmResponse)
+                    .map(report -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,
                             report.summary(),
                             Map.of("knowledgeGapReport", report)
                     ));
         } catch (JsonProcessingException e) {
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации запросов для анализа.", e));
+            return Mono.error(new ProcessingException("Ошибка сериализации запросов для анализа.", e));
         }
     }
 
     private KnowledgeGapReport parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, KnowledgeGapReport.class);
         } catch (JsonProcessingException e) {
             throw new ProcessingException("Knowledge Gap Analyzer LLM вернул невалидный JSON.", e);

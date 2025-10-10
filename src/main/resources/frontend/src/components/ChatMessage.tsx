@@ -10,25 +10,40 @@ import { MessageEditor } from './MessageEditor';
 import { useFeedback } from '../hooks/useFeedback';
 import styles from './ChatMessage.module.css';
 
+/**
+ * @interface ChatMessageProps
+ * @description Пропсы для компонента ChatMessage.
+ */
 export interface ChatMessageProps {
+  /** @param {string} sessionId - ID текущей сессии чата. */
   sessionId: string;
+  /** @param {Message} message - Объект сообщения для отображения. */
   message: Message;
+  /** @param {boolean} isLastInTurn - Является ли это сообщение последним в текущем "ходе" диалога. */
   isLastInTurn: boolean;
+  /** @param {{ total: number; current: number; siblings: Message[] }} [branchInfo] - Информация о ветвлении для данного сообщения. */
   branchInfo?: { total: number; current: number; siblings: Message[] };
+  /** @param {boolean} isEditing - Находится ли сообщение в режиме редактирования. */
   isEditing: boolean;
+  /** @param {() => void} onStartEdit - Колбэк для начала редактирования. */
   onStartEdit: () => void;
+  /** @param {() => void} onCancelEdit - Колбэк для отмены редактирования. */
   onCancelEdit: () => void;
+  /** @param {() => void} onRegenerate - Колбэк для запроса повторной генерации ответа. */
   onRegenerate: () => void;
+  /** @param {(messageId: string, newContent: string) => void} onUpdateContent - Колбэк для сохранения измененного контента. */
   onUpdateContent: (messageId: string, newContent: string) => void;
+  /** @param {() => void} onDelete - Колбэк для удаления сообщения. */
   onDelete: () => void;
+  /** @param {() => void} onStop - Колбэк для остановки потоковой генерации. */
   onStop: () => void;
 }
 
 /**
- * Отображает одно сообщение в чате.
- * @description Панель действий теперь видима по умолчанию только для последнего
- * сообщения в чате, а для остальных появляется при наведении.
+ * Отображает одно сообщение в чате, управляя его состоянием и действиями.
+ * Компонент оптимизирован с помощью `React.memo` для предотвращения ненужных перерисовок.
  * @param {ChatMessageProps} props - Пропсы компонента.
+ * @returns {React.ReactElement} Отрендеренный компонент сообщения.
  */
 export const ChatMessage: FC<ChatMessageProps> = React.memo(({
   sessionId,

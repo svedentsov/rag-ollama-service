@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агентов, выполняющих задачи по обеспечению безопасности.
@@ -30,11 +30,11 @@ public class SecurityAgentController {
      * Запускает полный, многоэтапный конвейер аудита безопасности для изменений в коде.
      *
      * @param request DTO с Git-ссылками и опциональными логами.
-     * @return {@link CompletableFuture} с финальным, агрегированным отчетом о безопасности.
+     * @return {@link Mono} с финальным, агрегированным отчетом о безопасности.
      */
     @PostMapping("/full-scan")
     @Operation(summary = "Провести полный аудит безопасности (SAST, RBAC, PII)")
-    public CompletableFuture<List<AgentResult>> runFullSecurityScan(@Valid @RequestBody SecurityScanRequest request) {
+    public Mono<List<AgentResult>> runFullSecurityScan(@Valid @RequestBody SecurityScanRequest request) {
         return orchestratorService.invoke("full-security-audit-pipeline", request.toAgentContext());
     }
 
@@ -42,12 +42,12 @@ public class SecurityAgentController {
      * Запускает конвейер для генерации Fuzzing-тестов, нацеленных на проверку RBAC и IDOR.
      *
      * @param request DTO с Git-ссылками, определяющими область анализа.
-     * @return {@link CompletableFuture} с результатом, содержащим сгенерированный код тестов.
+     * @return {@link Mono} с результатом, содержащим сгенерированный код тестов.
      */
     @PostMapping("/generate-rbac-fuzz-tests")
     @Operation(summary = "Сгенерировать Fuzzing-тесты для проверки RBAC",
             description = "Анализирует изменения в коде, извлекает правила RBAC, генерирует атакующие персоны и создает код теста для симуляции IDOR-атаки.")
-    public CompletableFuture<List<AgentResult>> generateRbacFuzzTests(@Valid @RequestBody SecurityScanRequest request) {
+    public Mono<List<AgentResult>> generateRbacFuzzTests(@Valid @RequestBody SecurityScanRequest request) {
         return orchestratorService.invoke("rbac-fuzzing-pipeline", request.toAgentContext());
     }
 }

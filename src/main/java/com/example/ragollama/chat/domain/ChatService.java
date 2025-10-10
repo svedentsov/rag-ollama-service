@@ -8,9 +8,9 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * "Чистый" доменный сервис для обработки бизнес-логики чата.
@@ -33,10 +33,9 @@ public class ChatService {
      * Обрабатывает чат-запрос асинхронно, возвращая полный ответ.
      *
      * @param history Предоставленная история чата для поддержания контекста.
-     *                Последнее сообщение в списке - это текущий запрос пользователя.
-     * @return {@link CompletableFuture} с финальным ответом от LLM.
+     * @return {@link Mono} с финальным ответом от LLM.
      */
-    public CompletableFuture<String> processChatRequestAsync(List<Message> history) {
+    public Mono<String> processChatRequestAsync(List<Message> history) {
         log.info("Обработка 'чистого' асинхронного запроса в чат.");
         Prompt prompt = new Prompt(history);
         return llmClient.callChat(prompt, ModelCapability.BALANCED);
@@ -45,8 +44,7 @@ public class ChatService {
     /**
      * Обрабатывает чат-запрос в потоковом режиме (Server-Sent Events).
      *
-     * @param history Предоставленная история чата. Последнее сообщение в списке -
-     *                это текущий запрос пользователя.
+     * @param history Предоставленная история чата.
      * @return Реактивный поток {@link Flux}, передающий части ответа по мере их генерации.
      */
     public Flux<String> processChatRequestStream(List<Message> history) {

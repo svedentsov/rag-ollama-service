@@ -32,6 +32,7 @@ public class WorkflowPlannerAgent {
     private final ToolRegistryService toolRegistryService;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     /**
      * Асинхронно создает граф выполнения (DAG) на основе цели пользователя.
@@ -56,14 +57,14 @@ public class WorkflowPlannerAgent {
         ));
         log.info("Запрос к LLM-планировщику для построения workflow: '{}'", goal);
 
-        return Mono.fromFuture(() -> llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .map(this::parseWorkflow)
                 .doOnSuccess(plan -> log.info("LLM-планировщик сгенерировал workflow из {} узлов.", plan.size()));
     }
 
     private List<WorkflowNode> parseWorkflow(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, new TypeReference<>() {
             });
         } catch (JsonProcessingException e) {

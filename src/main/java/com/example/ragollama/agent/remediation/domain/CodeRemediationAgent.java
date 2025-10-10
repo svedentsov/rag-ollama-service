@@ -20,7 +20,6 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который генерирует исправления для обнаруженных проблем в коде.
@@ -34,6 +33,7 @@ public class CodeRemediationAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @Override
     public String getName() {
@@ -52,7 +52,7 @@ public class CodeRemediationAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String filePath = (String) context.payload().get("filePath");
         String ref = (String) context.payload().getOrDefault("ref", "main");
         String problemDescription = (String) context.payload().get("problemDescription");
@@ -66,7 +66,7 @@ public class CodeRemediationAgent implements ToolAgent {
                             "problemSnippet", codeSnippet != null ? codeSnippet : "N/A"
                     ));
                     Prompt prompt = new Prompt(new UserMessage(promptString));
-                    return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.BALANCED));
+                    return llmClient.callChat(prompt, ModelCapability.BALANCED);
                 })
                 .map(this::parseLlmResponse)
                 .map(patch -> new AgentResult(
@@ -74,13 +74,12 @@ public class CodeRemediationAgent implements ToolAgent {
                         AgentResult.Status.SUCCESS,
                         "Предложение по исправлению кода успешно сгенерировано.",
                         Map.of("codePatch", patch)
-                ))
-                .toFuture();
+                ));
     }
 
     private CodePatch parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, CodePatch.class);
         } catch (JsonProcessingException e) {
             throw new ProcessingException("LLM вернула невалидный JSON для CodePatch.", e);

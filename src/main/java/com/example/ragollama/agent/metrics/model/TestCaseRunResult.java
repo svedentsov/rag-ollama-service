@@ -1,74 +1,49 @@
 package com.example.ragollama.agent.metrics.model;
 
-import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * Сущность JPA, представляющая результат выполнения одного тест-кейса в рамках
- * одного тестового прогона.
- * <p>
- * Хранение этих гранулярных данных является основой для построения любой
- * глубокой аналитики по стабильности и производительности тестов.
+ * Сущность TestCaseRunResult, адаптированная для R2DBC.
  */
-@Entity
-@Table(name = "test_case_run_results")
+@Table("test_case_run_results")
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class TestCaseRunResult {
-    /**
-     * Уникальный идентификатор записи.
-     */
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false)
+    @Column("project_id")
     private String projectId;
 
-    /**
-     * Ссылка на общий тестовый прогон, к которому относится этот результат.
-     * Используется для связи с метаданными (коммит, ветка).
-     * `ON DELETE CASCADE` гарантирует, что при удалении записи о прогоне
-     * все связанные с ней результаты также будут удалены.
-     */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "test_run_id", nullable = false)
-    private TestRunMetric testRun;
+    @Column("test_run_id")
+    private UUID testRunId;
 
-    /**
-     * Полное имя класса, в котором находится тест.
-     */
+    @Column("class_name")
     private String className;
 
-    /**
-     * Имя тестового метода.
-     */
+    @Column("test_name")
     private String testName;
 
-    /**
-     * Статус выполнения теста (PASSED, FAILED, SKIPPED).
-     */
-    @Enumerated(EnumType.STRING)
+    @Column("status")
     private TestResult.Status status;
 
-    /**
-     * Детальная информация об ошибке (стек-трейс), если тест упал.
-     */
-    @Lob
-    @Column(columnDefinition = "TEXT")
+    @Column("failure_details")
     private String failureDetails;
 
+    @Column("duration_ms")
     private long durationMs;
 
-    /**
-     * Временная метка создания записи.
-     */
-    @Column(nullable = false, updatable = false)
+    @CreatedDate
+    @Column("created_at")
     private OffsetDateTime createdAt;
 }

@@ -1,15 +1,17 @@
 package com.example.ragollama.monitoring.model;
 
-import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * Сущность JPA, представляющая одну запись об обратной связи от пользователя.
+ * Сущность FeedbackLog, адаптированная для R2DBC.
  */
 @Getter
 @Builder
@@ -17,27 +19,24 @@ import java.util.UUID;
 @AllArgsConstructor
 @ToString
 @EqualsAndHashCode(of = "id")
-@Entity
-@Table(name = "feedback_log")
+@Table("feedback_log")
 public class FeedbackLog {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @NotNull
-    @Column(name = "request_id", nullable = false)
+    @Column("request_id")
     private String requestId;
 
     @NotNull
-    @Column(name = "is_helpful", nullable = false)
+    @Column("is_helpful")
     private Boolean isHelpful;
 
-    @Lob
-    @Column(name = "user_comment", columnDefinition = "TEXT")
+    @Column("user_comment")
     private String userComment;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @CreatedDate
+    @Column("created_at")
     private OffsetDateTime createdAt;
 }

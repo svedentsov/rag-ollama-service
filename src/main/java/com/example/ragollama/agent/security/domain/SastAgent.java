@@ -23,7 +23,6 @@ import reactor.core.publisher.Mono;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, выполняющий статическое сканирование безопасности (SAST)
@@ -39,6 +38,7 @@ public class SastAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     /**
      * {@inheritDoc}
@@ -69,7 +69,7 @@ public class SastAgent implements ToolAgent {
      */
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         List<String> changedFiles = (List<String>) context.payload().get("changedFiles");
         String newRef = (String) context.payload().get("newRef");
 
@@ -84,29 +84,21 @@ public class SastAgent implements ToolAgent {
                     String summary = "SAST-сканирование завершено. Найдено уязвимостей: " + flattened.size();
                     log.info(summary);
                     return new AgentResult(getName(), AgentResult.Status.SUCCESS, summary, Map.of("sastFindings", flattened));
-                })
-                .toFuture();
+                });
     }
 
-    /**
-     * Асинхронно сканирует один файл с помощью LLM.
-     *
-     * @param filePath Путь к файлу.
-     * @param content  Содержимое файла.
-     * @return {@link Mono} со списком найденных уязвимостей.
-     */
     private Mono<List<SecurityFinding>> scanFile(String filePath, String content) {
         if (content == null || content.isBlank()) {
             return Mono.just(Collections.emptyList());
         }
         String promptString = promptService.render("sastAgentPrompt", Map.of("filePath", filePath, "code", content));
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .map(this::parseLlmResponse);
     }
 
     private List<SecurityFinding> parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             if (cleanedJson.isEmpty() || "[]".equals(cleanedJson)) {
                 return Collections.emptyList();
             }

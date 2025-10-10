@@ -20,7 +20,8 @@ import java.util.List;
  * <p>
  * Преобразует XML-структуру в список типизированных Java-объектов,
  * извлекая всю необходимую информацию о каждом тест-кейсе, включая
- * статус, детали ошибки и время выполнения.
+ * статус, детали ошибки и время выполнения. Эта версия включает
+ * "защиту от дурака" для обработки невалидных входных данных.
  */
 @Slf4j
 @Service
@@ -32,12 +33,13 @@ public class JUnitXmlParser {
      * Парсит содержимое JUnit XML и преобразует его в список объектов {@link TestResult}.
      *
      * @param xmlContent Строка, содержащая XML-отчет.
-     * @return Список результатов тестов.
-     * @throws ProcessingException если происходит ошибка парсинга XML.
+     * @return Список результатов тестов. Возвращает пустой список, если xmlContent пуст или невалиден.
+     * @throws ProcessingException если происходит критическая, непредвиденная ошибка парсинга.
      */
     public List<TestResult> parse(String xmlContent) {
         List<TestResult> results = new ArrayList<>();
         if (xmlContent == null || xmlContent.isBlank()) {
+            log.warn("В JUnitXmlParser передан пустой xmlContent. Возвращен пустой список.");
             return results;
         }
 
@@ -51,7 +53,7 @@ public class JUnitXmlParser {
                 String className = testcase.getAttribute("classname");
                 String testName = testcase.getAttribute("name");
                 String timeStr = testcase.getAttribute("time");
-                // Преобразуем время из секунд (с точкой или запятой) в миллисекунды
+
                 long durationMs = (long) (Double.parseDouble(timeStr.replace(",", ".")) * 1000);
                 String failureDetails = null;
                 TestResult.Status status = TestResult.Status.PASSED;
@@ -75,9 +77,12 @@ public class JUnitXmlParser {
 
                 results.add(new TestResult(className, testName, status, failureDetails, durationMs));
             }
+        } catch (org.xml.sax.SAXParseException e) {
+            log.warn("Не удалось распарсить JUnit XML, так как он не является валидным XML. Сообщение: '{}'. Возвращен пустой список.", e.getMessage());
+            return List.of(); // Возвращаем пустой список вместо падения
         } catch (Exception e) {
-            log.error("Не удалось распарсить JUnit XML отчет", e);
-            throw new ProcessingException("Ошибка парсинга JUnit XML отчета.", e);
+            log.error("Произошла непредвиденная ошибка при парсинге JUnit XML отчета", e);
+            throw new ProcessingException("Критическая ошибка парсинга JUnit XML отчета.", e);
         }
         return results;
     }

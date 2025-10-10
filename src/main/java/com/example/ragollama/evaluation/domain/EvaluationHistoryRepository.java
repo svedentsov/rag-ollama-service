@@ -2,20 +2,23 @@ package com.example.ragollama.evaluation.domain;
 
 import com.example.ragollama.evaluation.model.EvaluationHistory;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
 
-import java.util.List;
 import java.util.UUID;
 
+/**
+ * Реактивный репозиторий для EvaluationHistory.
+ */
 @Repository
-public interface EvaluationHistoryRepository extends JpaRepository<EvaluationHistory, UUID> {
+public interface EvaluationHistoryRepository extends ReactiveCrudRepository<EvaluationHistory, UUID> {
 
     /**
-     * Находит последний успешный результат оценки.
+     * Находит последние записи истории.
      *
-     * @param pageable Сортировка и ограничение (должно быть PageRequest.of(0, 1)).
-     * @return Список, содержащий не более одного (самого последнего) результата.
+     * @param pageable Сортировка и ограничение.
+     * @return Поток записей.
      */
-    List<EvaluationHistory> findAllByOrderByCreatedAtDesc(Pageable pageable);
+    Flux<EvaluationHistory> findAllBy(Pageable pageable);
 }

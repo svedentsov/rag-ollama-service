@@ -3,30 +3,31 @@ import toast from 'react-hot-toast';
 import { useChatSessions } from './hooks/useChatSessions';
 import { useDebounce } from './hooks/useDebounce';
 import { useRouter } from './hooks/useRouter';
-import { useNotifications, useClearNotification } from './state/notificationStore';
+import { useNotificationStore } from './state/notificationStore';
 import { SearchInput } from './components/SearchInput';
 import { ChatListItem } from './components/ChatListItem';
 import { Plus } from 'lucide-react';
 import styles from './ChatSidebar.module.css';
 
 /**
- * Пропсы для компонента ChatSidebar.
+ * @interface ChatSidebarProps
+ * @description Пропсы для компонента ChatSidebar.
  */
 interface ChatSidebarProps {
-  /** @param currentSessionId - ID активной в данный момент сессии чата. */
+  /** @param {string | null} currentSessionId - ID активной в данный момент сессии чата. */
   currentSessionId: string | null;
 }
 
 /**
- * Компонент боковой панели, который теперь выступает в роли контейнера,
- * управляя списком чатов и делегируя отображение дочерним компонентам.
+ * Компонент боковой панели для навигации по чатам.
+ * Управляет состоянием поиска, отображает список чатов и кнопку создания нового.
  * @param {ChatSidebarProps} props - Пропсы компонента.
+ * @returns {React.ReactElement} Отрендеренный компонент боковой панели.
  */
 export function ChatSidebar({ currentSessionId }: ChatSidebarProps) {
   const { sessions, isLoading, createChat, deleteChat, renameChat } = useChatSessions();
   const { navigate } = useRouter();
-  const { notifications } = useNotifications();
-  const clearNotification = useClearNotification();
+  const { notifications, clearNotification } = useNotificationStore();
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 

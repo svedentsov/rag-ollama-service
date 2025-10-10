@@ -1,7 +1,7 @@
 -- Таблица для хранения сырых метрик по каждому тестовому прогону.
 CREATE TABLE IF NOT EXISTS test_run_metrics
 (
-    id             UUID PRIMARY KEY,
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     commit_hash    VARCHAR(40)              NOT NULL,
     branch_name    VARCHAR(255),
     total_count    INTEGER                  NOT NULL,

@@ -33,6 +33,7 @@ public class SourceCiteVerifierService {
     private final PromptService promptService;
     private final MetricService metricService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     /**
      * Асинхронно выполняет проверку ответа.
@@ -58,36 +59,28 @@ public class SourceCiteVerifierService {
         ));
 
         llmClient.callChat(new Prompt(promptString), ModelCapability.FAST_RELIABLE)
-                .thenAccept(jsonResponse -> {
-                    VerificationResult result = parseLlmResponse(jsonResponse);
-                    metricService.recordVerificationResult(result.isValid());
-                    if (!result.isValid()) {
-                        log.warn("""
-                                
-                                !!! ПРОВЕРКА ЦИТИРОВАНИЯ НЕ ПРОЙДЕНА !!!
-                                Ответ: "{}"
-                                Причина: {}
-                                Отсутствующие цитаты: {}
-                                """, generatedAnswer, result.reasoning(), result.missingCitations());
-                    } else {
-                        log.info("Проверка цитирования успешно пройдена для ответа.");
-                    }
-                })
-                .exceptionally(ex -> {
-                    log.error("Ошибка во время выполнения асинхронной верификации ответа.", ex);
-                    return null;
-                });
+                .subscribe(
+                        jsonResponse -> {
+                            VerificationResult result = parseLlmResponse(jsonResponse);
+                            metricService.recordVerificationResult(result.isValid());
+                            if (!result.isValid()) {
+                                log.warn("""
+                                        
+                                        !!! ПРОВЕРКА ЦИТИРОВАНИЯ НЕ ПРОЙДЕНА !!!
+                                        Ответ: "{}"
+                                        Причина: {}
+                                        Отсутствующие цитаты: {}
+                                        """, generatedAnswer, result.reasoning(), result.missingCitations());
+                            } else {
+                                log.info("Проверка цитирования успешно пройдена для ответа.");
+                            }
+                        },
+                        ex -> log.error("Ошибка во время выполнения асинхронной верификации ответа.", ex)
+                );
     }
 
-    /**
-     * Надежно парсит ответ от LLM, используя {@link JsonExtractorUtil} для
-     * извлечения чистого JSON-блока перед десериализацией.
-     *
-     * @param llmResponse Сырой ответ от LLM, который может содержать "мусор".
-     * @return Десериализованный объект {@link VerificationResult}.
-     */
     private VerificationResult parseLlmResponse(String llmResponse) {
-        String cleanedJson = JsonExtractorUtil.extractJsonBlock(llmResponse);
+        String cleanedJson = jsonExtractorUtil.extractJsonBlock(llmResponse);
         if (cleanedJson.isEmpty()) {
             log.error("Не удалось извлечь JSON из ответа LLM-верификатора: {}", llmResponse);
             return new VerificationResult(false, List.of(), "LLM вернула ответ без валидного JSON.");

@@ -6,6 +6,7 @@ import com.example.ragollama.agent.AgentResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
 import java.util.HashMap;
 import java.util.List;
@@ -50,22 +51,22 @@ public class ProjectHealthAggregatorService {
      */
     public CompletableFuture<Map<String, Object>> aggregateHealthReports(AgentContext context) {
         log.info("Запуск агрегации отчетов о здоровье проекта...");
-        CompletableFuture<List<AgentResult>> testDebtFuture = orchestratorService.invoke("test-debt-report-pipeline", context);
-        CompletableFuture<List<AgentResult>> bugPatternFuture = orchestratorService.invoke("bug-pattern-detection-pipeline", context);
+        Mono<List<AgentResult>> testDebtMono = orchestratorService.invoke("test-debt-report-pipeline", context);
+        Mono<List<AgentResult>> bugPatternMono = orchestratorService.invoke("bug-pattern-detection-pipeline", context);
 
-        return CompletableFuture.allOf(testDebtFuture, bugPatternFuture)
-                .thenApply(v -> {
+        return Mono.zip(testDebtMono, bugPatternMono)
+                .map(tuple -> {
                     Map<String, Object> healthReport = new HashMap<>();
-                    testDebtFuture.join().stream()
+                    tuple.getT1().stream()
                             .reduce((first, second) -> second) // Берем результат последнего агента в конвейере
                             .ifPresent(r -> healthReport.put("testDebtReport", r.details().get("testDebtReport")));
 
-                    bugPatternFuture.join().stream()
+                    tuple.getT2().stream()
                             .reduce((first, second) -> second)
                             .ifPresent(r -> healthReport.put("bugPatternReport", r.details().get("bugPatternReport")));
 
                     log.info("Агрегация отчетов о здоровье проекта завершена. Собрано {} отчетов.", healthReport.size());
                     return healthReport;
-                });
+                }).toFuture();
     }
 }

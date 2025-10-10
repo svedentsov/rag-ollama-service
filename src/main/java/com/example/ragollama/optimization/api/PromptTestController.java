@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агента, управляющего A/B-тестированием промптов.
@@ -30,11 +30,11 @@ public class PromptTestController {
      * Запускает A/B-тест для новой версии промпта.
      *
      * @param request DTO с именем промпта и его новым содержимым.
-     * @return {@link CompletableFuture} с отчетом, содержащим сравнение метрик.
+     * @return {@link Mono} с отчетом, содержащим сравнение метрик.
      */
     @PostMapping("/run")
     @Operation(summary = "Запустить A/B-тест для новой версии промпта")
-    public CompletableFuture<List<AgentResult>> runPromptTest(@Valid @RequestBody PromptTestRequest request) {
+    public Mono<List<AgentResult>> runPromptTest(@Valid @RequestBody PromptTestRequest request) {
         return orchestratorService.invoke("prompt-testing-pipeline", request.toAgentContext());
     }
 }

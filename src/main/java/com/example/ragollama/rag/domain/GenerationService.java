@@ -14,20 +14,14 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
  * Сервис, отвечающий за этап генерации ответа в RAG-конвейере.
- * <p>
- * Эта версия формирует богатый доменный объект {@link RagAnswer}, который
- * включает в себя не просто список имен источников, а полный, структурированный
- * список цитат {@link SourceCitation} с текстом и метаданными.
- * Ключевое изменение: применяется маскирование PII к фрагментам текста
- * *перед* их возвратом (Egress Redaction).
  */
 @Slf4j
 @Service
@@ -43,21 +37,21 @@ public class GenerationService {
      *
      * @param prompt    Промпт для LLM.
      * @param documents Документы, использованные в контексте.
-     * @return {@link CompletableFuture} с {@link RagAnswer}.
+     * @return {@link Mono} с {@link RagAnswer}.
      */
-    public CompletableFuture<RagAnswer> generate(Prompt prompt, List<Document> documents) {
+    public Mono<RagAnswer> generate(Prompt prompt, List<Document> documents) {
         if (documents == null || documents.isEmpty()) {
             log.warn("На этап Generation не передано документов. Применяется стратегия '{}'.", noContextStrategy.getClass().getSimpleName());
-            return noContextStrategy.handle(prompt).toFuture();
+            return noContextStrategy.handle(prompt);
         }
         return llmClient.callChat(prompt, ModelCapability.BALANCED)
-                .thenApply(generatedAnswer -> {
+                .map(generatedAnswer -> {
                     List<SourceCitation> sourceCitations = extractCitations(documents);
                     return new RagAnswer(generatedAnswer, sourceCitations);
                 })
-                .exceptionally(ex -> {
+                .onErrorMap(ex -> {
                     log.error("Ошибка на этапе генерации ответа LLM", ex);
-                    throw new GenerationException("Не удалось сгенерировать ответ от LLM.", ex);
+                    return new GenerationException("Не удалось сгенерировать ответ от LLM.", ex);
                 });
     }
 
@@ -94,13 +88,6 @@ public class GenerationService {
                 });
     }
 
-    /**
-     * Преобразует список {@link Document} в список {@link SourceCitation},
-     * применяя маскирование PII к текстовым фрагментам.
-     *
-     * @param documents Документы, использованные в контексте.
-     * @return Список структурированных и безопасных для отображения цитат.
-     */
     private List<SourceCitation> extractCitations(List<Document> documents) {
         if (documents == null) {
             return Collections.emptyList();
@@ -108,7 +95,7 @@ public class GenerationService {
         return documents.stream()
                 .map(doc -> new SourceCitation(
                         (String) doc.getMetadata().get("source"),
-                        piiRedactionService.redact(doc.getText()), // Egress Redaction
+                        piiRedactionService.redact(doc.getText()),
                         doc.getMetadata(),
                         (String) doc.getMetadata().get("chunkId"),
                         (Float) doc.getMetadata().get("rerankedSimilarity")

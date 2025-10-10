@@ -1,6 +1,6 @@
 package com.example.ragollama.orchestration.dto;
 
-import com.example.ragollama.agent.buganalysis.api.dto.BugAnalysisResponse;
+import com.example.ragollama.agent.buganalysis.model.BugAnalysisReport;
 import com.example.ragollama.agent.codegeneration.api.dto.CodeGenerationResponse;
 import com.example.ragollama.rag.api.dto.StreamingResponsePart;
 import com.example.ragollama.rag.domain.model.SourceCitation;
@@ -51,7 +51,7 @@ public sealed interface UniversalResponse {
     }
 
     @Schema(description = "Результат работы агента анализа багов")
-    record BugAnalysis(BugAnalysisResponse analysis) implements UniversalResponse {
+    record BugAnalysis(BugAnalysisReport analysis) implements UniversalResponse {
     }
 
     @Schema(description = "Сигнал об успешном завершении потока")
@@ -91,7 +91,17 @@ public sealed interface UniversalResponse {
     /**
      * Фабричный метод для преобразования ответа от сервиса анализа багов.
      */
-    static UniversalResponse from(BugAnalysisResponse response) {
+    static UniversalResponse from(BugAnalysisReport response) {
         return new BugAnalysis(response);
+    }
+
+    /**
+     * Фабричный метод для преобразования полного синхронного ответа в одну потоковую часть.
+     */
+    static UniversalResponse from(UniversalSyncResponse syncResponse) {
+        if (syncResponse.bugAnalysisResponse() != null) {
+            return new BugAnalysis(syncResponse.bugAnalysisResponse());
+        }
+        return new Content(syncResponse.answer() != null ? syncResponse.answer() : "");
     }
 }

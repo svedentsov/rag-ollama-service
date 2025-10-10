@@ -17,10 +17,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который проверяет лицензии зависимостей на соответствие политике компании.
@@ -34,6 +34,7 @@ public class ScaComplianceAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @Override
     public String getName() {
@@ -51,7 +52,7 @@ public class ScaComplianceAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String buildContent = (String) context.payload().get("buildFileContent");
         String licensePolicy = (String) context.payload().get("licensePolicy");
 
@@ -59,7 +60,7 @@ public class ScaComplianceAgent implements ToolAgent {
         List<ScannedDependency> dependencies = scannerService.scan(buildContent);
 
         if (dependencies.isEmpty()) {
-            return CompletableFuture.completedFuture(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Зависимости для анализа не найдены.", Map.of()));
+            return Mono.just(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Зависимости для анализа не найдены.", Map.of()));
         }
 
         // Шаг 2: Вызов LLM для экспертной оценки на основе политики
@@ -71,21 +72,21 @@ public class ScaComplianceAgent implements ToolAgent {
             ));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(this::parseLlmResponse)
-                    .thenApply(report -> new AgentResult(
+                    .map(this::parseLlmResponse)
+                    .map(report -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,
                             report.summary(),
                             Map.of("scaReport", report)
                     ));
         } catch (JsonProcessingException e) {
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации отчета о зависимостях", e));
+            return Mono.error(new ProcessingException("Ошибка сериализации отчета о зависимостях", e));
         }
     }
 
     private ScaReport parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, ScaReport.class);
         } catch (JsonProcessingException e) {
             log.error("Не удалось распарсить JSON-ответ от SCA LLM: {}", jsonResponse, e);

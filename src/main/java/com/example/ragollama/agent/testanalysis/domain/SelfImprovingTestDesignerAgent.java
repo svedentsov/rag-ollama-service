@@ -19,7 +19,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -51,7 +50,7 @@ public class SelfImprovingTestDesignerAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String classCode = (String) context.payload().get("classCode");
         String methodName = (String) context.payload().get("methodName");
 
@@ -62,8 +61,7 @@ public class SelfImprovingTestDesignerAgent implements ToolAgent {
                         AgentResult.Status.SUCCESS,
                         "Тест успешно сгенерирован с использованием примеров из проекта.",
                         Map.of("generatedTestFile", generatedTest)
-                ))
-                .toFuture();
+                ));
     }
 
     private Mono<List<Document>> findRelevantTestExamples(String classCode, String methodName) {
@@ -89,7 +87,7 @@ public class SelfImprovingTestDesignerAgent implements ToolAgent {
                 "examples", examplesAsString.isBlank() ? "Примеры не найдены." : examplesAsString
         ));
         Prompt prompt = new Prompt(new UserMessage(promptString));
-        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.BALANCED))
+        return llmClient.callChat(prompt, ModelCapability.BALANCED)
                 .map(generatedCode -> {
                     String className = classCode.substring(classCode.indexOf("class ") + 6, classCode.indexOf("{")).trim();
                     String testFileName = className + "Test.java";

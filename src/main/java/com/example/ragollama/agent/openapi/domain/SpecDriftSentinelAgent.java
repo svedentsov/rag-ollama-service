@@ -11,9 +11,9 @@ import io.swagger.v3.oas.models.OpenAPI;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который выступает в роли "стража спецификации".
@@ -58,16 +58,12 @@ public class SpecDriftSentinelAgent implements ToolAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        return CompletableFuture.supplyAsync(() -> {
-            // Шаг 1: Получаем эндпоинты из спецификации
+    public Mono<AgentResult> execute(AgentContext context) {
+        return Mono.fromCallable(() -> {
             OpenAPI openAPI = getOpenApi(context);
             Set<EndpointInfo> specEndpoints = new HashSet<>(specParser.extractEndpoints(openAPI));
-
-            // Шаг 2: Получаем эндпоинты из кода (из рантайм-контекста Spring)
             Set<EndpointInfo> codeEndpoints = new HashSet<>(endpointInspector.getImplementedEndpoints());
 
-            // Шаг 3: Находим расхождения с помощью операций над множествами
             Set<EndpointInfo> missingInCode = new HashSet<>(specEndpoints);
             missingInCode.removeAll(codeEndpoints);
 
@@ -86,12 +82,6 @@ public class SpecDriftSentinelAgent implements ToolAgent {
         });
     }
 
-    /**
-     * Определяет источник спецификации и парсит ее.
-     *
-     * @param context Контекст с `specUrl` или `specContent`.
-     * @return Распарсенный объект {@link OpenAPI}.
-     */
     private OpenAPI getOpenApi(AgentContext context) {
         String specUrl = (String) context.payload().get("specUrl");
         if (specUrl != null) {

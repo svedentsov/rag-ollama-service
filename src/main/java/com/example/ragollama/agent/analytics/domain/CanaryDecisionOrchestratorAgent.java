@@ -3,9 +3,9 @@ package com.example.ragollama.agent.analytics.domain;
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.ToolAgent;
+import com.example.ragollama.agent.analytics.model.CanaryAnalysisReport;
 import com.example.ragollama.agent.dynamic.DynamicPipelineExecutionService;
 import com.example.ragollama.agent.dynamic.PlanStep;
-import com.example.ragollama.agent.analytics.model.CanaryAnalysisReport;
 import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
@@ -18,16 +18,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который оркестрирует принятие решений по канареечным развертываниям.
- * <p>
- * Принимает на вход отчет от CanaryAnalyzerAgent и политику, а затем генерирует
- * и запускает план действий (promote, rollback, hold).
  */
 @Slf4j
 @Component
@@ -38,6 +35,7 @@ public class CanaryDecisionOrchestratorAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @Override
     public String getName() {
@@ -55,7 +53,7 @@ public class CanaryDecisionOrchestratorAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         CanaryAnalysisReport report = (CanaryAnalysisReport) context.payload().get("canaryReport");
         String policy = (String) context.payload().get("decisionPolicy");
 
@@ -66,27 +64,24 @@ public class CanaryDecisionOrchestratorAgent implements ToolAgent {
                     "decision_policy", policy
             ));
 
-            // Шаг 1: LLM генерирует план действий
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(this::parsePlan)
-                    .thenCompose(plan -> {
-                        // Шаг 2: Выполняем сгенерированный план
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                    .map(this::parsePlan)
+                    .flatMap(plan -> {
                         log.info("Запуск сгенерированного Canary-плана с {} шагами.", plan.size());
                         return executionService.executePlan(plan, new AgentContext(Map.of()), null)
-                                .toFuture()
-                                .thenApply(results -> {
+                                .map(results -> {
                                     String summary = "Оркестрация решения по canary-развертыванию завершена. План запущен.";
                                     return new AgentResult(getName(), AgentResult.Status.SUCCESS, summary, Map.of("executedPlan", results));
                                 });
                     });
         } catch (JsonProcessingException e) {
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации отчета для оркестратора", e));
+            return Mono.error(new ProcessingException("Ошибка сериализации отчета для оркестратора", e));
         }
     }
 
     private List<PlanStep> parsePlan(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, new TypeReference<>() {
             });
         } catch (JsonProcessingException e) {

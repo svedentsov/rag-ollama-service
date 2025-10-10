@@ -18,6 +18,9 @@ import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Обработчик для намерения "Генерация кода", адаптированный для R2DBC и реактивного стека.
+ */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -34,18 +37,18 @@ public class CodeGenerationIntentHandler implements IntentHandler {
     @Override
     public CompletableFuture<UniversalSyncResponse> handleSync(UniversalRequest request, UUID taskId) {
         return dialogManager.startTurn(request.sessionId(), request.query(), MessageRole.USER)
-                .thenCompose(turnContext ->
+                .flatMap(turnContext ->
                         codeGenerationService.generateCode(request.toCodeGenerationRequest())
-                                .flatMap(response -> Mono.fromFuture(
+                                .flatMap(response ->
                                         dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), response.generatedCode(), MessageRole.ASSISTANT, taskId)
-                                                .thenApply(v -> UniversalSyncResponse.from(response, canHandle()))
-                                )).toFuture()
-                );
+                                                .thenReturn(UniversalSyncResponse.from(response, canHandle()))
+                                )
+                ).toFuture();
     }
 
     @Override
     public Flux<UniversalResponse> handleStream(UniversalRequest request, UUID taskId) {
-        return Mono.fromFuture(() -> dialogManager.startTurn(request.sessionId(), request.query(), MessageRole.USER))
+        return dialogManager.startTurn(request.sessionId(), request.query(), MessageRole.USER)
                 .flatMapMany(turnContext -> {
                     final StringBuilder fullResponseBuilder = new StringBuilder();
                     return codeGenerationService.generateCodeStream(request.toCodeGenerationRequest())
@@ -53,7 +56,7 @@ public class CodeGenerationIntentHandler implements IntentHandler {
                             .doOnComplete(() -> {
                                 String fullResponse = fullResponseBuilder.toString();
                                 if (!fullResponse.isBlank()) {
-                                    dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), fullResponse, MessageRole.ASSISTANT, taskId);
+                                    dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), fullResponse, MessageRole.ASSISTANT, taskId).subscribe();
                                 }
                             })
                             .map(UniversalResponse::from)

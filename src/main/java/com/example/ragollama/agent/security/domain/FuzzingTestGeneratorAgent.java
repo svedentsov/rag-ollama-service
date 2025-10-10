@@ -13,10 +13,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который генерирует код fuzzing-теста на основе правил RBAC
@@ -48,7 +48,7 @@ public class FuzzingTestGeneratorAgent implements ToolAgent {
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         List<Map<String, String>> rbacRules = (List<Map<String, String>>) context.payload().get("extractedRules");
         AttackPersonas personas = (AttackPersonas) context.payload().get("attackPersonas");
 
@@ -61,14 +61,14 @@ public class FuzzingTestGeneratorAgent implements ToolAgent {
             ));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(generatedCode -> new AgentResult(
+                    .map(generatedCode -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,
                             "Код Fuzzing-теста успешно сгенерирован.",
                             Map.of("generatedFuzzTest", generatedCode)
                     ));
         } catch (JsonProcessingException e) {
-            return CompletableFuture.failedFuture(new RuntimeException("Ошибка сериализации данных для Fuzzing-генератора", e));
+            return Mono.error(new RuntimeException("Ошибка сериализации данных для Fuzzing-генератора", e));
         }
     }
 }

@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агентов, связанных с анализом покрытия кода.
@@ -30,11 +30,11 @@ public class CoverageController {
      * Запускает полный конвейер аудита тестового покрытия для изменений.
      *
      * @param request DTO с Git-ссылками и JaCoCo-отчетом.
-     * @return {@link CompletableFuture} со структурированным отчетом о рисках.
+     * @return {@link Mono} со структурированным отчетом о рисках.
      */
     @PostMapping("/audit")
     @Operation(summary = "Провести аудит тестового покрытия для изменений в коде")
-    public CompletableFuture<List<AgentResult>> auditCoverage(@Valid @RequestBody CoverageAuditRequest request) {
+    public Mono<List<AgentResult>> auditCoverage(@Valid @RequestBody CoverageAuditRequest request) {
         return orchestratorService.invoke("coverage-audit-pipeline", request.toAgentContext());
     }
 }

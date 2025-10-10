@@ -15,9 +15,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * QA-агент, который анализирует неструктурированный текст баг-репорта
@@ -25,6 +25,9 @@ import java.util.concurrent.CompletableFuture;
  * <p>
  * Этот агент является первым шагом в конвейере анализа багов, подготавливая
  * качественные данные для последующих агентов, таких как детектор дубликатов.
+ * <p>
+ * В этой версии агент передает в контекст строго типизированный объект
+ * {@link BugReportSummary}, а не "сырую" строку.
  */
 @Slf4j
 @Component
@@ -34,11 +37,10 @@ public class BugReportSummarizerAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     /**
      * {@inheritDoc}
-     *
-     * @return Уникальное имя агента.
      */
     @Override
     public String getName() {
@@ -47,8 +49,6 @@ public class BugReportSummarizerAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     *
-     * @return Человекочитаемое описание назначения агента.
      */
     @Override
     public String getDescription() {
@@ -57,9 +57,6 @@ public class BugReportSummarizerAgent implements ToolAgent {
 
     /**
      * {@inheritDoc}
-     *
-     * @param context Контекст, который должен содержать 'rawReportText'.
-     * @return {@code true}, если все необходимые ключи присутствуют.
      */
     @Override
     public boolean canHandle(AgentContext context) {
@@ -70,35 +67,24 @@ public class BugReportSummarizerAgent implements ToolAgent {
      * Асинхронно выполняет структурирование текста.
      *
      * @param context Контекст, содержащий 'rawReportText'.
-     * @return {@link CompletableFuture} с результатом, обогащающим контекст
-     * структурированным отчетом и улучшенным текстом для следующего агента.
+     * @return {@link Mono} с результатом, обогащающим контекст
+     *         структурированным отчетом для следующего агента.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String rawReportText = (String) context.payload().get("rawReportText");
         log.info("BugReportSummarizerAgent: запуск анализа для сырого отчета.");
 
         String promptString = promptService.render("bugReportSummarizerPrompt", Map.of("rawReport", rawReportText));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .thenApply(this::parseLlmResponse)
-                .thenApply(summary -> {
-                    // Формируем улучшенный текст для следующего агента в конвейере
-                    String improvedTextForNextAgent = String.format(
-                            "Title: %s\nSteps:\n%s\nExpected: %s\nActual: %s",
-                            summary.title(), String.join("\n- ", summary.stepsToReproduce()),
-                            summary.expectedBehavior(), summary.actualBehavior()
-                    );
-                    return new AgentResult(
-                            getName(),
-                            AgentResult.Status.SUCCESS,
-                            "Баг-репорт успешно проанализирован и структурирован.",
-                            Map.of(
-                                    "bugReportSummary", summary,
-                                    "bugReportText", improvedTextForNextAgent
-                            )
-                    );
-                });
+                .map(this::parseLlmResponse)
+                .map(summary -> new AgentResult(
+                        getName(),
+                        AgentResult.Status.SUCCESS,
+                        "Баг-репорт успешно проанализирован и структурирован.",
+                        Map.of("bugReportSummary", summary) // Передаем строго типизированный объект
+                ));
     }
 
     /**
@@ -110,7 +96,7 @@ public class BugReportSummarizerAgent implements ToolAgent {
      */
     private BugReportSummary parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, BugReportSummary.class);
         } catch (JsonProcessingException e) {
             log.error("Не удалось распарсить JSON-ответ от LLM для BugReportSummary: {}", jsonResponse, e);

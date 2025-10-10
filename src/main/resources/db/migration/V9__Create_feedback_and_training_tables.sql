@@ -1,7 +1,7 @@
 -- Таблица для хранения сырой обратной связи от пользователей.
 CREATE TABLE IF NOT EXISTS feedback_log
 (
-    id          UUID PRIMARY KEY,
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     request_id  VARCHAR(36)              NOT NULL,
     is_helpful  BOOLEAN                  NOT NULL,
     user_comment TEXT,
@@ -13,7 +13,7 @@ CREATE INDEX IF NOT EXISTS idx_feedback_log_request_id ON feedback_log (request_
 -- Таблица для хранения готовых обучающих пар для дообучения моделей.
 CREATE TABLE IF NOT EXISTS training_data_pairs
 (
-    id                UUID PRIMARY KEY,
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     query_text        TEXT    NOT NULL,
     document_id       UUID    NOT NULL,
     -- 'positive' или 'negative'

@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агентов, обеспечивающих соблюдение контрактов данных.
@@ -30,11 +30,11 @@ public class DataContractAgentController {
      * Запускает агента для проверки обратной совместимости изменений в DTO.
      *
      * @param request DTO с Git-ссылками и путем к файлу DTO.
-     * @return {@link CompletableFuture} с результатом анализа.
+     * @return {@link Mono} с результатом анализа.
      */
     @PostMapping("/enforce")
     @Operation(summary = "Проверить DTO на наличие ломающих изменений")
-    public CompletableFuture<List<AgentResult>> enforceDataContract(@Valid @RequestBody DataContractRequest request) {
+    public Mono<List<AgentResult>> enforceDataContract(@Valid @RequestBody DataContractRequest request) {
         return orchestratorService.invoke("data-contract-enforcement-pipeline", request.toAgentContext());
     }
 }

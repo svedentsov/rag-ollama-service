@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для "Финансового Губернатора".
@@ -30,11 +30,11 @@ public class FinancialGovernorController {
      * Запускает "AI CFO" для анализа затрат и ROI.
      *
      * @param request DTO с параметрами анализа.
-     * @return {@link CompletableFuture} с финальным финансовым отчетом.
+     * @return {@link Mono} с финальным финансовым отчетом.
      */
     @PostMapping("/analyze-roi")
     @Operation(summary = "Проанализировать затраты и ROI инженерных инициатив (AI CFO)")
-    public CompletableFuture<List<AgentResult>> analyzeFinancials(@Valid @RequestBody FinancialAnalysisRequest request) {
+    public Mono<List<AgentResult>> analyzeFinancials(@Valid @RequestBody FinancialAnalysisRequest request) {
         return orchestratorService.invoke("financial-roi-analysis-pipeline", request.toAgentContext());
     }
 }

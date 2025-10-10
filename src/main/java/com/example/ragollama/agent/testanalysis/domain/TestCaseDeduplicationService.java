@@ -42,10 +42,8 @@ public class TestCaseDeduplicationService {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
-    /**
-     * DTO для внутреннего использования при парсинге ответа LLM.
-     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record VerificationResponse(boolean isDuplicate, String justification) {
     }
@@ -60,22 +58,13 @@ public class TestCaseDeduplicationService {
     public Mono<List<DeduplicationResult>> findDuplicates(String sourceId, String sourceContent) {
         log.info("Запуск поиска дубликатов для тест-кейса ID: {}", sourceId);
 
-        // Шаг 1: Найти кандидатов с помощью векторного поиска
         return findSimilarTestCases(sourceId, sourceContent)
                 .flatMapMany(Flux::fromIterable)
-                // Шаг 2: Для каждого кандидата асинхронно выполнить LLM-проверку
                 .flatMap(candidate -> verifyIsDuplicate(sourceContent, candidate))
-                .filter(Objects::nonNull) // Отфильтровать пары, которые не являются дубликатами
+                .filter(Objects::nonNull)
                 .collectList();
     }
 
-    /**
-     * Использует RAG-конвейер для поиска семантически похожих тест-кейсов.
-     *
-     * @param sourceId ID исходного теста, который нужно исключить из результатов.
-     * @param content  Текст исходного теста.
-     * @return {@link Mono} со списком документов-кандидатов.
-     */
     private Mono<List<Document>> findSimilarTestCases(String sourceId, String content) {
         Filter.Expression typeFilter = new Filter.Expression(
                 Filter.ExpressionType.EQ, new Filter.Key("metadata.doc_type"), new Filter.Value("test_case")
@@ -91,20 +80,13 @@ public class TestCaseDeduplicationService {
                 .flatMap(queries -> retrievalStrategy.retrieve(queries, content, config.topK() + 1, config.similarityThreshold(), combinedFilter));
     }
 
-    /**
-     * Вызывает LLM для окончательного вердикта по паре тест-кейсов.
-     *
-     * @param sourceContent Текст исходного теста.
-     * @param candidate     Документ-кандидат.
-     * @return {@link Mono} с результатом {@link DeduplicationResult}, если это дубликат, или пустой Mono.
-     */
     private Mono<DeduplicationResult> verifyIsDuplicate(String sourceContent, Document candidate) {
         String promptString = promptService.render("testCaseDeduplicationPrompt", Map.of(
                 "test_case_A", sourceContent,
                 "test_case_B", candidate.getText()
         ));
 
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .map(this::parseLlmResponse)
                 .flatMap(verification -> {
                     if (verification.isDuplicate()) {
@@ -115,20 +97,13 @@ public class TestCaseDeduplicationService {
 
                         return Mono.just(new DeduplicationResult(duplicateSourceId, verification.justification(), similarity));
                     }
-                    return Mono.empty(); // Не является дубликатом
+                    return Mono.empty();
                 });
     }
 
-    /**
-     * Безопасно парсит JSON-ответ от LLM.
-     *
-     * @param jsonResponse Ответ от LLM.
-     * @return Распарсенный объект VerificationResponse.
-     * @throws ProcessingException если парсинг JSON не удался.
-     */
     private VerificationResponse parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, VerificationResponse.class);
         } catch (JsonProcessingException e) {
             log.error("Не удалось распарсить JSON-ответ от LLM-верификатора дубликатов: {}", jsonResponse, e);

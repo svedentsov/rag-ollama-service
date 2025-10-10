@@ -1,16 +1,15 @@
 package com.example.ragollama.chat.domain.model;
 
-import io.hypersistence.utils.hibernate.type.json.JsonType;
-import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.Type;
-import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.annotation.Transient;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -22,52 +21,31 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Entity
-@Table(name = "chat_sessions")
+@Table("chat_sessions")
 public class ChatSession {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "session_id")
+    @Column("session_id")
     private UUID sessionId;
 
-    @Column(name = "user_name", nullable = false)
+    @Column("user_name")
     private String userName;
 
-    @Column(name = "chat_name", nullable = false)
+    @Column("chat_name")
     private String chatName;
 
-    @Type(JsonType.class)
-    @Column(name = "active_branches", columnDefinition = "jsonb")
+    @Column("active_branches")
     @Builder.Default
-    private Map<String, String> activeBranches = new HashMap<>();
+    private Map<String, Object> activeBranches = new HashMap<>();
 
-    @OneToMany(
-            mappedBy = "session",
-            cascade = CascadeType.ALL,
-            orphanRemoval = true,
-            fetch = FetchType.LAZY
-    )
-    @Builder.Default
-    private List<ChatMessage> messages = new ArrayList<>();
-
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @CreatedDate
+    @Column("created_at")
     private OffsetDateTime createdAt;
 
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
+    @LastModifiedDate
+    @Column("updated_at")
     private OffsetDateTime updatedAt;
 
     @Transient
     private ChatMessage lastMessage;
-
-    /**
-     * Helper-метод для безопасного добавления сообщения в сессию.
-     * @param message Сообщение для добавления.
-     */
-    public void addMessage(ChatMessage message) {
-        messages.add(message);
-        message.setSession(this);
-    }
 }

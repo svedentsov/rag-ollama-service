@@ -28,12 +28,9 @@ public class KnowledgeGuardianScheduler {
     public void runScheduledConsistencyCheck() {
         log.info("Планировщик запускает фоновую задачу аудита консистентности базы знаний...");
         orchestratorService.invoke("knowledge-guardian-pipeline", new AgentContext(Map.of()))
-                .whenComplete((result, ex) -> {
-                    if (ex != null) {
-                        log.error("Задача аудита консистентности завершилась с ошибкой.", ex);
-                    } else {
-                        log.info("Задача аудита консистентности успешно завершена.");
-                    }
-                });
+                .subscribe(
+                        result -> log.info("Задача аудита консистентности успешно завершена."),
+                        ex -> log.error("Задача аудита консистентности завершилась с ошибкой.", ex)
+                );
     }
 }

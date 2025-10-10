@@ -21,7 +21,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который выполняет аудит безопасности и комплаенса для измененного кода.
@@ -39,6 +38,7 @@ public class SecurityRiskScorerAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @Override
     public String getName() {
@@ -59,12 +59,11 @@ public class SecurityRiskScorerAgent implements ToolAgent {
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         List<String> changedFiles = (List<String>) context.payload().get("changedFiles");
         String newRef = (String) context.payload().get("newRef");
         List<Map<String, String>> rbacRules = (List<Map<String, String>>) context.payload().get("extractedRules");
 
-        // Асинхронно получаем контент всех измененных файлов
         return Flux.fromIterable(changedFiles)
                 .filter(file -> file.endsWith(".java") && file.startsWith("src/main/java"))
                 .flatMap(file -> gitApiClient.getFileContent(file, newRef).map(content -> Map.entry(file, content)))
@@ -81,7 +80,7 @@ public class SecurityRiskScorerAgent implements ToolAgent {
                                 "changedCode", filesJson,
                                 "rbacRules", rbacJson
                         ));
-                        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                                 .map(this::parseLlmResponse)
                                 .map(report -> new AgentResult(
                                         getName(),
@@ -92,13 +91,12 @@ public class SecurityRiskScorerAgent implements ToolAgent {
                     } catch (JsonProcessingException e) {
                         return Mono.error(new ProcessingException("Ошибка сериализации данных для LLM-аудитора", e));
                     }
-                })
-                .toFuture();
+                });
     }
 
     private SecurityRiskReport parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, SecurityRiskReport.class);
         } catch (JsonProcessingException e) {
             throw new ProcessingException("LLM вернула невалидный JSON для отчета о рисках безопасности.", e);

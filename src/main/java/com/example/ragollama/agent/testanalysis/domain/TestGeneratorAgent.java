@@ -17,15 +17,10 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * AI-агент, который автоматически генерирует unit-тесты для нового
  * или измененного производственного кода.
- * <p>
- * Выступает в роли "парного программиста", который берет на себя рутинную
- * задачу по написанию базовых тестов, ускоряя разработку и обеспечивая
- * базовый уровень тестового покрытия.
  */
 @Slf4j
 @Component
@@ -52,15 +47,13 @@ public class TestGeneratorAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         CodeAnalysisResult codeAnalysis = (CodeAnalysisResult) context.payload().get("codeAnalysis");
         String ref = (String) context.payload().get("ref");
         String filePath = codeAnalysis.filePath();
 
-        // Получаем полный код класса для контекста
         return gitApiClient.getFileContent(filePath, ref)
                 .flatMapMany(fullCode -> Flux.fromIterable(codeAnalysis.methods())
-                        // Генерируем тест для каждого измененного метода
                         .flatMap(method -> generateTestForMethod(fullCode, method.methodName()))
                 )
                 .collectList()
@@ -69,8 +62,7 @@ public class TestGeneratorAgent implements ToolAgent {
                         AgentResult.Status.SUCCESS,
                         "Генерация тестов завершена. Создано " + generatedTests.size() + " файлов.",
                         Map.of("generatedTestFiles", generatedTests)
-                ))
-                .toFuture();
+                ));
     }
 
     private Mono<GeneratedTestFile> generateTestForMethod(String fullClassCode, String methodName) {
@@ -79,7 +71,7 @@ public class TestGeneratorAgent implements ToolAgent {
                 "methodName", methodName
         ));
 
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
                 .map(generatedCode -> {
                     String className = fullClassCode.substring(fullClassCode.indexOf("class ") + 6, fullClassCode.indexOf("{")).trim();
                     String testFileName = className + "Test.java";

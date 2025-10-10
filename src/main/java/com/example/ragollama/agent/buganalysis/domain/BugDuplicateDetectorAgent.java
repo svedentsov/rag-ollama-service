@@ -3,7 +3,8 @@ package com.example.ragollama.agent.buganalysis.domain;
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.ToolAgent;
-import com.example.ragollama.agent.buganalysis.mappers.BugAnalysisMapper;
+import com.example.ragollama.agent.buganalysis.model.BugAnalysisReport;
+import com.example.ragollama.agent.buganalysis.model.BugReportSummary;
 import com.example.ragollama.rag.retrieval.HybridRetrievalStrategy;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
@@ -17,22 +18,25 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
- * Агент для поиска дубликатов баг-репортов, который теперь инкапсулирует всю бизнес-логику.
+ * Агент для поиска дубликатов баг-репортов.
+ * <p>
+ * Эта версия принимает на вход строго типизированный {@link BugReportSummary},
+ * что делает контракт с предыдущим шагом конвейера надежным и явным.
+ * Логика парсинга ответа от LLM вынесена в специализированный
+ * {@link DuplicateAnalysisParser} для соответствия принципу SRP.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class BugDuplicateDetectorAgent implements ToolAgent {
 
-    private static final String BUG_REPORT_TEXT_KEY = "bugReportText";
     private final HybridRetrievalStrategy retrievalStrategy;
     private final LlmClient llmClient;
     private final PromptService promptService;
-    private final BugAnalysisMapper bugAnalysisMapper;
+    private final DuplicateAnalysisParser duplicateAnalysisParser;
 
     @Override
     public String getName() {
@@ -46,53 +50,36 @@ public class BugDuplicateDetectorAgent implements ToolAgent {
 
     @Override
     public boolean canHandle(AgentContext context) {
-        return context.payload().containsKey(BUG_REPORT_TEXT_KEY);
+        return context.payload().get("bugReportSummary") instanceof BugReportSummary;
     }
 
     /**
      * Асинхронно выполняет полный конвейер анализа на дубликаты.
      *
-     * @param context Контекст, содержащий `bugReportText`.
-     * @return {@link CompletableFuture} с результатом, содержащим вердикт и кандидатов.
+     * @param context Контекст, содержащий `bugReportSummary`.
+     * @return {@link Mono} с результатом, содержащим вердикт и кандидатов.
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
-        String bugReportText = (String) context.payload().get(BUG_REPORT_TEXT_KEY);
+    public Mono<AgentResult> execute(AgentContext context) {
+        BugReportSummary summary = (BugReportSummary) context.payload().get("bugReportSummary");
+        String searchQuery = summary.title();
 
-        return findSimilarBugReports(bugReportText)
+        return findSimilarBugReports(searchQuery)
                 .flatMap(candidateDocs -> {
                     String contextBugs = formatCandidatesForPrompt(candidateDocs);
+                    String draftReport = summaryToText(summary);
                     String promptString = promptService.render("bugAnalysisPrompt", Map.of(
-                            "draft_report", bugReportText,
+                            "draft_report", draftReport,
                             "context_bugs", contextBugs
                     ));
-                    return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED));
+                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
                 })
-                .map(bugAnalysisMapper::parse)
-                .map(analysisResponse -> {
-                    String summary;
-                    if (analysisResponse.isDuplicate()) {
-                        summary = String.format("Обнаружен возможный дубликат. Похожие тикеты: %s",
-                                analysisResponse.duplicateCandidates());
-                    } else {
-                        summary = "Похожих баг-репортов не найдено. Вероятно, тикет уникален.";
-                    }
-                    return new AgentResult(
-                            getName(),
-                            AgentResult.Status.SUCCESS,
-                            summary,
-                            Map.of(
-                                    "isDuplicate", analysisResponse.isDuplicate(),
-                                    "candidates", analysisResponse.duplicateCandidates(),
-                                    "improvedDescription", analysisResponse.improvedDescription()
-                            )
-                    );
-                })
-                .toFuture();
+                .map(duplicateAnalysisParser::parse)
+                .map(this::buildAgentResult);
     }
 
-    private Mono<List<Document>> findSimilarBugReports(String description) {
-        return retrievalStrategy.retrieve(null, description, 5, 0.75, null);
+    private Mono<List<Document>> findSimilarBugReports(String searchQuery) {
+        return retrievalStrategy.retrieve(null, searchQuery, 5, 0.75, null);
     }
 
     private String formatCandidatesForPrompt(List<Document> documents) {
@@ -104,5 +91,33 @@ public class BugDuplicateDetectorAgent implements ToolAgent {
                         doc.getMetadata().get("source"),
                         doc.getText()))
                 .collect(Collectors.joining("\n---\n"));
+    }
+
+    private String summaryToText(BugReportSummary summary) {
+        return String.format(
+                "Title: %s\nSteps:\n%s\nExpected: %s\nActual: %s",
+                summary.title(), String.join("\n- ", summary.stepsToReproduce()),
+                summary.expectedBehavior(), summary.actualBehavior()
+        );
+    }
+
+    private AgentResult buildAgentResult(BugAnalysisReport analysisResult) {
+        String summaryMessage;
+        if (analysisResult.isDuplicate()) {
+            summaryMessage = String.format("Обнаружен возможный дубликат. Похожие тикеты: %s",
+                    analysisResult.duplicateCandidates());
+        } else {
+            summaryMessage = "Похожих баг-репортов не найдено. Вероятно, тикет уникален.";
+        }
+        return new AgentResult(
+                getName(),
+                AgentResult.Status.SUCCESS,
+                summaryMessage,
+                Map.of(
+                        "isDuplicate", analysisResult.isDuplicate(),
+                        "candidates", analysisResult.duplicateCandidates(),
+                        "bugReportSummary", analysisResult.improvedDescription()
+                )
+        );
     }
 }

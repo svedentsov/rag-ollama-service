@@ -15,9 +15,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Мета-агент, выступающий в роли "Губернатора Политик и Безопасности".
@@ -33,6 +33,7 @@ public class PolicyGuardianAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     /**
      * {@inheritDoc}
@@ -55,7 +56,6 @@ public class PolicyGuardianAgent implements ToolAgent {
      */
     @Override
     public boolean canHandle(AgentContext context) {
-        // Запускается как финальный агент, если есть хоть какие-то данные для анализа
         return context.payload().containsKey("changedFiles");
     }
 
@@ -63,14 +63,14 @@ public class PolicyGuardianAgent implements ToolAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         try {
             String analysisJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(context.payload());
             String promptString = promptService.render("policyGuardianPrompt", Map.of("analysis_reports_json", analysisJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .thenApply(this::parseLlmResponse)
-                    .thenApply(report -> new AgentResult(
+                    .map(this::parseLlmResponse)
+                    .map(report -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,
                             report.executiveSummary(),
@@ -78,13 +78,13 @@ public class PolicyGuardianAgent implements ToolAgent {
                     ));
 
         } catch (JsonProcessingException e) {
-            return CompletableFuture.failedFuture(new ProcessingException("Ошибка сериализации отчетов для Policy Guardian", e));
+            return Mono.error(new ProcessingException("Ошибка сериализации отчетов для Policy Guardian", e));
         }
     }
 
     private PolicyComplianceReport parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, PolicyComplianceReport.class);
         } catch (JsonProcessingException e) {
             throw new ProcessingException("Policy Guardian LLM вернул невалидный JSON.", e);

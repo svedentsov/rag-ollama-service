@@ -1,23 +1,31 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
-import { Message } from '../types';
+import { Message, ServerMessageDto } from '../types';
+
+/**
+ * Чистая функция-маппер для преобразования серверного DTO в клиентскую модель сообщения.
+ * @param {ServerMessageDto} dto - Data Transfer Object с сервера.
+ * @returns {Message} Клиентская модель сообщения.
+ */
+const transformMessageDtoToModel = (dto: ServerMessageDto): Message => ({
+  id: dto.id,
+  taskId: dto.taskId,
+  parentId: dto.parentId ?? undefined,
+  type: dto.role === 'USER' ? 'user' : 'assistant',
+  text: dto.content,
+  sources: [], // Инициализируется пустым, т.к. `sources` приходят позже по стриму
+  isStreaming: false, // По умолчанию false
+});
 
 /**
  * Хук для управления сообщениями в конкретной сессии чата.
- *
- * @description Этот хук инкапсулирует всю логику взаимодействия с API для сообщений,
- * используя React Query для управления состоянием сервера, кэшированием,
- * и оптимистичными обновлениями.
- *
- * @param {string} sessionId - ID сессии чата, для которой нужно получить и управлять сообщениями.
- * @returns {{
- *   messages: Message[];
- *   isLoading: boolean;
- *   isError: boolean;
- *   error: Error | null;
- *   updateMessage: (vars: { messageId: string; newContent: string; }) => void;
- *   deleteMessage: (messageId: string) => void;
- * }} Объект, содержащий массив сообщений, статусы загрузки/ошибки и функции-мутации для обновления и удаления.
+ * Инкапсулирует логику получения, трансформации, оптимистичного обновления и удаления сообщений.
+ * @param {string} sessionId - ID сессии чата, для которой нужно управлять сообщениями.
+ * @returns {object} Объект, содержащий:
+ * - `messages`: Массив сообщений в клиентском формате.
+ * - `...queryInfo`: Остальные свойства из `useQuery` (isLoading, error и т.д.).
+ * - `updateMessage`: Функция-мутация для обновления сообщения.
+ * - `deleteMessage`: Функция-мутация для удаления сообщения.
  */
 export function useChatMessages(sessionId: string) {
     const queryClient = useQueryClient();
@@ -25,52 +33,55 @@ export function useChatMessages(sessionId: string) {
 
     const { data: messages = [], ...queryInfo } = useQuery<Message[]>({
         queryKey,
-        // ИСПОЛЬЗУЕМ КОРРЕКТНЫЙ ВЫЗОВ API
-        queryFn: () => api.fetchMessages(sessionId),
-        enabled: !!sessionId, // Запрос выполняется только если sessionId предоставлен
+        queryFn: async () => {
+            const serverMessages = await api.fetchMessages(sessionId);
+            return serverMessages.map(transformMessageDtoToModel);
+        },
+        enabled: !!sessionId,
     });
 
-    /**
-     * Мутация для обновления одного сообщения.
-     * Реализует оптимистичное обновление для мгновенной обратной связи в UI.
-     */
     const updateMessageMutation = useMutation({
         mutationFn: api.updateMessage,
         onMutate: async ({ messageId, newContent }) => {
-            // Отменяем все текущие запросы на получение сообщений, чтобы они не перезаписали наши оптимистичные данные
             await queryClient.cancelQueries({ queryKey });
-            // Сохраняем предыдущее состояние на случай, если придется откатываться
             const previousMessages = queryClient.getQueryData<Message[]>(queryKey) ?? [];
-            // Оптимистично обновляем UI, не дожидаясь ответа сервера
             queryClient.setQueryData<Message[]>(queryKey, old =>
                 old?.map(msg => msg.id === messageId ? { ...msg, text: newContent } : msg)
             );
             return { previousMessages };
         },
-        // В случае ошибки откатываемся к состоянию до мутации
         onError: (err, variables, context) => {
             if (context?.previousMessages) {
                 queryClient.setQueryData(queryKey, context.previousMessages);
             }
         },
-        // После завершения мутации (успешно или с ошибкой) всегда обновляем данные с сервера
         onSettled: () => {
             queryClient.invalidateQueries({ queryKey });
         },
     });
 
-    /**
-     * Мутация для удаления одного сообщения.
-     * Также реализует оптимистичное обновление.
-     */
     const deleteMessageMutation = useMutation({
         mutationFn: api.deleteMessage,
-        onMutate: async (messageId) => {
+        onMutate: async (messageId: string) => {
             await queryClient.cancelQueries({ queryKey });
             const previousMessages = queryClient.getQueryData<Message[]>(queryKey) ?? [];
+
+            const idsToDelete = new Set<string>([messageId]);
+            let newChildrenFound = true;
+            while(newChildrenFound) {
+                newChildrenFound = false;
+                previousMessages.forEach(msg => {
+                    if (msg.parentId && idsToDelete.has(msg.parentId) && !idsToDelete.has(msg.id)) {
+                        idsToDelete.add(msg.id);
+                        newChildrenFound = true;
+                    }
+                });
+            }
+
             queryClient.setQueryData<Message[]>(queryKey, old =>
-                old?.filter(msg => msg.id !== messageId)
+                old?.filter(msg => !idsToDelete.has(msg.id))
             );
+
             return { previousMessages };
         },
         onError: (err, variables, context) => {

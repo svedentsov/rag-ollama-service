@@ -29,8 +29,8 @@ public class SummarizationService {
     /**
      * Асинхронно создает краткое содержание для предоставленного текста.
      *
-     * @param text    Текст для анализа. Может быть {@code null} или пустым.
-     * @param options Опции, управляющие стилем и форматом резюме. Может быть {@code null}.
+     * @param text    Текст для анализа.
+     * @param options Опции, управляющие стилем и форматом резюме.
      * @return {@link Mono}, который по завершении будет содержать строку с резюме.
      */
     public Mono<String> summarizeAsync(String text, SummaryOptions options) {
@@ -46,22 +46,10 @@ public class SummarizationService {
                 "style", style
         ));
 
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED));
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
     }
 
-    /**
-     * DTO для инкапсуляции опций саммаризации.
-     * <p>
-     * Использование `record` с компактным конструктором позволяет элегантно
-     * задавать значения по умолчанию для опциональных параметров.
-     *
-     * @param style Стиль изложения (например, "деловой", "в виде списка", "простой").
-     */
     public record SummaryOptions(String style) {
-        /**
-         * Компактный конструктор для установки значения по умолчанию.
-         * Он вызывается автоматически при вызове канонического конструктора.
-         */
         public SummaryOptions {
             if (style == null || style.isBlank()) {
                 style = "деловой и лаконичный";

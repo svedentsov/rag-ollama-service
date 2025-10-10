@@ -1,17 +1,21 @@
 package com.example.ragollama.evaluation.model;
 
-import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-@Entity
-@Table(name = "evaluation_history")
+/**
+ * Сущность для истории оценок, адаптированная для R2DBC.
+ */
+@Table("evaluation_history")
 @Getter
 @Builder
 @NoArgsConstructor
@@ -19,31 +23,30 @@ import java.util.UUID;
 public class EvaluationHistory {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "f1_score")
+    @Column("f1_score")
     private double f1Score;
 
-    @Column(name = "recall")
+    @Column("recall")
     private double recall;
 
-    @Column(name = "precision")
+    @Column("precision")
     private double precision;
 
-    @Column(name = "mrr")
+    @Column("mrr")
     private double meanReciprocalRank;
 
-    @Column(name = "ndcg_at_5")
+    @Column("ndcg_at_5")
     private double ndcgAt5;
 
-    @Column(name = "total_records")
+    @Column("total_records")
     private int totalRecords;
 
-    @Column(name = "triggering_source_id")
+    @Column("triggering_source_id")
     private String triggeringSourceId;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @CreatedDate
+    @Column("created_at")
     private OffsetDateTime createdAt;
 }

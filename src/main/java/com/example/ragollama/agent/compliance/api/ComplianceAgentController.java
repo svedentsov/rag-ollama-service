@@ -12,9 +12,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агентов, выполняющих задачи аудита и комплаенса.
@@ -31,11 +31,11 @@ public class ComplianceAgentController {
      * Запускает агента для проверки измененного кода на соответствие политикам конфиденциальности.
      *
      * @param request DTO с политикой и списком измененных файлов.
-     * @return {@link CompletableFuture} с результатом анализа.
+     * @return {@link Mono} с результатом анализа.
      */
     @PostMapping("/check-privacy")
     @Operation(summary = "Проверить код на соответствие политикам конфиденциальности")
-    public CompletableFuture<List<AgentResult>> checkPrivacyCompliance(@Valid @RequestBody PrivacyCheckRequest request) {
+    public Mono<List<AgentResult>> checkPrivacyCompliance(@Valid @RequestBody PrivacyCheckRequest request) {
         return orchestratorService.invoke("privacy-compliance-check-pipeline", request.toAgentContext());
     }
 
@@ -43,11 +43,11 @@ public class ComplianceAgentController {
      * Запускает полный конвейер для сбора доказательств и генерации аудиторского отчета.
      *
      * @param request DTO с Git-ссылками, определяющими диапазон аудита.
-     * @return {@link CompletableFuture} с финальным отчетом в формате Markdown.
+     * @return {@link Mono} с финальным отчетом в формате Markdown.
      */
     @PostMapping("/gather-evidence")
     @Operation(summary = "Собрать доказательства для аудита соответствия")
-    public CompletableFuture<List<AgentResult>> gatherComplianceEvidence(@Valid @RequestBody ComplianceEvidenceRequest request) {
+    public Mono<List<AgentResult>> gatherComplianceEvidence(@Valid @RequestBody ComplianceEvidenceRequest request) {
         return orchestratorService.invoke("compliance-evidence-gathering-pipeline", request.toAgentContext());
     }
 }

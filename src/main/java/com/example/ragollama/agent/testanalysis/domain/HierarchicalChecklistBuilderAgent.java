@@ -15,9 +15,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Продвинутый AI-агент, который строит иерархические, контекстно-богатые
@@ -31,6 +31,7 @@ public class HierarchicalChecklistBuilderAgent implements ToolAgent {
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     @Override
     public String getName() {
@@ -48,7 +49,7 @@ public class HierarchicalChecklistBuilderAgent implements ToolAgent {
     }
 
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String goal = (String) context.payload().get("goal");
         String analysisJson = (String) context.payload().get("analysis_results_json");
 
@@ -58,8 +59,8 @@ public class HierarchicalChecklistBuilderAgent implements ToolAgent {
         ));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .thenApply(this::parseLlmResponse)
-                .thenApply(testPlan -> new AgentResult(
+                .map(this::parseLlmResponse)
+                .map(testPlan -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,
                         "Иерархический план тестирования успешно сгенерирован.",
@@ -69,7 +70,7 @@ public class HierarchicalChecklistBuilderAgent implements ToolAgent {
 
     private HierarchicalTestPlan parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, HierarchicalTestPlan.class);
         } catch (JsonProcessingException e) {
             throw new ProcessingException("Hierarchical Checklist Builder LLM вернул невалидный JSON.", e);

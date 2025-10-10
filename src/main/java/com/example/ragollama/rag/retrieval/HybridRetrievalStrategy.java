@@ -21,11 +21,6 @@ import java.util.List;
 
 /**
  * Реализует адаптивную гибридную стратегию извлечения документов, включая графовый поиск.
- * <p>
- * Эта версия была улучшена для явной обработки "пробелов в знаниях" и корректной
- * работы с синхронным, кэшируемым {@link VectorSearchService}. Вызов
- * блокирующей операции поиска оборачивается в {@link Mono#fromCallable} и
- * выполняется в выделенном пуле потоков.
  */
 @Slf4j
 @Service
@@ -41,15 +36,14 @@ public class HybridRetrievalStrategy {
     private final AsyncTaskExecutor applicationTaskExecutor;
 
     /**
-     * Асинхронно выполняет гибридный поиск, объединяя результаты из векторного,
-     * полнотекстового и графового поисков.
+     * Асинхронно выполняет гибридный поиск.
      *
-     * @param processedQueries    Объект с обработанными запросами (основной и расширенные).
-     * @param originalQuery       Оригинальный, немодифицированный запрос пользователя.
+     * @param processedQueries    Объект с обработанными запросами.
+     * @param originalQuery       Оригинальный запрос пользователя.
      * @param topK                Количество документов для извлечения.
-     * @param similarityThreshold Порог схожести для векторного поиска.
-     * @param businessFilter      Опциональный бизнес-фильтр для метаданных.
-     * @return {@link Mono} со списком уникальных, отсортированных документов.
+     * @param similarityThreshold Порог схожести.
+     * @param businessFilter      Опциональный бизнес-фильтр.
+     * @return {@link Mono} со списком документов.
      */
     public Mono<List<Document>> retrieve(
             @Nullable ProcessedQueries processedQueries,
@@ -62,9 +56,10 @@ public class HybridRetrievalStrategy {
             knowledgeGapService.recordGap(originalQuery);
             return Mono.just(List.of());
         }
-        Mono<List<Document>> vectorSearchMono = Mono.fromCallable(() ->
-                vectorSearchService.search(processedQueries.expansionQueries(), topK, similarityThreshold, businessFilter, null)
-        ).subscribeOn(Schedulers.fromExecutor(applicationTaskExecutor));
+
+        Mono<List<Document>> vectorSearchMono = vectorSearchService.search(processedQueries.expansionQueries(), topK, similarityThreshold, businessFilter, null)
+                .subscribeOn(Schedulers.fromExecutor(applicationTaskExecutor));
+
         Mono<List<Document>> ftsSearchMono = ftsSearchService.search(originalQuery);
         Mono<List<Document>> graphSearchMono = isGraphQuery(originalQuery)
                 ? graphSearchService.search(originalQuery)
@@ -89,12 +84,6 @@ public class HybridRetrievalStrategy {
                 });
     }
 
-    /**
-     * Простая эвристика для определения, является ли запрос графовым.
-     *
-     * @param query Запрос пользователя.
-     * @return {@code true}, если запрос содержит ключевые слова для графового поиска.
-     */
     private boolean isGraphQuery(String query) {
         String lowerQuery = query.toLowerCase();
         return lowerQuery.contains("связан") || lowerQuery.contains("какие тесты") || lowerQuery.contains("какие требования");

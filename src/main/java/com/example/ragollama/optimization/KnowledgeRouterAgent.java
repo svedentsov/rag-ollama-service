@@ -15,10 +15,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -37,6 +37,7 @@ public class KnowledgeRouterAgent implements ToolAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
     private final KnowledgeDomainProperties domainProperties;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     private record SelectedDomains(List<String> domains) {
     }
@@ -69,7 +70,7 @@ public class KnowledgeRouterAgent implements ToolAgent {
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<AgentResult> execute(AgentContext context) {
+    public Mono<AgentResult> execute(AgentContext context) {
         String query = (String) context.payload().get("query");
         String domainsForPrompt = domainProperties.domains().stream()
                 .map(d -> String.format("- %s: %s", d.name(), d.description()))
@@ -80,10 +81,9 @@ public class KnowledgeRouterAgent implements ToolAgent {
                 "domains", domainsForPrompt
         ));
 
-        // Используем быструю модель, так как это простая задача классификации
         return llmClient.callChat(new Prompt(promptString), ModelCapability.FAST_RELIABLE)
-                .thenApply(this::parseLlmResponse)
-                .thenApply(selectedDomains -> {
+                .map(this::parseLlmResponse)
+                .map(selectedDomains -> {
                     log.info("Маршрутизатор выбрал домены {} для запроса: '{}'", selectedDomains.domains(), query);
                     return new AgentResult(
                             getName(),
@@ -94,16 +94,9 @@ public class KnowledgeRouterAgent implements ToolAgent {
                 });
     }
 
-    /**
-     * Безопасно парсит JSON-ответ от LLM.
-     *
-     * @param jsonResponse Ответ от LLM.
-     * @return DTO {@link SelectedDomains} с выбранными доменами.
-     * @throws ProcessingException если парсинг не удался.
-     */
     private SelectedDomains parseLlmResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, SelectedDomains.class);
         } catch (JsonProcessingException e) {
             throw new ProcessingException("KnowledgeRouterAgent LLM вернул невалидный JSON.", e);

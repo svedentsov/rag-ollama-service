@@ -1,11 +1,9 @@
 package com.example.ragollama.agent;
 
-import java.util.concurrent.CompletableFuture;
+import reactor.core.publisher.Mono;
 
 /**
  * Определяет универсальный контракт для всех QA-агентов в системе.
- * <p>
- * Добавлен метод `requiresApproval` для поддержки Human-in-the-Loop.
  */
 public interface QaAgent {
 
@@ -41,10 +39,10 @@ public interface QaAgent {
      * Асинхронно выполняет основную логику агента.
      *
      * @param context Контекст с входными данными для агента.
-     * @return {@link CompletableFuture}, который по завершении будет содержать
+     * @return {@link Mono}, который по завершении будет содержать
      * результат работы агента в виде {@link AgentResult}.
      */
-    CompletableFuture<AgentResult> execute(AgentContext context);
+    Mono<AgentResult> execute(AgentContext context);
 
     /**
      * Указывает, требует ли выполнение этого агента предварительного

@@ -10,9 +10,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Контроллер для AI-агентов, анализирующих пробелы в базе знаний.
@@ -29,11 +29,11 @@ public class KnowledgeGapsController {
      * Запускает конвейер для анализа и кластеризации пробелов в знаниях.
      *
      * @param request DTO с параметрами анализа (например, период в днях).
-     * @return {@link CompletableFuture} с отчетом, содержащим приоритизированные темы для документации.
+     * @return {@link Mono} с отчетом, содержащим приоритизированные темы для документации.
      */
     @GetMapping("/analyze")
     @Operation(summary = "Проанализировать и сгруппировать пробелы в базе знаний")
-    public CompletableFuture<List<AgentResult>> analyzeKnowledgeGaps(@Valid KnowledgeGapAnalysisRequest request) {
+    public Mono<List<AgentResult>> analyzeKnowledgeGaps(@Valid KnowledgeGapAnalysisRequest request) {
         return orchestratorService.invoke("knowledge-expansion-pipeline", request.toAgentContext());
     }
 }

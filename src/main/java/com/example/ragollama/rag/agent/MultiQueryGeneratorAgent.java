@@ -33,7 +33,7 @@ public class MultiQueryGeneratorAgent implements QueryEnhancementAgent {
         String promptString = promptService.render("multiQueryPrompt", Map.of("query", originalQuery));
         Prompt prompt = new Prompt(promptString);
 
-        return Mono.fromFuture(llmClient.callChat(prompt, ModelCapability.FASTEST))
+        return llmClient.callChat(prompt, ModelCapability.FASTEST)
                 .map(this::parseToList)
                 .map(generatedQueries -> {
                     List<String> uniqueGenerated = generatedQueries.stream()
@@ -50,12 +50,6 @@ public class MultiQueryGeneratorAgent implements QueryEnhancementAgent {
                 );
     }
 
-    /**
-     * Разбирает многострочный ответ от LLM в список строк.
-     *
-     * @param llmResponse Сырой ответ от LLM.
-     * @return Список очищенных строк.
-     */
     private List<String> parseToList(String llmResponse) {
         if (llmResponse == null || llmResponse.isBlank()) {
             return List.of();

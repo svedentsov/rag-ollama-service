@@ -22,7 +22,8 @@ import java.util.Map;
 
 /**
  * Агент, реализующий цикл самокорректирующегося поиска (Self-Correcting Retrieval).
- * <p> Оценивает найденные документы и, при необходимости, переформулирует запрос для повторного поиска,
+ * <p>
+ * Оценивает найденные документы и, при необходимости, переформулирует запрос для повторного поиска,
  * повышая надежность и качество извлечения информации.
  */
 @Service
@@ -35,6 +36,7 @@ public class ReflectiveRetrieverAgent {
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
     private static final int MAX_ATTEMPTS = 2;
+    private final JsonExtractorUtil jsonExtractorUtil;
 
     private record JudgeResult(boolean isSufficient, String reasoning) {
     }
@@ -53,9 +55,6 @@ public class ReflectiveRetrieverAgent {
         return performRetrievalAttempt(queries, originalQuery, topK, threshold, filter, 1);
     }
 
-    /**
-     * Выполняет одну итерацию цикла "поиск -> оценка -> (опционально) переформулирование".
-     */
     private Mono<List<Document>> performRetrievalAttempt(ProcessedQueries queries, String originalQuery, int topK, double threshold, Filter.Expression filter, int attempt) {
         if (attempt > MAX_ATTEMPTS) {
             log.warn("Достигнут лимит попыток самокоррекции для запроса: '{}'", originalQuery);
@@ -84,32 +83,26 @@ public class ReflectiveRetrieverAgent {
                 });
     }
 
-    /**
-     * Вызывает LLM-судью для оценки релевантности найденных документов.
-     */
     private Mono<JudgeResult> judgeRetrieval(String query, List<Document> documents) {
         String promptString = promptService.render("retrievalJudgePrompt", Map.of(
                 "query", query,
                 "documents", documents
         ));
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.FAST_RELIABLE, true))
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.FAST_RELIABLE, true)
                 .map(this::parseJudgeResponse);
     }
 
-    /**
-     * Вызывает LLM для генерации нового поискового запроса.
-     */
     private Mono<String> rewriteQuery(String originalQuery, String missingInfo) {
         String promptString = promptService.render("queryRewritePrompt", Map.of(
                 "originalQuery", originalQuery,
                 "missingInfo", missingInfo
         ));
-        return Mono.fromFuture(llmClient.callChat(new Prompt(promptString), ModelCapability.FASTEST));
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.FASTEST);
     }
 
     private JudgeResult parseJudgeResponse(String jsonResponse) {
         try {
-            String cleanedJson = JsonExtractorUtil.extractJsonBlock(jsonResponse);
+            String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             return objectMapper.readValue(cleanedJson, JudgeResult.class);
         } catch (JsonProcessingException e) {
             log.error("LLM-судья вернул невалидный JSON: {}", jsonResponse, e);
