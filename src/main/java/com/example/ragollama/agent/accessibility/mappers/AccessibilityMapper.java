@@ -7,53 +7,44 @@ import com.example.ragollama.agent.accessibility.model.AccessibilityReport;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-
 /**
  * Компонент-маппер, отвечающий за преобразование внутреннего результата
- * работы конвейера ({@link AgentResult}) в публичный DTO ответа ({@link AccessibilityAuditResponse}).
+ * работы агента ({@link AgentResult}) в публичный DTO ответа ({@link AccessibilityAuditResponse}).
  * <p>
  * Эта версия использует более надежную и читаемую логику для извлечения
- * необходимого результата из списка.
+ * необходимого результата, основываясь на явном контракте с агентом
+ * (константа {@link AccessibilityAuditorAgent#ACCESSIBILITY_REPORT_KEY}
+ * и проверка типа с помощью {@code instanceof}).
  */
 @Component
 @Slf4j
 public class AccessibilityMapper {
 
     /**
-     * Преобразует список результатов работы конвейера в DTO ответа для API.
+     * Преобразует результат работы агента в DTO ответа для API.
      * <p>
-     * Логика основана на строгом контракте: мы ищем результат, сгенерированный
-     * агентом {@link AccessibilityAuditorAgent}, и извлекаем из его деталей
-     * отчет по ключу {@link AccessibilityAuditorAgent#ACCESSIBILITY_REPORT_KEY}.
+     * Логика основана на строгом контракте: мы извлекаем из деталей результата
+     * отчет по ключу {@link AccessibilityAuditorAgent#ACCESSIBILITY_REPORT_KEY} и
+     * выполняем типобезопасную проверку перед преобразованием.
      *
-     * @param agentResults Список результатов, возвращенный конвейером. Может быть null или пустым.
+     * @param agentResult Результат, возвращенный конвейером.
      * @return DTO ответа {@link AccessibilityAuditResponse} для API.
-     * @throws IllegalStateException если в результатах конвейера не найден
-     *                               ожидаемый {@link AccessibilityReport}.
+     * @throws IllegalStateException если в результате конвейера не найден
+     *                               ожидаемый {@link AccessibilityReport} или он имеет неверный тип.
      */
-    public AccessibilityAuditResponse toResponseDto(List<AgentResult> agentResults) {
-        if (agentResults == null || agentResults.isEmpty()) {
-            log.error("Нарушение контракта: конвейер не вернул ни одного результата.");
-            throw new IllegalStateException("Внутренняя ошибка: конвейер не вернул результат.");
+    public AccessibilityAuditResponse toResponseDto(AgentResult agentResult) {
+        log.debug("Маппинг результата от агента '{}' в DTO.", agentResult.agentName());
+
+        Object reportObject = agentResult.details().get(AccessibilityAuditorAgent.ACCESSIBILITY_REPORT_KEY);
+
+        // Типобезопасная проверка перед приведением типа
+        if (reportObject instanceof AccessibilityReport report) {
+            return new AccessibilityAuditResponse(report);
         }
 
-        // Ищем результат от конкретного агента, что более надежно, чем брать последний.
-        return agentResults.stream()
-                .filter(result -> AccessibilityAuditorAgent.class.getSimpleName().equals(result.agentName()))
-                .findFirst()
-                .map(result -> {
-                    log.debug("Маппинг результата от агента '{}' в DTO.", result.agentName());
-                    Object reportObject = result.details().get(AccessibilityAuditorAgent.ACCESSIBILITY_REPORT_KEY);
-                    if (reportObject instanceof AccessibilityReport report) {
-                        return new AccessibilityAuditResponse(report);
-                    }
-                    return null;
-                })
-                .orElseThrow(() -> {
-                    log.error("Нарушение контракта: в результатах конвейера не найден AccessibilityReport от агента '{}'",
-                            AccessibilityAuditorAgent.class.getSimpleName());
-                    return new IllegalStateException("Внутренняя ошибка: результат конвейера не содержит ожидаемый отчет.");
-                });
+        // Если контракт нарушен, выбрасываем исключение с детальным сообщением
+        log.error("Нарушение контракта: результат от агента '{}' не содержит AccessibilityReport. Вместо этого найден: {}",
+                agentResult.agentName(), reportObject != null ? reportObject.getClass().getName() : "null");
+        throw new IllegalStateException("Внутренняя ошибка: результат конвейера не содержит ожидаемый отчет.");
     }
 }

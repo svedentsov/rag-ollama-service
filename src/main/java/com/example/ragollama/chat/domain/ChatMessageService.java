@@ -1,5 +1,7 @@
 package com.example.ragollama.chat.domain;
 
+import com.example.ragollama.chat.domain.model.ChatMessage;
+import com.example.ragollama.chat.domain.model.ChatSession;
 import com.example.ragollama.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +18,8 @@ import java.util.UUID;
  * Доменный сервис для управления жизненным циклом отдельных сообщений чата, адаптированный для R2DBC.
  * <p>
  * В этой версии реализована корректная логика каскадного удаления,
- * которая обеспечивает целостность данных при удалении сообщений, имеющих потомков.
+ * которая обеспечивает целостность данных при удалении сообщений, имеющих потомков,
+ * и очищает связанные данные в родительской сессии чата.
  */
 @Slf4j
 @Service
@@ -25,6 +28,7 @@ import java.util.UUID;
 public class ChatMessageService {
 
     private final ChatMessageRepository chatMessageRepository;
+    private final ChatSessionRepository chatSessionRepository; // Добавлена зависимость
     private final ChatSessionService chatSessionService;
 
     /**
@@ -35,7 +39,6 @@ public class ChatMessageService {
      * @return {@link Mono}, завершающийся после сохранения.
      */
     public Mono<Void> updateMessage(UUID messageId, String newContent) {
-        // Используем findByIdWithLock из chatSessionRepository для блокировки на уровне сессии
         return chatMessageRepository.findById(messageId)
                 .switchIfEmpty(Mono.error(new ResourceNotFoundException("Сообщение с ID " + messageId + " не найдено.")))
                 .flatMap(message ->
@@ -50,11 +53,11 @@ public class ChatMessageService {
     }
 
     /**
-     * Рекурсивно удаляет сообщение и всех его потомков.
+     * Рекурсивно удаляет сообщение и всех его потомков, а также очищает
+     * связанные "висячие" ссылки в родительской сессии чата.
      * <p>
-     * Сначала проверяются права доступа к исходному сообщению. Затем рекурсивно
-     * находятся все дочерние сообщения, их ID собираются в `Set` и удаляются
-     * одной пакетной операцией для максимальной производительности.
+     * Операция выполняется в рамках одной транзакции для обеспечения
+     * полной атомарности и целостности данных.
      *
      * @param messageId ID сообщения для удаления.
      * @return {@link Mono<Void>}, завершающийся после полного удаления всего дерева сообщений.
@@ -62,22 +65,33 @@ public class ChatMessageService {
     public Mono<Void> deleteMessage(UUID messageId) {
         return chatMessageRepository.findById(messageId)
                 .switchIfEmpty(Mono.error(new ResourceNotFoundException("Сообщение с ID " + messageId + " не найдено.")))
-                .flatMap(message ->
-                        // 1. Проверяем права доступа
-                        chatSessionService.findAndVerifyOwnership(message.getSessionId())
-                                .thenReturn(message)
-                )
+                .flatMap(message -> chatSessionService.findAndVerifyOwnership(message.getSessionId()).thenReturn(message))
                 .flatMap(rootMessage -> {
-                    // 2. Рекурсивно собираем ID всех потомков
                     Set<UUID> idsToDelete = new HashSet<>();
                     idsToDelete.add(rootMessage.getId());
+                    // 1. Рекурсивно собираем ID всех потомков
                     return collectAllChildrenIds(rootMessage.getId(), idsToDelete)
-                            .then(Mono.just(idsToDelete));
+                            .then(Mono.zip(
+                                    Mono.just(idsToDelete),
+                                    chatSessionRepository.findById(rootMessage.getSessionId())
+                            ));
                 })
-                .flatMap(ids -> {
-                    log.info("Запрос на удаление дерева сообщений. Количество: {}. IDs: {}", ids.size(), ids);
-                    // 3. Удаляем все сообщения одной пакетной операцией
-                    return chatMessageRepository.deleteAllByIdIn(ids);
+                .flatMap(tuple -> {
+                    Set<UUID> idsToDelete = tuple.getT1();
+                    ChatSession session = tuple.getT2();
+
+                    // 2. Очищаем "висячие" ссылки в activeBranches
+                    boolean modified = session.getActiveBranches().entrySet()
+                            .removeIf(entry -> idsToDelete.contains(UUID.fromString(entry.getKey())) ||
+                                    idsToDelete.contains(UUID.fromString(String.valueOf(entry.getValue()))));
+
+                    Mono<ChatSession> saveSessionMono = modified ? chatSessionRepository.save(session) : Mono.just(session);
+
+                    return saveSessionMono.then(
+                            // 3. Удаляем все сообщения одной пакетной операцией
+                            chatMessageRepository.deleteAllByIdIn(idsToDelete)
+                                    .doOnSuccess(v -> log.info("Удалено {} сообщений и очищены ссылки в сессии {}.", idsToDelete.size(), session.getSessionId()))
+                    );
                 });
     }
 
@@ -93,21 +107,14 @@ public class ChatMessageService {
      */
     private Mono<Void> collectAllChildrenIds(UUID parentId, Set<UUID> collectedIds) {
         return chatMessageRepository.findByParentId(parentId)
-                .flatMap(child -> {
-                    if (collectedIds.add(child.getId())) {
-                        return Flux.just(child.getId());
+                .map(ChatMessage::getId)
+                .expand(childId -> {
+                    if (collectedIds.add(childId)) {
+                        return chatMessageRepository.findByParentId(childId).map(ChatMessage::getId);
                     }
                     return Flux.empty();
                 })
-                .expand(childId ->
-                        chatMessageRepository.findByParentId(childId)
-                                .flatMap(grandchild -> {
-                                    if (collectedIds.add(grandchild.getId())) {
-                                        return Flux.just(grandchild.getId());
-                                    }
-                                    return Flux.empty();
-                                })
-                )
+                .doOnNext(collectedIds::add)
                 .then();
     }
 }

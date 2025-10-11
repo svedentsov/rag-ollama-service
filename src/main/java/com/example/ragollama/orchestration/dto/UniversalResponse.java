@@ -15,6 +15,10 @@ import java.util.UUID;
 /**
  * Запечатанный (sealed) интерфейс для представления различных частей
  * унифицированного потокового ответа от оркестратора.
+ * <p>
+ * В эту версию добавлен новый тип события `Finalized` для подтверждения
+ * сохранения данных на сервере, что является ключевым для надежной
+ * обработки прерванных потоков на клиенте.
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes({
@@ -30,37 +34,64 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public sealed interface UniversalResponse {
 
+    /**
+     * Сигнал о старте задачи, содержит ее ID для отслеживания.
+     * @param taskId Уникальный идентификатор задачи.
+     */
     @Schema(description = "Сигнал о старте задачи, содержит ее ID")
-    record TaskStarted(UUID taskId) implements UniversalResponse {
-    }
+    record TaskStarted(UUID taskId) implements UniversalResponse {}
 
+    /**
+     * Промежуточное обновление статуса выполнения задачи на бэкенде.
+     * @param text Текст статуса (например, "Ищу информацию...").
+     */
     @Schema(description = "Обновление статуса выполнения задачи на бэкенде")
-    record StatusUpdate(String text) implements UniversalResponse {
-    }
+    record StatusUpdate(String text) implements UniversalResponse {}
 
+    /**
+     * Часть сгенерированного текстового контента ответа.
+     * @param text Фрагмент текста.
+     */
     @Schema(description = "Часть сгенерированного текстового контента")
-    record Content(String text) implements UniversalResponse {
-    }
+    record Content(String text) implements UniversalResponse {}
 
+    /**
+     * Список структурированных цитат (источников), использованных для RAG-ответа.
+     * Отправляется единым блоком.
+     * @param sources Список цитат.
+     */
     @Schema(description = "Список структурированных цитат, использованных для RAG-ответа")
-    record Sources(List<SourceCitation> sources) implements UniversalResponse {
-    }
+    record Sources(List<SourceCitation> sources) implements UniversalResponse {}
 
+    /**
+     * Результат работы агента кодогенерации. Отправляется единым блоком.
+     * @param generatedCode Сгенерированный код.
+     * @param language Язык программирования.
+     */
     @Schema(description = "Результат работы агента кодогенерации")
-    record Code(String generatedCode, String language) implements UniversalResponse {
-    }
+    record Code(String generatedCode, String language) implements UniversalResponse {}
 
+    /**
+     * Результат работы агента анализа багов. Отправляется единым блоком.
+     * @param analysis Полный отчет об анализе.
+     */
     @Schema(description = "Результат работы агента анализа багов")
-    record BugAnalysis(BugAnalysisReport analysis) implements UniversalResponse {
-    }
+    record BugAnalysis(BugAnalysisReport analysis) implements UniversalResponse {}
 
-    @Schema(description = "Сигнал об успешном завершении потока")
-    record Done(String message) implements UniversalResponse {
-    }
+    /**
+     * Сигнал об успешном завершении потока и финализации (сохранении) ответа на сервере.
+     * @param message Сообщение о статусе завершения.
+     */
+    @Schema(description = "Сигнал об успешном завершении и сохранении ответа")
+    record Done(String message) implements UniversalResponse {}
 
+    /**
+     * Сообщение об ошибке, возникшей во время обработки потока.
+     * @param message Детальное описание ошибки.
+     */
     @Schema(description = "Сообщение об ошибке в потоке")
-    record Error(String message) implements UniversalResponse {
-    }
+    record Error(String message) implements UniversalResponse {}
+
 
     /**
      * Фабричный метод для преобразования {@link StreamingResponsePart} от RAG-сервиса.

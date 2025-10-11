@@ -38,9 +38,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * Основной конфигурационный класс приложения.
  * <p>
- * Эта версия содержит явное создание бина {@link DataSource}, что необходимо
- * для корректной работы JDBC-компонентов (Flyway, PgVectorStore, JdbcTemplate)
- * в гибридном приложении с WebFlux. Также исправлено расположение аннотаций @Primary.
+ * В эту версию добавлена настройка `MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS`,
+ * чтобы сделать десериализацию Enum более устойчивой к регистру.
  */
 @Configuration
 @RequiredArgsConstructor

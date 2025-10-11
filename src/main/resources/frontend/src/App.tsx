@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { ChatMessage } from './components/ChatMessage';
 import { ChatInput } from './components/ChatInput';
 import { useChatMessages } from './hooks/useChatMessages';
@@ -6,7 +6,6 @@ import { useScrollManager } from './hooks/useScrollManager';
 import { useVisibleMessages } from './hooks/useVisibleMessages';
 import { useStreamingStore } from './state/streamingStore';
 import { useChatInteraction } from './hooks/useChatInteraction';
-import { useStreamManager } from './hooks/useStreamManager';
 import styles from './App.module.css';
 
 /**
@@ -20,23 +19,31 @@ interface AppProps {
 
 /**
  * Главный компонент-контейнер для чата.
- * Теперь он максимально "глупый": вся логика вынесена в кастомные хуки.
- * Его задача - композиция UI-компонентов и передача им пропсов из хуков.
+ * Этот компонент является "глупым" (dumb component), делегируя всю бизнес-логику кастомным хукам.
+ * Его задача - композиция UI-компонентов и передача им пропсов.
  * @param {AppProps} props - Пропсы компонента.
  * @returns {React.ReactElement} Отрендеренный компонент чата.
  */
 const App: React.FC<AppProps> = ({ sessionId }) => {
   const { messages, isLoading: isLoadingHistory, error: historyError, updateMessage, deleteMessage } = useChatMessages(sessionId);
-  const { handleSendMessage, handleRegenerate } = useChatInteraction(sessionId);
-  const { stopStream } = useStreamManager();
+  const { handleSendMessage, handleRegenerate, handleStopGenerating, stopStream } = useChatInteraction(sessionId);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
   const { visibleMessages, messageBranchInfo } = useVisibleMessages(sessionId, messages);
   const { containerRef, messagesEndRef, showScrollButton, scrollToBottom } = useScrollManager([visibleMessages]);
 
-  // Подписываемся на легковесный стор для определения статуса загрузки
-  const isAnyMessageStreaming = useStreamingStore((state) => state.streamingMessageIds.size > 0);
   const streamingMessageIds = useStreamingStore((state) => state.streamingMessageIds);
+
+  /**
+   * Вычисляет, идет ли генерация ответа именно в ТЕКУЩЕМ чате.
+   * @returns {boolean} True, если в текущей сессии есть активный стрим.
+   */
+  const isCurrentChatStreaming = useMemo(() => {
+    // Проверяем, есть ли пересечение между глобальным списком стримов
+    // и сообщениями, принадлежащими данной сессии.
+    return messages.some(msg => streamingMessageIds.has(msg.id));
+  }, [messages, streamingMessageIds]);
+
 
   const handleUpdateMessage = useCallback((messageId: string, newContent: string) => {
     updateMessage({ messageId, newContent });
@@ -46,13 +53,6 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
   const handleDeleteMessage = useCallback((messageId: string) => {
     deleteMessage(messageId);
   }, [deleteMessage]);
-
-  const handleStopGenerating = useCallback(() => {
-    const streamingId = Array.from(streamingMessageIds)[0];
-    if (streamingId) {
-      stopStream(streamingId);
-    }
-  }, [streamingMessageIds, stopStream]);
 
   const isLastMessage = (msgId: string) => visibleMessages.length > 0 && visibleMessages[visibleMessages.length - 1].id === msgId;
 
@@ -84,7 +84,7 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
       </div>
       <ChatInput
         onSendMessage={handleSendMessage}
-        isLoading={isAnyMessageStreaming}
+        isLoading={isCurrentChatStreaming}
         onStopGenerating={handleStopGenerating}
         showScrollButton={showScrollButton}
         onScrollToBottom={() => scrollToBottom('smooth')}

@@ -34,10 +34,19 @@
     border-color: hsl(var(--ring));
 }
 
-.sendButton, .stopButton {
+.buttonContainer {
+    position: relative;
     flex-shrink: 0;
     width: 44px;
     height: 44px;
+}
+
+.sendButton, .stopButton {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     padding: 0;
     border: none;
     border-radius: 0.5rem;
@@ -45,7 +54,19 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: background-color 0.15s ease-in-out;
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out, box-shadow 0.3s ease;
+}
+
+.visible {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+}
+
+.hidden {
+    opacity: 0;
+    transform: scale(0.8);
+    pointer-events: none;
 }
 
 .sendButton {
@@ -67,6 +88,23 @@
     color: hsl(var(--destructive-foreground));
 }
 
+.stopButton.visible {
+    /* Применяем обновленную анимацию */
+    animation: pulseOutgoing 3s infinite ease-out;
+}
+
 .stopButton:hover:not(:disabled) {
     background-color: hsl(var(--destructive) / 0.9);
+}
+
+/* Обновленная, однонаправленная анимация с уменьшенной площадью */
+@keyframes pulseOutgoing {
+    from {
+        /* Начальное состояние: плотная, видимая тень */
+        box-shadow: 0 0 0 0px hsl(var(--destructive) / 0.7);
+    }
+    to {
+        /* Конечное состояние: тень с радиусом 5px, полностью прозрачная */
+        box-shadow: 0 0 0 5px hsl(var(--destructive) / 0);
+    }
 }

@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.SignalType;
 
 import java.io.IOException;
 import java.util.UUID;
@@ -17,6 +18,9 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Обработчик для намерения "RAG", адаптированный для реактивного стека.
+ * <p>
+ * Эта версия использует оператор {@code doFinally} для гарантированного сохранения
+ * результата в базу данных, даже если поток был прерван клиентом.
  */
 @Service
 @Slf4j
@@ -25,11 +29,17 @@ public class RagIntentHandler implements IntentHandler {
 
     private final RagApplicationService ragApplicationService;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public QueryIntent canHandle() {
         return QueryIntent.RAG_QUERY;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<UniversalSyncResponse> handleSync(UniversalRequest request, UUID taskId) {
         return ragApplicationService.processRagRequestAsync(request.toRagQueryRequest(), taskId)
@@ -37,6 +47,9 @@ public class RagIntentHandler implements IntentHandler {
                 .toFuture();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Flux<UniversalResponse> handleStream(UniversalRequest request, UUID taskId) {
         return ragApplicationService.processRagRequestStream(request.toRagQueryRequest(), taskId)

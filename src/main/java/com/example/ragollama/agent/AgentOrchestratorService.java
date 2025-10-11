@@ -126,8 +126,8 @@ public class AgentOrchestratorService {
 
     /**
      * Запускает полный конвейер в полностью неблокирующем, реактивном стиле.
-     * Последовательно выполняет каждый этап, передавая обогащенный контекст
-     * от предыдущего этапа к следующему.
+     * Использует идиоматичный паттерн `reduce` с `Mono`-аккумулятором для
+     * последовательного выполнения этапов.
      *
      * @param pipeline       Конвейер для запуска.
      * @param initialContext Начальный контекст.
@@ -137,17 +137,16 @@ public class AgentOrchestratorService {
         List<List<QaAgent>> stages = pipeline.getStages();
         log.info("Запуск конвейера '{}' с {} этапами.", pipeline.getName(), stages.size());
 
-        var initialState = new StageExecutionState(initialContext, new ArrayList<>());
+        Mono<StageExecutionState> initialStateMono = Mono.just(new StageExecutionState(initialContext, new ArrayList<>()));
 
-        // Последовательно выполняем каждый этап, передавая обновленное состояние.
-        // `reduce` с Mono-аккумулятором и `flatMap` является идиоматичным способом
-        // для последовательного выполнения асинхронных операций в Project Reactor.
         return Flux.fromIterable(stages)
-                .reduce(Mono.just(initialState), (stateMono, stageAgents) ->
+                .reduce(initialStateMono, (stateMono, stageAgents) ->
                         stateMono.flatMap(currentState -> executeStageAndUpdateState(stageAgents, currentState, pipeline.getName()))
                 )
-                .flatMap(finalStateMono -> finalStateMono.map(StageExecutionState::accumulatedResults));
+                .flatMap(Function.identity()) // Разворачиваем Mono<Mono<State>> в Mono<State>
+                .map(StageExecutionState::accumulatedResults);
     }
+
 
     /**
      * Выполняет один этап конвейера (всех его агентов параллельно) и асинхронно
@@ -161,13 +160,10 @@ public class AgentOrchestratorService {
     private Mono<StageExecutionState> executeStageAndUpdateState(List<QaAgent> agentsInStage, StageExecutionState currentState, String pipelineName) {
         return executeStage(agentsInStage, currentState.currentContext(), pipelineName)
                 .map(stageResults -> {
-                    // Создаем новый, обогащенный контекст для следующего этапа,
-                    // используя результаты текущего (Паттерн "Эволюционирующий Контекст").
                     Map<String, Object> newPayload = new HashMap<>(currentState.currentContext().payload());
                     stageResults.forEach(result -> newPayload.putAll(result.details()));
                     AgentContext newContext = new AgentContext(newPayload);
 
-                    // Добавляем результаты текущего этапа в общий список
                     List<AgentResult> newAccumulatedResults = new ArrayList<>(currentState.accumulatedResults());
                     newAccumulatedResults.addAll(stageResults);
 
@@ -194,9 +190,6 @@ public class AgentOrchestratorService {
                     return canHandle;
                 })
                 .flatMap(agent -> agent.execute(context)
-                        // Каждый агент может выполнять блокирующие операции, поэтому его
-                        // выполнение выносится на отдельный эластичный планировщик,
-                        // чтобы не блокировать основной event-loop.
                         .subscribeOn(Schedulers.boundedElastic()))
                 .collectList();
     }

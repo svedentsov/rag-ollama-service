@@ -1,6 +1,7 @@
 package com.example.ragollama.agent.accessibility.api;
 
 import com.example.ragollama.agent.AgentOrchestratorService;
+import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.accessibility.api.dto.AccessibilityAuditRequest;
 import com.example.ragollama.agent.accessibility.api.dto.AccessibilityAuditResponse;
 import com.example.ragollama.agent.accessibility.mappers.AccessibilityMapper;
@@ -17,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
+
+import java.util.List;
 
 /**
  * Контроллер для AI-агента, выполняющего аудит доступности (a11y).
@@ -44,16 +47,18 @@ public class AccessibilityAgentController {
 
     /**
      * Запускает асинхронный аудит HTML-кода на предмет нарушений доступности.
+     * <p>
+     * Вызывает именованный конвейер {@code accessibility-audit-pipeline}, который инкапсулирует
+     * всю логику выполнения. Это делает контроллер декларативным и независимым от деталей реализации.
      *
      * @param request DTO с HTML-кодом для анализа. Должен быть валидным.
-     * @return {@link Mono}, который по завершении будет содержать
-     * результат работы агента, преобразованный в DTO ответа. Spring WebFlux
-     * автоматически обработает асинхронный ответ.
+     * @return {@link Mono}, который по завершении будет содержать результат работы конвейера,
+     * преобразованный в DTO ответа. Spring WebFlux автоматически обработает асинхронный ответ.
      */
     @PostMapping("/audit")
     @Operation(
             summary = "Провести аудит доступности (a11y) для HTML-кода",
-            description = "Принимает HTML-код страницы и асинхронно запускает агент для его анализа. " +
+            description = "Принимает HTML-код страницы и асинхронно запускает конвейер для его анализа. " +
                     "Возвращает отчет с резюме, рекомендациями и списком технических нарушений."
     )
     @ApiResponse(
@@ -64,6 +69,24 @@ public class AccessibilityAgentController {
     @ApiResponse(responseCode = "400", description = "Некорректный запрос (например, пустой HTML)")
     public Mono<AccessibilityAuditResponse> auditAccessibility(@Valid @RequestBody AccessibilityAuditRequest request) {
         return orchestratorService.invoke("accessibility-audit-pipeline", request.toAgentContext())
+                .map(this::extractFinalResult)
                 .map(accessibilityMapper::toResponseDto);
+    }
+
+    /**
+     * Извлекает финальный результат из списка, возвращаемого оркестратором.
+     * <p>
+     * В конвейере из одного шага мы ожидаем ровно один результат. Этот метод
+     * обеспечивает дополнительную проверку на соответствие этому контракту.
+     *
+     * @param results Список результатов от оркестратора.
+     * @return Единственный {@link AgentResult} из списка.
+     * @throws IllegalStateException если список результатов пуст или содержит более одного элемента.
+     */
+    private AgentResult extractFinalResult(List<AgentResult> results) {
+        if (results == null || results.size() != 1) {
+            throw new IllegalStateException("Внутренняя ошибка: конвейер аудита доступности вернул некорректное количество результатов.");
+        }
+        return results.get(0);
     }
 }

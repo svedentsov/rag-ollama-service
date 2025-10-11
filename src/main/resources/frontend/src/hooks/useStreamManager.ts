@@ -5,6 +5,7 @@ import { Message, UniversalStreamResponse } from '../types';
 import { streamChatResponse } from '../api';
 import { useNotificationStore } from '../state/notificationStore';
 import { useSessionStore } from '../state/sessionStore';
+import { useStreamingStore } from '../state/streamingStore';
 
 /**
  * Хук для управления множественными, параллельными потоками ответов чата.
@@ -14,6 +15,7 @@ export function useStreamManager() {
   const queryClient = useQueryClient();
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const { addNotification } = useNotificationStore();
+  const { addStreamingMessage, removeStreamingMessage } = useStreamingStore();
 
   /**
    * Обновляет кэш React Query на основе входящего события из потока.
@@ -38,6 +40,11 @@ export function useStreamManager() {
           case 'error':
             updatedMsg.error = event.message;
             break;
+          case 'done':
+            // Событие 'done' от сервера сигнализирует о финализации.
+            // Устанавливаем isStreaming в false, чтобы скрыть кнопку "Стоп" у сообщения.
+            updatedMsg.isStreaming = false;
+            break;
         }
         return updatedMsg;
       })
@@ -55,6 +62,7 @@ export function useStreamManager() {
     query: string,
     assistantMessageId: string
   ) => {
+    addStreamingMessage(assistantMessageId);
     const abortController = new AbortController();
     abortControllersRef.current.set(assistantMessageId, abortController);
 
@@ -68,12 +76,15 @@ export function useStreamManager() {
         updateQueryCache(sessionId, assistantMessageId, { type: 'error', message: (error as Error).message });
       }
     } finally {
+      // Этот блок - ЕДИНСТВЕННЫЙ ИСТОЧНИК ПРАВДЫ о завершении стрима.
+      // Он выполнится при успехе, ошибке или отмене (abort).
       queryClient.setQueryData<Message[]>(['messages', sessionId], (oldData = []) =>
         oldData.map(msg =>
           msg.id === assistantMessageId ? { ...msg, isStreaming: false } : msg
         )
       );
       abortControllersRef.current.delete(assistantMessageId);
+      removeStreamingMessage(assistantMessageId);
 
       const currentSessionId = useSessionStore.getState().currentSessionId;
       if (sessionId !== currentSessionId) {
@@ -82,17 +93,19 @@ export function useStreamManager() {
 
       await queryClient.invalidateQueries({ queryKey: ['chatSessions'] });
     }
-  }, [queryClient, updateQueryCache, addNotification]);
+  }, [queryClient, updateQueryCache, addNotification, addStreamingMessage, removeStreamingMessage]);
 
   /**
-   * Останавливает генерацию ответа для конкретного сообщения.
+   * Инициирует остановку генерации ответа для конкретного сообщения.
+   * Не управляет состоянием UI напрямую, а только вызывает AbortController.
    * @param {string} assistantMessageId - ID сообщения ассистента, генерацию которого нужно остановить.
    */
   const stopStream = useCallback((assistantMessageId: string) => {
     const controller = abortControllersRef.current.get(assistantMessageId);
     if (controller) {
-      controller.abort();
+      controller.abort(); // Просто отправляем сигнал отмены
       toast.success('Генерация ответа остановлена.');
+      // НЕ вызываем removeStreamingMessage здесь. Это сделает блок finally в startStream.
     }
   }, []);
 

@@ -4,16 +4,17 @@ import { v4 as uuidv4 } from 'uuid';
 import { useStreamManager } from './useStreamManager';
 import { Message } from '../types';
 import { useChatMessages } from './useChatMessages';
+import { useStreamingStore } from '../state/streamingStore';
 
 /**
  * Хук, инкапсулирующий всю бизнес-логику действий пользователя в чате.
- * Он отвечает за отправку, регенерацию сообщений и управление потоками.
+ * Он отвечает за отправку, регенерацию и остановку сообщений.
  * @param {string} sessionId - ID текущей сессии чата.
  * @returns {object} Объект с функциями для взаимодействия с чатом.
  */
 export function useChatInteraction(sessionId: string) {
   const queryClient = useQueryClient();
-  const { startStream } = useStreamManager();
+  const { startStream, stopStream } = useStreamManager();
   const { messages } = useChatMessages(sessionId);
 
   /**
@@ -42,8 +43,27 @@ export function useChatInteraction(sessionId: string) {
     }
   }, [messages, queryClient, sessionId, startStream]);
 
+  /**
+   * Останавливает активную генерацию ответа в текущей сессии (для основной кнопки "Стоп").
+   */
+  const handleStopGenerating = useCallback(() => {
+    const streamingMessage = messages.find(msg => msg.isStreaming);
+    if (streamingMessage) {
+      stopStream(streamingMessage.id);
+    } else {
+      const globalStreamingIds = useStreamingStore.getState().streamingMessageIds;
+      const firstId = Array.from(globalStreamingIds)[0];
+      if (firstId) {
+        console.warn(`Не найдено активного стрима в сессии ${sessionId}. Остановка первого глобального стрима в качестве fallback.`);
+        stopStream(firstId);
+      }
+    }
+  }, [messages, stopStream, sessionId]);
+
   return {
     handleSendMessage,
     handleRegenerate,
+    handleStopGenerating,
+    stopStream, // Явно экспортируем функцию для использования в дочерних компонентах
   };
 }

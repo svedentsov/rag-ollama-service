@@ -1,17 +1,33 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, FC } from 'react';
 import { Send, Square } from 'lucide-react';
 import { ScrollToBottomButton } from "./ScrollToBottomButton";
 import styles from './ChatInput.module.css';
 
+/**
+ * @interface ChatInputProps
+ * @description Пропсы для компонента ChatInput.
+ */
 interface ChatInputProps {
-    onSendMessage: (text: string) => void;
-    onStopGenerating: () => void;
-    isLoading: boolean;
-    showScrollButton: boolean;
-    onScrollToBottom: () => void;
+  /** @param {(text: string) => void} onSendMessage - Колбэк для отправки нового сообщения. */
+  onSendMessage: (text: string) => void;
+  /** @param {() => void} onStopGenerating - Колбэк для остановки всех активных генераций. */
+  onStopGenerating: () => void;
+  /** @param {boolean} isLoading - Флаг, указывающий, активен ли хотя бы один процесс генерации. */
+  isLoading: boolean;
+  /** @param {boolean} showScrollButton - Флаг для отображения кнопки прокрутки вниз. */
+  showScrollButton: boolean;
+  /** @param {() => void} onScrollToBottom - Колбэк для плавной прокрутки вниз. */
+  onScrollToBottom: () => void;
 }
 
-export function ChatInput({ onSendMessage, onStopGenerating, isLoading, showScrollButton, onScrollToBottom }: ChatInputProps) {
+/**
+ * Компонент для ввода и отправки сообщений в чат.
+ * Управляет состоянием текстового поля, его автоматическим расширением
+ * и отображением кнопок "Отправить" или "Стоп" с плавной анимацией.
+ * @param {ChatInputProps} props - Пропсы компонента.
+ * @returns {React.ReactElement} Отрендеренный компонент.
+ */
+export const ChatInput: FC<ChatInputProps> = ({ onSendMessage, onStopGenerating, isLoading, showScrollButton, onScrollToBottom }) => {
     const [inputText, setInputText] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -26,7 +42,7 @@ export function ChatInput({ onSendMessage, onStopGenerating, isLoading, showScro
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (inputText.trim() && !isLoading) {
+        if (inputText.trim()) {
             onSendMessage(inputText);
             setInputText('');
         }
@@ -51,16 +67,30 @@ export function ChatInput({ onSendMessage, onStopGenerating, isLoading, showScro
                     placeholder="Спросите что-нибудь..."
                     className={styles.textarea}
                     rows={1}
+                    aria-label="Поле для ввода сообщения"
                 />
-                {isLoading ? (
-                    <button type="button" onClick={onStopGenerating} className={styles.stopButton} aria-label="Остановить генерацию">
-                        <Square size={18} />
-                    </button>
-                ) : (
-                    <button type="submit" disabled={!inputText.trim()} className={styles.sendButton} aria-label="Отправить сообщение">
+                {/*
+                  Контейнер теперь управляет состоянием анимации.
+                  Кнопки просто меняют свою видимость.
+                */}
+                <div className={`${styles.buttonContainer} ${isLoading ? styles.loading : ''}`}>
+                    <button
+                        type="submit"
+                        disabled={!inputText.trim()}
+                        className={`${styles.actionButton} ${styles.sendButton} ${!isLoading ? styles.visible : styles.hidden}`}
+                        aria-label="Отправить сообщение"
+                    >
                         <Send size={18} />
                     </button>
-                )}
+                    <button
+                        type="button"
+                        onClick={onStopGenerating}
+                        className={`${styles.actionButton} ${styles.stopButton} ${isLoading ? styles.visible : styles.hidden}`}
+                        aria-label="Остановить генерацию"
+                    >
+                        <Square size={18} />
+                    </button>
+                </div>
             </form>
         </div>
     );

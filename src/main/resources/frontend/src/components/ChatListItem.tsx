@@ -51,6 +51,27 @@ export const ChatListItem: FC<ChatListItemProps> = ({
     }
   }, [isEditing]);
 
+  /**
+   * Обрабатывает правый клик мыши.
+   * Если кастомное меню уже открыто для этого элемента, ничего не делает,
+   * позволяя браузеру показать нативное меню. В противном случае
+   * подавляет нативное меню и показывает кастомное.
+   * @param {React.MouseEvent} e - Событие мыши.
+   */
+  const handleContextMenu = (e: React.MouseEvent) => {
+    // Если наше меню уже открыто для этого элемента, ничего не делаем.
+    // Это позволяет второму правому клику "пройти" до браузера.
+    // Закрытие нашего меню будет обработано хуком useClickOutside.
+    if (menuState.show && menuState.item?.sessionId === session.sessionId) {
+      return;
+    }
+
+    // В противном случае, это первый клик. Предотвращаем меню браузера и открываем наше.
+    e.preventDefault();
+    e.stopPropagation();
+    openMenu(e, session);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsEditing(false);
@@ -74,6 +95,7 @@ export const ChatListItem: FC<ChatListItemProps> = ({
     <>
       <div
         onClick={(e) => { e.preventDefault(); onNavigate(session.sessionId); }}
+        onContextMenu={handleContextMenu}
         className={`${styles.navLink} ${isActive && !isEditing ? styles.active : ''}`}
         role="button"
         tabIndex={0}

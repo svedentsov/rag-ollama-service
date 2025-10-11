@@ -16,7 +16,7 @@ import java.util.Map;
 /**
  * AI-агент, который проводит аудит доступности (a11y) веб-страницы.
  * <p>
- * Эталонная реализация агента-оркестратора, следующего принципам Clean Architecture
+ * Эталонная реализация агента, следующего принципам Clean Architecture
  * и полностью адаптированного под реактивный стек. Он определяет высокоуровневый
  * бизнес-процесс, делегируя конкретные шаги специализированным компонентам:
  * <ol>
@@ -45,19 +45,29 @@ public class AccessibilityAuditorAgent implements QaAgent {
     private final ExternalAccessibilityScannerClient scannerClient;
     private final LlmAccessibilityAnalyzer llmAnalyzer;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getName() {
         return "accessibility-auditor";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String getDescription() {
         return "Анализирует HTML-код на предмет нарушений доступности (a11y) и генерирует отчет.";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean canHandle(AgentContext context) {
-        return context.payload().get("htmlContent") instanceof String;
+        Object htmlContent = context.payload().get("htmlContent");
+        return htmlContent instanceof String && !((String) htmlContent).isBlank();
     }
 
     /**
@@ -65,7 +75,8 @@ public class AccessibilityAuditorAgent implements QaAgent {
      * <p>
      * Эта реализация демонстрирует эталонный подход к работе с внешними системами:
      * вызов сканера инкапсулирован в асинхронном клиенте, который не блокирует
-     * основной event loop.
+     * основной event loop. Логика для случая отсутствия нарушений теперь также
+     * инкапсулирована в {@link LlmAccessibilityAnalyzer} для лучшего соблюдения SRP.
      *
      * @param context Контекст, содержащий HTML-код страницы в поле `htmlContent`.
      * @return {@link Mono} с финальным отчетом {@link AgentResult}.
@@ -74,18 +85,20 @@ public class AccessibilityAuditorAgent implements QaAgent {
     @Override
     public Mono<AgentResult> execute(AgentContext context) {
         String htmlContent = (String) context.payload().get("htmlContent");
-        log.info("Запуск аудита доступности для HTML-контента...");
+        log.info("Запуск аудита доступности для HTML-контента (длина: {} символов)...", htmlContent.length());
 
         return scannerClient.scan(htmlContent)
                 .flatMap(violations -> {
                     if (violations.isEmpty()) {
-                        log.info("Нарушений доступности не найдено. Вызов LLM не требуется.");
-                        return Mono.just(createEmptySuccessResult());
+                        log.info("Нарушений доступности не найдено сканером.");
+                        // Даже если нарушений нет, делегируем создание "пустого" отчета анализатору
+                        // для консистентности логики.
+                        return llmAnalyzer.analyze(Collections.emptyList());
                     }
                     log.info("Найдено {} нарушений доступности. Запуск LLM-анализатора.", violations.size());
-                    return llmAnalyzer.analyze(violations)
-                            .map(this::createSuccessResultWithReport);
-                });
+                    return llmAnalyzer.analyze(violations);
+                })
+                .map(this::createSuccessResultWithReport);
     }
 
     /**
@@ -100,22 +113,6 @@ public class AccessibilityAuditorAgent implements QaAgent {
                 AgentResult.Status.SUCCESS,
                 report.summary(),
                 Map.of(ACCESSIBILITY_REPORT_KEY, report)
-        );
-    }
-
-    /**
-     * Создает успешный результат в случае отсутствия нарушений.
-     *
-     * @return Стандартизированный результат работы агента.
-     */
-    private AgentResult createEmptySuccessResult() {
-        String summary = "Аудит завершен. Нарушений доступности не найдено.";
-        AccessibilityReport emptyReport = new AccessibilityReport(summary, Collections.emptyList(), Collections.emptyList());
-        return new AgentResult(
-                getName(),
-                AgentResult.Status.SUCCESS,
-                summary,
-                Map.of(ACCESSIBILITY_REPORT_KEY, emptyReport)
         );
     }
 }

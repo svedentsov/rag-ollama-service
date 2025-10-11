@@ -13,7 +13,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -22,7 +24,8 @@ import java.util.Map;
  * доступности (a11y) с помощью языковой модели (LLM).
  * <p>
  * Эта версия использует полностью декларативный, идиоматичный реактивный стиль,
- * инкапсулируя потенциально блокирующие операции в {@link Mono#fromCallable}.
+ * инкапсулируя потенциально блокирующие операции (сериализация JSON) в {@link Mono#fromCallable},
+ * чтобы гарантировать неблокирующее выполнение на всех этапах.
  */
 @Service
 @Slf4j
@@ -36,6 +39,9 @@ public class LlmAccessibilityAnalyzer {
 
     /**
      * Асинхронно анализирует список технических нарушений доступности с помощью LLM.
+     * <p>
+     * Корректно обрабатывает случай, когда список нарушений пуст, возвращая
+     * соответствующий "пустой" отчет без вызова LLM.
      *
      * @param violations Список технических нарушений, обнаруженных сканером.
      * @return {@link Mono}, который по завершении будет содержать
@@ -43,15 +49,22 @@ public class LlmAccessibilityAnalyzer {
      * @throws ProcessingException если происходит критическая ошибка при сериализации данных в JSON.
      */
     public Mono<AccessibilityReport> analyze(List<AccessibilityViolation> violations) {
+        if (violations.isEmpty()) {
+            String summary = "Аудит завершен. Нарушений доступности не найдено.";
+            return Mono.just(new AccessibilityReport(summary, Collections.emptyList(), Collections.emptyList()));
+        }
+
+        // Оборачиваем потенциально блокирующую операцию сериализации в `Mono.fromCallable`.
         return Mono.fromCallable(() -> {
-                    // Эта операция потенциально блокирующая, поэтому инкапсулируем ее.
                     try {
                         return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(violations);
                     } catch (JsonProcessingException e) {
                         log.error("Критическая ошибка: не удалось сериализовать список нарушений a11y в JSON.", e);
+                        // Оборачиваем в кастомное непроверяемое исключение
                         throw new ProcessingException("Ошибка сериализации нарушений a11y", e);
                     }
                 })
+                .subscribeOn(Schedulers.boundedElastic()) // Указываем, что операцию нужно выполнить на отдельном потоке
                 .flatMap(violationsJson -> {
                     String promptString = promptService.render("accessibilityAudit", Map.of("violationsJson", violationsJson));
                     log.debug("Отправка запроса к LLM для анализа {} нарушений доступности.", violations.size());

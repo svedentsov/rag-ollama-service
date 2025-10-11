@@ -10,11 +10,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.SignalType;
 
 import java.util.UUID;
 
 /**
  * Сервис-фасад для RAG, адаптированный для реактивного стека.
+ * <p>
+ * Эта версия использует оператор {@code doFinally} для гарантированного сохранения
+ * результата в базу данных, даже если поток был прерван клиентом.
  */
 @Service
 @Slf4j
@@ -77,10 +81,14 @@ public class RagApplicationService {
                                     fullResponseBuilder.append(content.text());
                                 }
                             })
-                            .doOnComplete(() -> {
-                                String fullResponse = fullResponseBuilder.toString();
-                                if (!fullResponse.isBlank()) {
-                                    dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), fullResponse, MessageRole.ASSISTANT, taskId).subscribe();
+                            .doFinally(signalType -> {
+                                // Гарантированно сохраняем частичный или полный ответ при завершении или отмене
+                                if (signalType == SignalType.ON_COMPLETE || signalType == SignalType.CANCEL) {
+                                    String fullResponse = fullResponseBuilder.toString();
+                                    if (!fullResponse.isBlank()) {
+                                        dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), fullResponse, MessageRole.ASSISTANT, taskId)
+                                                .subscribe(null, error -> log.error("Ошибка при сохранении прерванного RAG-ответа", error));
+                                    }
                                 }
                             });
                 });
