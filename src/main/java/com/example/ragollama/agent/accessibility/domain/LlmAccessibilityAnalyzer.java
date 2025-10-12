@@ -49,7 +49,7 @@ public class LlmAccessibilityAnalyzer {
      * @throws ProcessingException если происходит критическая ошибка при сериализации данных в JSON.
      */
     public Mono<AccessibilityReport> analyze(List<AccessibilityViolation> violations) {
-        if (violations.isEmpty()) {
+        if (violations == null || violations.isEmpty()) {
             String summary = "Аудит завершен. Нарушений доступности не найдено.";
             return Mono.just(new AccessibilityReport(summary, Collections.emptyList(), Collections.emptyList()));
         }

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -34,6 +35,10 @@ public class ExternalAccessibilityScannerClient {
 
     /**
      * Асинхронно отправляет HTML-контент на анализ во внешний сервис.
+     * <p>
+     * В реальном приложении здесь был бы вызов WebClient, как показано в закомментированном коде.
+     * Для демонстрации используется `Mono.fromCallable` с задержкой, чтобы
+     * симулировать асинхронную сетевую операцию.
      *
      * @param htmlContent HTML-код для анализа.
      * @return {@link Mono}, который по завершении будет содержать список
@@ -44,22 +49,19 @@ public class ExternalAccessibilityScannerClient {
     @TimeLimiter(name = "accessibilityScanner")
     public Mono<List<AccessibilityViolation>> scan(String htmlContent) {
         log.info("Отправка запроса на асинхронное сканирование доступности...");
-
         // ======================= MOCK IMPLEMENTATION =======================
-        // В реальном приложении здесь будет вызов WebClient, как показано ниже.
-        // Для демонстрации мы возвращаем предопределенный набор нарушений.
         return Mono.fromCallable(() -> {
-            if (htmlContent != null && htmlContent.contains("<img src=")) {
-                if (!htmlContent.matches(".*<img[^>]+alt=.*")) {
-                    return List.of(
-                            new AccessibilityViolation(
-                                    "image-alt", "critical", "Images must have alternate text",
-                                    "https://dequeuniversity.com/rules/axe/4.4/image-alt", List.of("img[src=\"logo.png\"]")
-                            )
-                    );
-                }
-            }
-            return List.of();
-        });
+                    // Симуляция работы
+                    if (htmlContent != null && htmlContent.contains("<img") && !htmlContent.contains("alt=")) {
+                        return List.of(
+                                new AccessibilityViolation(
+                                        "image-alt", "critical", "Images must have alternate text",
+                                        "https://dequeuniversity.com/rules/axe/4.4/image-alt", List.of("img[src=\"logo.png\"]")
+                                )
+                        );
+                    }
+                    return List.<AccessibilityViolation>of();
+                })
+                .delayElement(Duration.ofMillis(150)); // Симуляция сетевой задержки
     }
 }

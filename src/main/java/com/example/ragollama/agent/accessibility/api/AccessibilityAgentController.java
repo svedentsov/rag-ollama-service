@@ -85,7 +85,10 @@ public class AccessibilityAgentController {
      */
     private AgentResult extractFinalResult(List<AgentResult> results) {
         if (results == null || results.size() != 1) {
-            throw new IllegalStateException("Внутренняя ошибка: конвейер аудита доступности вернул некорректное количество результатов.");
+            throw new IllegalStateException(String.format(
+                    "Внутренняя ошибка: конвейер аудита доступности вернул некорректное количество результатов. Ожидался: 1, получено: %d.",
+                    results != null ? results.size() : 0
+            ));
         }
         return results.get(0);
     }

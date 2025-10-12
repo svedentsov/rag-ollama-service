@@ -12,8 +12,8 @@ import java.util.List;
  * человекочитаемое резюме и рекомендации, сгенерированные LLM.
  *
  * @param summary            Высокоуровневое резюме, сгенерированное LLM.
- * @param violations         Полный список технических нарушений, обнаруженных сканером.
  * @param topRecommendations Список наиболее приоритетных рекомендаций от LLM.
+ * @param violations         Полный список технических нарушений, обнаруженных сканером.
  */
 @Schema(description = "Финальный отчет об аудите доступности (a11y)")
 @JsonIgnoreProperties(ignoreUnknown = true)

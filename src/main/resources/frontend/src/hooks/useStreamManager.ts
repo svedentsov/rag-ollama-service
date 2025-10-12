@@ -9,6 +9,7 @@ import { useStreamingStore } from '../state/streamingStore';
 
 /**
  * Хук для управления множественными, параллельными потоками ответов чата.
+ * Он отвечает за запуск, обработку событий, остановку и финальную синхронизацию состояния.
  * @returns {object} Объект с функциями `startStream` и `stopStream`.
  */
 export function useStreamManager() {
@@ -19,6 +20,7 @@ export function useStreamManager() {
 
   /**
    * Обновляет кэш React Query на основе входящего события из потока.
+   * Эта функция выполняет "оптимистичное" обновление UI в реальном времени.
    */
   const updateQueryCache = useCallback((sessionId: string, assistantMessageId: string, event: UniversalStreamResponse) => {
     const queryKey = ['messages', sessionId];
@@ -41,8 +43,7 @@ export function useStreamManager() {
             updatedMsg.error = event.message;
             break;
           case 'done':
-            // Событие 'done' от сервера сигнализирует о финализации.
-            // Устанавливаем isStreaming в false, чтобы скрыть кнопку "Стоп" у сообщения.
+            // Это событие от сервера сигнализирует о финализации.
             updatedMsg.isStreaming = false;
             break;
         }
@@ -53,9 +54,9 @@ export function useStreamManager() {
 
   /**
    * Запускает новый поток для генерации ответа.
-   * @param {string} sessionId - ID сессии.
-   * @param {string} query - Текст запроса пользователя.
-   * @param {string} assistantMessageId - ID сообщения-плейсхолдера для ассистента.
+   * @param sessionId - ID сессии.
+   * @param query - Текст запроса пользователя.
+   * @param assistantMessageId - ID сообщения-плейсхолдера для ассистента.
    */
   const startStream = useCallback(async (
     sessionId: string,
@@ -76,8 +77,9 @@ export function useStreamManager() {
         updateQueryCache(sessionId, assistantMessageId, { type: 'error', message: (error as Error).message });
       }
     } finally {
-      // Этот блок - ЕДИНСТВЕННЫЙ ИСТОЧНИК ПРАВДЫ о завершении стрима.
-      // Он выполнится при успехе, ошибке или отмене (abort).
+      // КЛЮЧЕВОЙ БЛОК: выполняется при любом завершении потока (успех, ошибка, отмена).
+      // Он является единственным источником правды о завершении стрима.
+      // 1. Убираем UI-индикаторы стриминга
       queryClient.setQueryData<Message[]>(['messages', sessionId], (oldData = []) =>
         oldData.map(msg =>
           msg.id === assistantMessageId ? { ...msg, isStreaming: false } : msg
@@ -85,27 +87,28 @@ export function useStreamManager() {
       );
       abortControllersRef.current.delete(assistantMessageId);
       removeStreamingMessage(assistantMessageId);
-
+      // 2. Уведомляем пользователя, если ответ пришел в неактивный чат
       const currentSessionId = useSessionStore.getState().currentSessionId;
       if (sessionId !== currentSessionId) {
         addNotification(sessionId);
       }
-
+      // 3. Инвалидируем кэши, чтобы заставить UI синхронизироваться с бэкендом.
+      // Это гарантирует, что даже после прерывания потока и перезагрузки страницы
+      // пользователь увидит сохраненный частичный ответ.
       await queryClient.invalidateQueries({ queryKey: ['chatSessions'] });
+      await queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
     }
   }, [queryClient, updateQueryCache, addNotification, addStreamingMessage, removeStreamingMessage]);
 
   /**
    * Инициирует остановку генерации ответа для конкретного сообщения.
-   * Не управляет состоянием UI напрямую, а только вызывает AbortController.
-   * @param {string} assistantMessageId - ID сообщения ассистента, генерацию которого нужно остановить.
+   * @param assistantMessageId - ID сообщения ассистента, генерацию которого нужно остановить.
    */
   const stopStream = useCallback((assistantMessageId: string) => {
     const controller = abortControllersRef.current.get(assistantMessageId);
     if (controller) {
-      controller.abort(); // Просто отправляем сигнал отмены
+      controller.abort(); // Отправляем сигнал отмены
       toast.success('Генерация ответа остановлена.');
-      // НЕ вызываем removeStreamingMessage здесь. Это сделает блок finally в startStream.
     }
   }, []);
 

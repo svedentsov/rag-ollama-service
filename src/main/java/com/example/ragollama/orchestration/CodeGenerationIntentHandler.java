@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.SignalType;
 
 import java.io.IOException;
 import java.util.UUID;
@@ -70,30 +71,31 @@ public class CodeGenerationIntentHandler implements IntentHandler {
                                     fullResponseBuilder.append(content.text());
                                 }
                             })
-                            .concatWith( // Затем конкатенируем с Mono<UniversalResponse>
-                                    Mono.defer(() -> {
-                                        String fullResponse = fullResponseBuilder.toString();
-                                        if (!fullResponse.isBlank()) {
-                                            return dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), fullResponse, MessageRole.ASSISTANT, taskId)
-                                                    .thenReturn(new UniversalResponse.Done("Сохранено на сервере."));
-                                        }
-                                        return Mono.just(new UniversalResponse.Done("Завершено без сохранения."));
-                                    })
-                            )
+                            .doFinally(signalType -> {
+                                // Гарантированное сохранение при штатном завершении или отмене клиентом
+                                if (signalType == SignalType.ON_COMPLETE || signalType == SignalType.CANCEL) {
+                                    String responseToSave = fullResponseBuilder.toString();
+                                    if (!responseToSave.isBlank()) {
+                                        dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), responseToSave, MessageRole.ASSISTANT, taskId)
+                                                .subscribe(
+                                                        null, // onNext не нужен
+                                                        error -> log.error("Ошибка при сохранении (частичного) ответа генерации кода для сессии {}", turnContext.sessionId(), error)
+                                                );
+                                    }
+                                }
+                            })
+                            .concatWith(Mono.just(new UniversalResponse.Done("Генерация завершена.")))
                             .onErrorResume(e -> {
                                 Throwable cause = (e.getCause() != null) ? e.getCause() : e;
+                                // Не логируем отмену как ошибку, так как это штатное поведение
                                 if (cause instanceof CancellationException || cause instanceof IOException) {
                                     log.warn("Поток генерации кода был прерван клиентом: {}", cause.getMessage());
-                                    String partialResponse = fullResponseBuilder.toString();
-                                    if (!partialResponse.isBlank()) {
-                                        return dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), partialResponse, MessageRole.ASSISTANT, taskId)
-                                                .thenReturn(new UniversalResponse.Done("Частично сохранено на сервере."))
-                                                .flux();
-                                    }
-                                    return Flux.empty();
+                                } else {
+                                    log.error("Ошибка в потоке генерации кода: {}", e.getMessage(), e);
                                 }
-                                log.error("Ошибка в потоке генерации кода: {}", e.getMessage(), e);
-                                return Flux.just(new UniversalResponse.Error("Ошибка при генерации кода: " + e.getMessage()));
+                                // При любой ошибке или отмене, поток просто завершается.
+                                // `doFinally` позаботится о сохранении.
+                                return Flux.empty();
                             });
                 });
     }

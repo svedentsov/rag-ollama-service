@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  */
 @Schema(description = "DTO ответа с результатами аудита доступности")
 public record AccessibilityAuditResponse(
+        @Schema(description = "Финальный отчет об аудите с рекомендациями и техническими деталями.")
         AccessibilityReport report
 ) {
 }

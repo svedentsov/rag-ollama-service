@@ -15,6 +15,9 @@ import java.util.List;
 /**
  * Компонент-парсер, отвечающий за безопасное преобразование JSON-ответа от LLM
  * в строго типизированный DTO {@link AccessibilityReport}.
+ * <p>
+ * Изоляция этой логики в отдельном классе повышает тестируемость, отказоустойчивость
+ * и соответствует Принципу единственной ответственности (SRP).
  */
 @Slf4j
 @Component
@@ -26,20 +29,28 @@ public class AccessibilityReportParser {
 
     /**
      * Безопасно парсит JSON-ответ от LLM, очищает его и объединяет с исходными данными.
+     * <p>
+     * Этот метод является "антикоррупционным слоем" между непредсказуемым выводом LLM
+     * и строго типизированной доменной моделью приложения.
      *
      * @param jsonResponse  Сырой строковый JSON-ответ от языковой модели.
-     * @param rawViolations Исходный список нарушений от сканера.
-     * @return Полностью собранный и валидный {@link AccessibilityReport}.
-     * @throws LlmJsonResponseParseException если LLM вернула невалидный JSON.
+     * @param rawViolations Исходный список нарушений от сканера. Этот список
+     *                      является "источником правды" для технических деталей.
+     * @return Полностью собранный и валидный {@link AccessibilityReport}, где
+     * резюме взято от LLM, а технические детали — из исходных данных.
+     * @throws LlmJsonResponseParseException если LLM вернула невалидный JSON, который
+     *                                       не удалось распарсить даже после очистки.
      */
     public AccessibilityReport parse(String jsonResponse, List<AccessibilityViolation> rawViolations) {
         try {
             String cleanedJson = jsonExtractorUtil.extractJsonBlock(jsonResponse);
             AccessibilityReport summaryReport = objectMapper.readValue(cleanedJson, AccessibilityReport.class);
-            log.debug("JSON-ответ от LLM успешно распарсен.");
+            log.debug("JSON-ответ от LLM для аудита доступности успешно распарсен.");
+
+            // Собираем финальный отчет: саммари и рекомендации от LLM, а "сырые" данные — из сканера.
             return new AccessibilityReport(summaryReport.summary(), summaryReport.topRecommendations(), rawViolations);
         } catch (JsonProcessingException e) {
-            log.error("Не удалось распарсить JSON-ответ от a11y LLM: {}", jsonResponse, e);
+            log.error("Не удалось распарсить JSON-ответ от LLM-аудитора доступности: {}", jsonResponse, e);
             throw new LlmJsonResponseParseException("LLM-аудитор вернул невалидный JSON.", e, jsonResponse);
         }
     }

@@ -106,7 +106,6 @@ dependencies {
     // JAXB API for Java 11+ compatibility with swagger-parser and other libraries
     implementation 'jakarta.xml.bind:jakarta.xml.bind-api:4.0.0'
     runtimeOnly 'org.glassfish.jaxb:jaxb-runtime:4.0.2'
-    // This is the CRITICAL addition for legacy javax.* namespace compatibility
     implementation 'javax.xml.bind:jaxb-api:2.3.1'
 
     // Testing

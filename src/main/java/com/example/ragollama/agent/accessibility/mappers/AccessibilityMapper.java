@@ -43,8 +43,9 @@ public class AccessibilityMapper {
         }
 
         // Если контракт нарушен, выбрасываем исключение с детальным сообщением
-        log.error("Нарушение контракта: результат от агента '{}' не содержит AccessibilityReport. Вместо этого найден: {}",
-                agentResult.agentName(), reportObject != null ? reportObject.getClass().getName() : "null");
+        String foundType = (reportObject != null) ? reportObject.getClass().getName() : "null";
+        log.error("Нарушение контракта: результат от агента '{}' не содержит AccessibilityReport по ключу '{}'. Вместо этого найден: {}",
+                agentResult.agentName(), AccessibilityAuditorAgent.ACCESSIBILITY_REPORT_KEY, foundType);
         throw new IllegalStateException("Внутренняя ошибка: результат конвейера не содержит ожидаемый отчет.");
     }
 }

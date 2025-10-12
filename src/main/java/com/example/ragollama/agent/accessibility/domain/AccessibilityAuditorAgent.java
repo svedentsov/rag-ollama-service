@@ -10,7 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
-import java.util.Collections;
 import java.util.Map;
 
 /**
@@ -88,16 +87,8 @@ public class AccessibilityAuditorAgent implements QaAgent {
         log.info("Запуск аудита доступности для HTML-контента (длина: {} символов)...", htmlContent.length());
 
         return scannerClient.scan(htmlContent)
-                .flatMap(violations -> {
-                    if (violations.isEmpty()) {
-                        log.info("Нарушений доступности не найдено сканером.");
-                        // Даже если нарушений нет, делегируем создание "пустого" отчета анализатору
-                        // для консистентности логики.
-                        return llmAnalyzer.analyze(Collections.emptyList());
-                    }
-                    log.info("Найдено {} нарушений доступности. Запуск LLM-анализатора.", violations.size());
-                    return llmAnalyzer.analyze(violations);
-                })
+                .doOnNext(violations -> log.info("Сканер доступности обнаружил {} нарушений.", violations.size()))
+                .flatMap(llmAnalyzer::analyze)
                 .map(this::createSuccessResultWithReport);
     }
 
