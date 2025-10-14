@@ -58,8 +58,8 @@ public class SecurityLogAnalyzerAgent implements ToolAgent {
 
         String promptString = promptService.render("securityLogAnalyzerPrompt", Map.of("application_logs", logs));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(this::parseLlmResponse)
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(findings -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,

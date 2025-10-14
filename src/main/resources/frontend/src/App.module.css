@@ -83,7 +83,7 @@
     margin: 1rem;
     border: 1px solid hsl(var(--destructive));
     background-color: hsla(var(--destructive), 0.1);
-    color: hsl(var(--destructive-foreground));
+    color: hsl(var(--destructive));
     border-radius: var(--radius);
 }
 

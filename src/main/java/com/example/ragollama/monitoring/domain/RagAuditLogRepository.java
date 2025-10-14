@@ -14,4 +14,5 @@ import java.util.UUID;
 public interface RagAuditLogRepository extends ReactiveCrudRepository<RagAuditLog, UUID> {
     Mono<Boolean> existsByRequestId(String requestId);
     Mono<RagAuditLog> findByRequestId(String requestId);
+    Mono<RagAuditLog> findByTaskId(UUID taskId);
 }

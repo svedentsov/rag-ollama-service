@@ -67,7 +67,8 @@ public class ChecklistGeneratorAgent implements ToolAgent {
         String promptString = promptService.render("checklistGeneratorPrompt", Map.of("feature_description", featureDescription));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(llmResponse -> {
+                .map(tuple -> {
+                    String llmResponse = tuple.getT1();
                     List<String> checklistItems = parseToList(llmResponse);
                     String summary = "Чек-лист успешно сгенерирован. Найдено " + checklistItems.size() + " пунктов для проверки.";
                     log.info("ChecklistGeneratorAgent: сгенерирован чек-лист из {} пунктов.", checklistItems.size());

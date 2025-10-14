@@ -70,8 +70,8 @@ public class ArchitectureReviewSynthesizerAgent implements ToolAgent {
             String analysisJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(context.payload());
             String promptString = promptService.render("architecturalReviewSynthesizerPrompt", Map.of("analysis_reports_json", analysisJson));
 
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(this::parseLlmResponse)
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                    .map(tuple -> parseLlmResponse(tuple.getT1()))
                     .map(report -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,

@@ -91,6 +91,7 @@ public class OpenApiQueryService {
                 "question", query,
                 "history", "Нет истории."
         ));
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
+                .map(tuple -> tuple.getT1());
     }
 }

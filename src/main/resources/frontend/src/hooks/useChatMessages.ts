@@ -13,8 +13,12 @@ const transformMessageDtoToModel = (dto: ServerMessageDto): Message => ({
   parentId: dto.parentId ?? undefined,
   type: dto.role === 'USER' ? 'user' : 'assistant',
   text: dto.content,
-  sources: [], // Инициализируется пустым, т.к. `sources` приходят позже по стриму
-  isStreaming: false, // По умолчанию false
+  createdAt: dto.createdAt,
+  sources: dto.sourceCitations,
+  queryFormationHistory: dto.queryFormationHistory,
+  finalPrompt: dto.finalPrompt,
+  trustScoreReport: dto.trustScoreReport,
+  isStreaming: false,
 });
 
 /**
@@ -35,7 +39,9 @@ export function useChatMessages(sessionId: string) {
         queryKey,
         queryFn: async () => {
             const serverMessages = await api.fetchMessages(sessionId);
-            return serverMessages.map(transformMessageDtoToModel);
+            return serverMessages
+                .map(transformMessageDtoToModel)
+                .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         },
         enabled: !!sessionId,
     });

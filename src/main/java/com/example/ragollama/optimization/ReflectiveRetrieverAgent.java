@@ -89,7 +89,7 @@ public class ReflectiveRetrieverAgent {
                 "documents", documents
         ));
         return llmClient.callChat(new Prompt(promptString), ModelCapability.FAST_RELIABLE, true)
-                .map(this::parseJudgeResponse);
+                .map(tuple -> parseJudgeResponse(tuple.getT1()));
     }
 
     private Mono<String> rewriteQuery(String originalQuery, String missingInfo) {
@@ -97,7 +97,8 @@ public class ReflectiveRetrieverAgent {
                 "originalQuery", originalQuery,
                 "missingInfo", missingInfo
         ));
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.FASTEST);
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.FASTEST)
+                .map(tuple -> tuple.getT1());
     }
 
     private JudgeResult parseJudgeResponse(String jsonResponse) {

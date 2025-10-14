@@ -24,7 +24,11 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Шаг RAG-конвейера "Prompt Guard", адаптированный для R2DBC.
+ * Шаг RAG-конвейера "Prompt Guard", отвечающий за проверку входящего запроса
+ * на предмет атак типа "Prompt Injection".
+ * <p>
+ * Этот шаг выполняется самым первым и использует комбинацию эвристик и вызова
+ * быстрой LLM для классификации запроса как безопасного или вредоносного.
  */
 @Component
 @Order(1)
@@ -38,26 +42,39 @@ public class PromptGuardStep implements RagPipelineStep {
     private final TaskLifecycleService taskLifecycleService;
     private final JsonExtractorUtil jsonExtractorUtil;
 
+    /**
+     * Внутренний DTO для парсинга JSON-ответа от LLM-классификатора.
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record SecurityCheckResponse(boolean is_safe, Object reasoning) {
     }
 
+    /**
+     * "Белый список" ключевых слов, указывающих на легитимный RAG-запрос.
+     */
     private static final Set<String> WHITELISTED_KEYWORDS = Set.of(
             "что", "где", "когда", "кто", "как", "почему", "сколько", "какой", "расскажи", "опиши",
             "what", "where", "when", "who", "how", "why", "tell me", "describe", "explain"
     );
 
+    /**
+     * "Черный список" ключевых слов, часто используемых в атаках Prompt Injection.
+     */
     private static final Set<String> BLACKLISTED_KEYWORDS = Set.of(
             "ignore previous", "ignore all", "забудь предыдущие", "игнорируй все", "system prompt",
             "act as", "ты теперь", "твои инструкции"
     );
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
         log.info("Шаг [01] Prompt Guard: проверка запроса на безопасность...");
 
+        // Отправляем статусное событие клиенту
         taskLifecycleService.getActiveTaskForSession(context.sessionId())
-                .doOnNext(task -> taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Проверяю запрос...")))
+                .doOnNext(task -> taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Проверяю ваш вопрос на безопасность...")))
                 .subscribe();
 
         String query = context.originalQuery();
@@ -73,8 +90,8 @@ public class PromptGuardStep implements RagPipelineStep {
         String promptString = promptService.render("promptGuardPrompt", Map.of("query", query));
         Prompt prompt = new Prompt(promptString);
         return llmClient.callChat(prompt, ModelCapability.FASTEST, true)
-                .flatMap(responseJson -> {
-                    SecurityCheckResponse checkResponse = parseLlmResponse(responseJson);
+                .flatMap(tuple -> {
+                    SecurityCheckResponse checkResponse = parseLlmResponse(tuple.getT1());
                     if (!checkResponse.is_safe()) {
                         log.warn("Обнаружена и заблокирована потенциальная атака Prompt Injection. Запрос: '{}'. Обоснование AI: {}",
                                 query, formatReasoning(checkResponse.reasoning()));

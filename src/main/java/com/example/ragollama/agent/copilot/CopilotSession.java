@@ -1,7 +1,6 @@
 package com.example.ragollama.agent.copilot;
 
 import com.example.ragollama.agent.AgentContext;
-import com.example.ragollama.agent.AgentResult;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -25,12 +24,12 @@ public class CopilotSession implements Serializable {
     private final Map<String, Object> accumulatedContext = new HashMap<>();
 
     /**
-     * Последний результат работы агента, сохраненный для возможных
-     * последующих запросов на объяснение (XAI). Поле помечено как transient,
-     * чтобы избежать проблем с сериализацией в кэш.
+     * "Полезная нагрузка" (payload) последнего результата работы агента.
+     * Сохраняется для возможных последующих запросов на объяснение (XAI).
+     * Поле помечено как transient, чтобы избежать проблем с сериализацией сложных объектов.
      */
     @Setter
-    private transient AgentResult lastAgentResult;
+    private transient Map<String, Object> lastAgentResult;
 
     /**
      * Добавляет новое сообщение в историю диалога.

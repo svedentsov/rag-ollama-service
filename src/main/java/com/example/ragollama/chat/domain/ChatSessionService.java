@@ -1,7 +1,9 @@
 package com.example.ragollama.chat.domain;
 
-import com.example.ragollama.chat.domain.model.ChatMessage;
+import com.example.ragollama.chat.api.dto.ChatMessageDto;
 import com.example.ragollama.chat.domain.model.ChatSession;
+import com.example.ragollama.chat.domain.model.MessageRole;
+import com.example.ragollama.monitoring.domain.RagAuditLogRepository;
 import com.example.ragollama.shared.config.properties.AppProperties;
 import com.example.ragollama.shared.exception.AccessDeniedException;
 import com.example.ragollama.shared.exception.ResourceNotFoundException;
@@ -31,6 +33,7 @@ public class ChatSessionService {
 
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final RagAuditLogRepository ragAuditLogRepository;
     private final AppProperties appProperties;
     private final TaskLifecycleService taskLifecycleService;
 
@@ -115,9 +118,6 @@ public class ChatSessionService {
 
     /**
      * Удаляет сессию чата и все связанные с ней сообщения.
-     * <p>
-     * Перед удалением отменяет любую активную асинхронную задачу, связанную с этой сессией.
-     * Каскадное удаление сообщений делегировано базе данных через `ON DELETE CASCADE`.
      *
      * @param sessionId ID сессии для удаления.
      * @return {@link Mono}, завершающийся после удаления.
@@ -136,17 +136,13 @@ public class ChatSessionService {
     }
 
     /**
-     * Получает историю сообщений для указанной сессии после проверки прав доступа.
-     * <p>
-     * Этот метод сначала проверяет, существует ли сессия и принадлежит ли она
-     * пользователю, и только затем запрашивает сообщения. Если сообщений нет,
-     * он корректно возвращает пустой поток, а не ошибку.
+     * Получает историю сообщений для указанной сессии, обогащая RAG-ответами.
      *
      * @param sessionId ID сессии.
-     * @return {@link Flux} сообщений, отсортированных от старых к новым.
+     * @return {@link Flux} обогащенных DTO сообщений.
      */
     @Transactional(readOnly = true)
-    public Flux<ChatMessage> getMessagesForSession(UUID sessionId) {
+    public Flux<ChatMessageDto> getMessagesForSession(UUID sessionId) {
         return findAndVerifyOwnership(sessionId)
                 .thenMany(Flux.defer(() -> {
                     int historySize = appProperties.chat().history().maxMessages();
@@ -156,17 +152,24 @@ public class ChatSessionService {
                                 java.util.Collections.reverse(list); // findRecentMessages возвращает в DESC порядке
                                 return Flux.fromIterable(list);
                             });
-                }));
+                }))
+                .flatMap(message -> {
+                    // Если это сообщение ассистента и у него есть taskId, пытаемся обогатить его
+                    if (message.getRole() == MessageRole.ASSISTANT && message.getTaskId() != null) {
+                        return ragAuditLogRepository.findByTaskId(message.getTaskId())
+                                .map(auditLog -> ChatMessageDto.fromEntityWithAudit(message, auditLog))
+                                .defaultIfEmpty(ChatMessageDto.fromEntity(message)); // Fallback, если аудит не найден
+                    }
+                    // Для пользовательских сообщений просто преобразуем в DTO
+                    return Mono.just(ChatMessageDto.fromEntity(message));
+                });
     }
 
     /**
      * Находит сессию по ID и проверяет, что она принадлежит текущему пользователю.
-     * <p>
-     * Является ключевым методом для обеспечения безопасности и изоляции данных.
      *
      * @param sessionId ID сессии.
-     * @return {@link Mono} с сущностью сессии, если проверка пройдена. В противном
-     * случае завершается ошибкой {@link ResourceNotFoundException} или {@link AccessDeniedException}.
+     * @return {@link Mono} с сущностью сессии.
      */
     public Mono<ChatSession> findAndVerifyOwnership(UUID sessionId) {
         return chatSessionRepository.findById(sessionId)
@@ -180,16 +183,7 @@ public class ChatSessionService {
                 });
     }
 
-    /**
-     * Возвращает имя текущего аутентифицированного пользователя.
-     * <p>
-     * ВАЖНО: В текущей реализации используется заглушка. В production-системе
-     * здесь должна быть интеграция с Spring Security для получения реального пользователя.
-     *
-     * @return Имя пользователя.
-     */
     private String getCurrentUsername() {
-        // TODO: Заменить на реальную логику аутентификации из Spring Security
         return "default-user";
     }
 }

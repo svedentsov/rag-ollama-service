@@ -69,8 +69,8 @@ public class TestVerifierAgent implements ToolAgent {
 
         String promptString = promptService.render("testVerifierPrompt", Map.of("testCode", testCode));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(this::parseLlmResponse)
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(validationResult -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,

@@ -1,7 +1,7 @@
 import { useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Message, UniversalStreamResponse } from '../types';
+import { Message, UniversalStreamResponse, ThinkingStep } from '../types';
 import { streamChatResponse } from '../api';
 import { useNotificationStore } from '../state/notificationStore';
 import { useSessionStore } from '../state/sessionStore';
@@ -16,98 +16,113 @@ export function useStreamManager() {
   const queryClient = useQueryClient();
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const { addNotification } = useNotificationStore();
-  const { addStreamingMessage, removeStreamingMessage } = useStreamingStore();
+  const { startStream: startStreamInStore, stopStream: stopStreamInStore, updateStreamState } = useStreamingStore();
 
   /**
-   * Обновляет кэш React Query на основе входящего события из потока.
-   * Эта функция выполняет "оптимистичное" обновление UI в реальном времени.
+   * Обновляет кэш React Query и глобальные сторы на основе входящего события из потока.
+   * @param {string} sessionId - ID сессии.
+   * @param {string} assistantMessageId - ID сообщения ассистента.
+   * @param {UniversalStreamResponse} event - Событие из потока.
    */
-  const updateQueryCache = useCallback((sessionId: string, assistantMessageId: string, event: UniversalStreamResponse) => {
-    const queryKey = ['messages', sessionId];
-    queryClient.setQueryData<Message[]>(queryKey, (oldData = []) =>
+  const processStreamEvent = useCallback((sessionId: string, assistantMessageId: string, event: UniversalStreamResponse) => {
+    queryClient.setQueryData<Message[]>(['messages', sessionId], (oldData = []) =>
       oldData.map(msg => {
         if (msg.id !== assistantMessageId) return msg;
+        const updatedMsg: Message = { ...msg };
 
-        const updatedMsg = { ...msg };
         switch (event.type) {
           case 'task_started':
             updatedMsg.taskId = event.taskId;
+            updateStreamState(assistantMessageId, { taskId: event.taskId });
+            break;
+          case 'status_update':
+            updateStreamState(assistantMessageId, { statusText: event.text });
+            break;
+          case 'thinking_thought':
+            const newStep: ThinkingStep = { name: event.stepName, status: event.status };
+            updateStreamState(assistantMessageId, {
+              statusText: event.status === 'RUNNING' ? `Выполняю: ${event.stepName}...` : null,
+              thinkingSteps: new Map([[event.stepName, newStep]])
+            });
             break;
           case 'content':
-            updatedMsg.text += event.text;
+            updateStreamState(assistantMessageId, { statusText: null, thinkingSteps: new Map() });
+            updatedMsg.text = (updatedMsg.text || '') + event.text;
             break;
           case 'sources':
             updatedMsg.sources = event.sources;
+            updatedMsg.queryFormationHistory = event.queryFormationHistory;
+            updatedMsg.finalPrompt = event.finalPrompt;
+            break;
+          case 'code':
+             updateStreamState(assistantMessageId, { statusText: null, thinkingSteps: new Map() });
+            updatedMsg.text = event.generatedCode;
+            updatedMsg.finalPrompt = event.finalPrompt;
             break;
           case 'error':
             updatedMsg.error = event.message;
             break;
           case 'done':
-            // Это событие от сервера сигнализирует о финализации.
             updatedMsg.isStreaming = false;
             break;
         }
         return updatedMsg;
       })
     );
-  }, [queryClient]);
+  }, [queryClient, updateStreamState]);
 
   /**
    * Запускает новый поток для генерации ответа.
-   * @param sessionId - ID сессии.
-   * @param query - Текст запроса пользователя.
-   * @param assistantMessageId - ID сообщения-плейсхолдера для ассистента.
+   * @param {string} sessionId - ID сессии.
+   * @param {string} query - Текст запроса пользователя.
+   * @param {string} assistantMessageId - ID сообщения-плейсхолдера для ассистента.
    */
   const startStream = useCallback(async (
     sessionId: string,
     query: string,
     assistantMessageId: string
   ) => {
-    addStreamingMessage(assistantMessageId);
+    startStreamInStore(assistantMessageId);
     const abortController = new AbortController();
     abortControllersRef.current.set(assistantMessageId, abortController);
 
     try {
       for await (const event of streamChatResponse(query, sessionId, abortController.signal)) {
-        updateQueryCache(sessionId, assistantMessageId, event);
+        processStreamEvent(sessionId, assistantMessageId, event);
       }
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
         toast.error((error as Error).message || 'Произошла неизвестная ошибка в потоке.');
-        updateQueryCache(sessionId, assistantMessageId, { type: 'error', message: (error as Error).message });
+        processStreamEvent(sessionId, assistantMessageId, { type: 'error', message: (error as Error).message });
       }
     } finally {
-      // КЛЮЧЕВОЙ БЛОК: выполняется при любом завершении потока (успех, ошибка, отмена).
-      // Он является единственным источником правды о завершении стрима.
-      // 1. Убираем UI-индикаторы стриминга
+      // Финальная очистка состояния
+      stopStreamInStore(assistantMessageId);
+      abortControllersRef.current.delete(assistantMessageId);
+
       queryClient.setQueryData<Message[]>(['messages', sessionId], (oldData = []) =>
         oldData.map(msg =>
           msg.id === assistantMessageId ? { ...msg, isStreaming: false } : msg
         )
       );
-      abortControllersRef.current.delete(assistantMessageId);
-      removeStreamingMessage(assistantMessageId);
-      // 2. Уведомляем пользователя, если ответ пришел в неактивный чат
+
       const currentSessionId = useSessionStore.getState().currentSessionId;
       if (sessionId !== currentSessionId) {
         addNotification(sessionId);
       }
-      // 3. Инвалидируем кэши, чтобы заставить UI синхронизироваться с бэкендом.
-      // Это гарантирует, что даже после прерывания потока и перезагрузки страницы
-      // пользователь увидит сохраненный частичный ответ.
       await queryClient.invalidateQueries({ queryKey: ['chatSessions'] });
       await queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
     }
-  }, [queryClient, updateQueryCache, addNotification, addStreamingMessage, removeStreamingMessage]);
+  }, [processStreamEvent, addNotification, startStreamInStore, stopStreamInStore, queryClient]);
 
   /**
    * Инициирует остановку генерации ответа для конкретного сообщения.
-   * @param assistantMessageId - ID сообщения ассистента, генерацию которого нужно остановить.
+   * @param {string} assistantMessageId - ID сообщения ассистента, генерацию которого нужно остановить.
    */
   const stopStream = useCallback((assistantMessageId: string) => {
     const controller = abortControllersRef.current.get(assistantMessageId);
     if (controller) {
-      controller.abort(); // Отправляем сигнал отмены
+      controller.abort();
       toast.success('Генерация ответа остановлена.');
     }
   }, []);

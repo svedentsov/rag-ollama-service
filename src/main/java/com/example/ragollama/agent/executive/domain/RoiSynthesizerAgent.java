@@ -59,8 +59,7 @@ public class RoiSynthesizerAgent implements ToolAgent {
     public boolean canHandle(AgentContext context) {
         return context.payload().containsKey("cloudCosts") &&
                 context.payload().containsKey("llmCosts") &&
-                context.payload().containsKey("jiraMetrics") &&
-                context.payload().containsKey("productAnalytics");
+                context.payload().containsKey("jiraMetrics");
     }
 
     /**
@@ -74,14 +73,16 @@ public class RoiSynthesizerAgent implements ToolAgent {
         financialInputs.put("cloudCosts", context.payload().get("cloudCosts"));
         financialInputs.put("llmCosts", context.payload().get("llmCosts"));
         financialInputs.put("jiraEffort", context.payload().get("jiraMetrics"));
-        financialInputs.put("productAnalytics", context.payload().get("productAnalytics"));
+        if (context.payload().containsKey("productAnalytics")) {
+            financialInputs.put("productAnalytics", context.payload().get("productAnalytics"));
+        }
 
         try {
             String inputsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(financialInputs);
             String promptString = promptService.render("roiSynthesizer", Map.of("financial_data_json", inputsJson));
 
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(this::parseLlmResponse)
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                    .map(tuple -> parseLlmResponse(tuple.getT1()))
                     .map(report -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,

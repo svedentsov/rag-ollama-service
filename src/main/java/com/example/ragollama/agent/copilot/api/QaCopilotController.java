@@ -35,8 +35,7 @@ public class QaCopilotController {
      */
     @PostMapping("/chat")
     @Operation(summary = "Отправить сообщение в чат с QA Copilot",
-            description = "Продолжает существующий диалог или начинает новый. " +
-                    "Копайлот сохраняет контекст между сообщениями.")
+            description = "Продолжает существующий диалог или начинает новый. Копайлот сохраняет контекст между сообщениями.")
     public Mono<CopilotResponse> chatWithCopilot(@Valid @RequestBody CopilotRequest request) {
         return qaCopilotService.processUserMessage(request);
     }

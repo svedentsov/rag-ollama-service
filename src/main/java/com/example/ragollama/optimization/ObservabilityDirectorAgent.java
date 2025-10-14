@@ -70,8 +70,8 @@ public class ObservabilityDirectorAgent implements ToolAgent {
             String traceJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(traceData);
             String promptString = promptService.render("observabilityDirectorPrompt", Map.of("trace_json", traceJson));
 
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(this::parseLlmResponse)
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                    .map(tuple -> parseLlmResponse(tuple.getT1()))
                     .map(report -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,

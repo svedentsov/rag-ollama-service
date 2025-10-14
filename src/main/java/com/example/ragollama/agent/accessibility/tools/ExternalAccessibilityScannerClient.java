@@ -1,67 +1,95 @@
 package com.example.ragollama.agent.accessibility.tools;
 
 import com.example.ragollama.agent.accessibility.model.AccessibilityViolation;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.retry.annotation.Retry;
-import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
-import lombok.RequiredArgsConstructor;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.reactor.circuitbreaker.operator.CircuitBreakerOperator;
+import io.github.resilience4j.reactor.retry.RetryOperator;
+import io.github.resilience4j.reactor.timelimiter.TimeLimiterOperator;
+import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryRegistry;
+import io.github.resilience4j.timelimiter.TimeLimiter;
+import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
- * Асинхронный клиент для взаимодействия с внешним микросервисом,
- * выполняющим сканирование доступности.
+ * Асинхронный, отказоустойчивый клиент для взаимодействия с внешним
+ * микросервисом, выполняющим сканирование доступности.
  * <p>
- * Этот класс инкапсулирует всю сетевую логику и защищен механизмами
- * отказоустойчивости (Retry, Circuit Breaker, Timeout) от Resilience4j.
- * ВАЖНО: Текущая реализация является **mock-заглушкой** для демонстрации
- * архитектурного паттерна.
+ * Эталонная реализация, демонстрирующая интеграцию с внешним API
+ * в реактивном стеке с использованием {@link WebClient} и Resilience4j.
+ * Все вызовы защищены паттернами Retry, Circuit Breaker и Timeout.
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ExternalAccessibilityScannerClient {
 
-    private final WebClient.Builder webClientBuilder;
+    private final WebClient webClient;
+    private final CircuitBreaker circuitBreaker;
+    private final Retry retry;
+    private final TimeLimiter timeLimiter;
 
-    @Value("${app.integrations.accessibility-scanner.base-url:http://localhost:8081}")
-    private String scannerBaseUrl;
+    private static final String RESILIENCE_CONFIG_NAME = "accessibilityScanner";
+
+    /**
+     * Конструктор для внедрения зависимостей.
+     *
+     * @param webClientBuilder       Глобальный строитель WebClient.
+     * @param scannerBaseUrl         URL внешнего сервиса из application.yml.
+     * @param circuitBreakerRegistry Реестр Circuit Breaker'ов.
+     * @param retryRegistry          Реестр Retry.
+     * @param timeLimiterRegistry    Реестр Time Limiter'ов.
+     */
+    public ExternalAccessibilityScannerClient(
+            WebClient.Builder webClientBuilder,
+            @Value("${app.integrations.accessibility-scanner.base-url:http://localhost:8081}") String scannerBaseUrl,
+            CircuitBreakerRegistry circuitBreakerRegistry,
+            RetryRegistry retryRegistry,
+            TimeLimiterRegistry timeLimiterRegistry) {
+        this.webClient = webClientBuilder.baseUrl(scannerBaseUrl).build();
+        this.circuitBreaker = circuitBreakerRegistry.circuitBreaker(RESILIENCE_CONFIG_NAME);
+        this.retry = retryRegistry.retry(RESILIENCE_CONFIG_NAME);
+        this.timeLimiter = timeLimiterRegistry.timeLimiter(RESILIENCE_CONFIG_NAME);
+    }
 
     /**
      * Асинхронно отправляет HTML-контент на анализ во внешний сервис.
      * <p>
-     * В реальном приложении здесь был бы вызов WebClient, как показано в закомментированном коде.
-     * Для демонстрации используется `Mono.fromCallable` с задержкой, чтобы
-     * симулировать асинхронную сетевую операцию.
+     * Вызов оборачивается в операторы Resilience4j для обеспечения
+     * отказоустойчивости. В случае ошибки после всех попыток или при
+     * разомкнутом Circuit Breaker, возвращается пустой список нарушений,
+     * что позволяет конвейеру продолжить работу в деградированном режиме.
      *
      * @param htmlContent HTML-код для анализа.
      * @return {@link Mono}, который по завершении будет содержать список
-     * обнаруженных нарушений.
+     * обнаруженных нарушений или пустой список в случае сбоя.
      */
-    @CircuitBreaker(name = "accessibilityScanner")
-    @Retry(name = "accessibilityScanner")
-    @TimeLimiter(name = "accessibilityScanner")
     public Mono<List<AccessibilityViolation>> scan(String htmlContent) {
         log.info("Отправка запроса на асинхронное сканирование доступности...");
-        // ======================= MOCK IMPLEMENTATION =======================
-        return Mono.fromCallable(() -> {
-                    // Симуляция работы
-                    if (htmlContent != null && htmlContent.contains("<img") && !htmlContent.contains("alt=")) {
-                        return List.of(
-                                new AccessibilityViolation(
-                                        "image-alt", "critical", "Images must have alternate text",
-                                        "https://dequeuniversity.com/rules/axe/4.4/image-alt", List.of("img[src=\"logo.png\"]")
-                                )
-                        );
-                    }
-                    return List.<AccessibilityViolation>of();
-                })
-                .delayElement(Duration.ofMillis(150)); // Симуляция сетевой задержки
+
+        Mono<List<AccessibilityViolation>> requestMono = webClient.post()
+                .uri("/api/v1/scan")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("htmlContent", htmlContent))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<List<AccessibilityViolation>>() {
+                });
+
+        return requestMono
+                .transformDeferred(RetryOperator.of(retry))
+                .transformDeferred(TimeLimiterOperator.of(timeLimiter))
+                .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
+                .doOnError(e -> log.error("Ошибка при вызове сканера доступности после всех попыток.", e))
+                .onErrorReturn(Collections.emptyList()); // Fallback: возвращаем пустой список
     }
 }

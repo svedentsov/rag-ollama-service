@@ -68,7 +68,7 @@ public class FeedbackToTestAgent implements ToolAgent {
                             "retrieved_docs", feedbackContext.retrievedDocumentIds()
                     ));
                     return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
-                            .map(llmResponse -> createGoldenRecord(llmResponse, feedbackContext));
+                            .map(tuple -> createGoldenRecord(tuple.getT1(), feedbackContext));
                 });
     }
 

@@ -23,9 +23,6 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 import java.util.Map;
 
-/**
- * AI-агент, который оркестрирует принятие решений по канареечным развертываниям.
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -65,7 +62,7 @@ public class CanaryDecisionOrchestratorAgent implements ToolAgent {
             ));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
-                    .map(this::parsePlan)
+                    .map(tuple -> parsePlan(tuple.getT1()))
                     .flatMap(plan -> {
                         log.info("Запуск сгенерированного Canary-плана с {} шагами.", plan.size());
                         return executionService.executePlan(plan, new AgentContext(Map.of()), null)

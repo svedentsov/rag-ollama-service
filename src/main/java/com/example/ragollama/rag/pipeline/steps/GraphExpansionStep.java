@@ -24,6 +24,13 @@ public class GraphExpansionStep implements RagPipelineStep {
     private final GraphContextExpanderService expanderService;
     private final TaskLifecycleService taskLifecycleService;
 
+    /**
+     * Конструктор для внедрения зависимостей.
+     *
+     * @param expanderService      Сервис для расширения контекста.
+     * @param appProperties        Конфигурация приложения.
+     * @param taskLifecycleService Сервис для управления задачами.
+     */
     public GraphExpansionStep(GraphContextExpanderService expanderService, AppProperties appProperties, TaskLifecycleService taskLifecycleService) {
         this.expanderService = expanderService;
         this.taskLifecycleService = taskLifecycleService;

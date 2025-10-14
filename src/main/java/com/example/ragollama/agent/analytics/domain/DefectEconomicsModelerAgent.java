@@ -78,12 +78,12 @@ public class DefectEconomicsModelerAgent implements ToolAgent {
                     try {
                         String dossierJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(dossier);
                         String promptString = promptService.render("defectEconomicsPrompt", Map.of("dossierJson", dossierJson));
-                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
+                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true);
                     } catch (JsonProcessingException e) {
                         return Mono.error(new ProcessingException("Ошибка сериализации досье дефекта", e));
                     }
                 })
-                .map(this::parseLlmResponse)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(assessment -> {
                     double remediationCost = costService.calculateRemediationCost(assessment.estimatedDevHoursToFix());
                     double inactionCost = costService.calculateInactionCost(assessment.estimatedSupportTicketsPerMonth());

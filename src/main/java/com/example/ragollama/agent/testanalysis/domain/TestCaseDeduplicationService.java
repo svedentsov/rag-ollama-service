@@ -86,8 +86,8 @@ public class TestCaseDeduplicationService {
                 "test_case_B", candidate.getText()
         ));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(this::parseLlmResponse)
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .flatMap(verification -> {
                     if (verification.isDuplicate()) {
                         Float similarity = candidate.getMetadata().containsKey("distance")

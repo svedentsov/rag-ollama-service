@@ -34,7 +34,7 @@ public class MultiQueryGeneratorAgent implements QueryEnhancementAgent {
         Prompt prompt = new Prompt(promptString);
 
         return llmClient.callChat(prompt, ModelCapability.FASTEST)
-                .map(this::parseToList)
+                .map(tuple -> parseToList(tuple.getT1()))
                 .map(generatedQueries -> {
                     List<String> uniqueGenerated = generatedQueries.stream()
                             .filter(q -> !q.equalsIgnoreCase(originalQuery))

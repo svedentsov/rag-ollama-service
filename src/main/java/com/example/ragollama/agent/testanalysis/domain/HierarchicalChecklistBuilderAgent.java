@@ -58,8 +58,8 @@ public class HierarchicalChecklistBuilderAgent implements ToolAgent {
                 "analysis_results_json", analysisJson
         ));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(this::parseLlmResponse)
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(testPlan -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,

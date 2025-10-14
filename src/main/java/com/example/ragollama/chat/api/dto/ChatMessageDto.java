@@ -2,33 +2,47 @@ package com.example.ragollama.chat.api.dto;
 
 import com.example.ragollama.chat.domain.model.ChatMessage;
 import com.example.ragollama.chat.domain.model.MessageRole;
+import com.example.ragollama.monitoring.model.RagAuditLog;
+import com.example.ragollama.rag.domain.model.QueryFormationStep;
+import com.example.ragollama.rag.domain.model.SourceCitation;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
- * DTO для представления одного сообщения в чате.
- * Включает parentId для построения древовидной структуры на клиенте.
+ * DTO для представления одного сообщения в чате, обогащенного RAG-контекстом.
  *
- * @param id       ID сообщения.
- * @param parentId ID родительского сообщения (для ответов ассистента).
- * @param role     Роль отправителя.
- * @param content  Текст сообщения.
- * @param taskId   ID асинхронной задачи, сгенерировавшей это сообщение.
+ * @param id                    ID сообщения.
+ * @param parentId              ID родительского сообщения.
+ * @param role                  Роль отправителя.
+ * @param content               Текст сообщения.
+ * @param createdAt             Время создания.
+ * @param taskId                ID асинхронной задачи, сгенерировавшей это сообщение.
+ * @param sourceCitations       (Опционально) Источники для RAG-ответа.
+ * @param queryFormationHistory (Опционально) История трансформации запроса.
+ * @param finalPrompt           (Опционально) Финальный промпт, отправленный в LLM.
  */
-@Schema(description = "DTO для одного сообщения в чате")
+@Schema(description = "DTO для одного сообщения в чате с полным RAG-контекстом")
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record ChatMessageDto(
         UUID id,
         UUID parentId,
         MessageRole role,
         String content,
-        UUID taskId
+        OffsetDateTime createdAt,
+        UUID taskId,
+        List<SourceCitation> sourceCitations,
+        List<QueryFormationStep> queryFormationHistory,
+        String finalPrompt
 ) {
     /**
-     * Фабричный метод для преобразования сущности ChatMessage в DTO.
+     * Фабричный метод для преобразования базовой сущности ChatMessage в DTO.
      *
      * @param entity Сущность для преобразования.
-     * @return Новый экземпляр DTO.
+     * @return Новый экземпляр DTO без RAG-контекста.
      */
     public static ChatMessageDto fromEntity(ChatMessage entity) {
         return new ChatMessageDto(
@@ -36,7 +50,30 @@ public record ChatMessageDto(
                 entity.getParentId(),
                 entity.getRole(),
                 entity.getContent(),
-                entity.getTaskId()
+                entity.getCreatedAt(),
+                entity.getTaskId(),
+                null, null, null
+        );
+    }
+
+    /**
+     * Фабричный метод для создания обогащенного DTO из сообщения и аудиторской записи.
+     *
+     * @param message  Сущность сообщения.
+     * @param auditLog Запись из аудиторского журнала.
+     * @return Новый экземпляр DTO с полным RAG-контекстом.
+     */
+    public static ChatMessageDto fromEntityWithAudit(ChatMessage message, RagAuditLog auditLog) {
+        return new ChatMessageDto(
+                message.getId(),
+                message.getParentId(),
+                message.getRole(),
+                message.getContent(),
+                message.getCreatedAt(),
+                message.getTaskId(),
+                auditLog.getSourceCitations(),
+                auditLog.getQueryFormationHistory(),
+                auditLog.getFinalPrompt()
         );
     }
 }

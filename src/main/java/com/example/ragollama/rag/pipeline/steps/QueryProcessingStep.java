@@ -12,7 +12,11 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 /**
- * Шаг RAG-конвейера для предварительной обработки запроса, адаптированный для R2DBC.
+ * Шаг RAG-конвейера для предварительной обработки и улучшения запроса пользователя.
+ * <p>
+ * Этот шаг делегирует выполнение цепочки агентов по улучшению запроса
+ * (HyDE, Multi-Query, и т.д.) специализированному сервису {@link QueryProcessingPipeline}.
+ * Также информирует клиента о текущем статусе.
  */
 @Component
 @Order(10)
@@ -23,10 +27,14 @@ public class QueryProcessingStep implements RagPipelineStep {
     private final QueryProcessingPipeline queryProcessingPipeline;
     private final TaskLifecycleService taskLifecycleService;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
         log.info("Шаг [10] Query Processing: запуск обработки запроса '{}'", context.originalQuery());
 
+        // Асинхронно отправляем событие статуса клиенту, не блокируя основной поток
         taskLifecycleService.getActiveTaskForSession(context.sessionId())
                 .doOnNext(task -> taskLifecycleService.emitEvent(task.getId(), new UniversalResponse.StatusUpdate("Анализирую ваш вопрос...")))
                 .subscribe();

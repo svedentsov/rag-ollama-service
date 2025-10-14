@@ -1,10 +1,11 @@
 .notificationDot {
     width: 8px;
     height: 8px;
-    background-color: hsl(var(--destructive));
+    background-color: hsl(var(--primary)); /* Используем основной цвет для лучшей видимости */
     border-radius: 50%;
     flex-shrink: 0;
     margin-left: 0.5rem;
+    border: 1px solid hsl(var(--background));
 
     /* Анимация для привлечения внимания */
     animation: pulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
@@ -13,8 +14,10 @@
 @keyframes pulse {
     0%, 100% {
         opacity: 1;
+        transform: scale(1);
     }
     50% {
-        opacity: .5;
+        opacity: .7;
+        transform: scale(0.9);
     }
 }

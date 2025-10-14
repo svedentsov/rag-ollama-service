@@ -19,10 +19,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.Map;
 
-/**
- * Мета-агент, выступающий в роли "AI SRE", который диагностирует сбои
- * других агентов и пытается их исправить.
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -52,8 +48,8 @@ public class ErrorHandlerAgent implements ToolAgent {
     public Mono<AgentResult> execute(AgentContext context) {
         String promptString = promptService.render("errorHandlerPrompt", context.payload());
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(this::parseLlmResponse)
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(plan -> {
                     log.info("ErrorHandlerAgent сгенерировал план исправления: {}", plan.action());
                     return new AgentResult(

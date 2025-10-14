@@ -73,7 +73,8 @@ public class FederatedInsightsAgent implements QaAgent {
                         String promptString = promptService.render("federatedInsightsPrompt", Map.of("healthDataJson", summariesJson));
 
                         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                                .map(summary -> {
+                                .map(tuple -> {
+                                    String summary = tuple.getT1();
                                     FederatedReport report = new FederatedReport(summary, healthSummaries);
                                     return new AgentResult(
                                             getName(),

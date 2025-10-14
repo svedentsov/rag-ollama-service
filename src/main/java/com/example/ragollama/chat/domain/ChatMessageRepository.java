@@ -29,7 +29,7 @@ public interface ChatMessageRepository extends ReactiveCrudRepository<ChatMessag
      * @return Реактивный поток {@link Flux} с найденными сообщениями.
      */
     @ResilientDatabaseOperation
-    @Query("SELECT * FROM chat_messages WHERE session_id = :sessionId ORDER BY created_at DESC LIMIT :limit")
+    @Query("SELECT * FROM (SELECT * FROM chat_messages WHERE session_id = :sessionId ORDER BY created_at DESC LIMIT :limit) AS recent_messages ORDER BY created_at ASC")
     Flux<ChatMessage> findRecentMessages(UUID sessionId, int limit);
 
     /**

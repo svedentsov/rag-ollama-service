@@ -71,8 +71,8 @@ public class SprintPlannerAgent implements ToolAgent {
             String reportJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(bugPatternReport);
             String promptString = promptService.render("sprintPlannerPrompt", Map.of("bug_pattern_report_json", reportJson));
 
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(this::parseLlmResponse)
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                    .map(tuple -> parseLlmResponse(tuple.getT1()))
                     .map(plan -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,

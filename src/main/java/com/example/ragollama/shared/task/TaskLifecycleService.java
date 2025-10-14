@@ -22,6 +22,9 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Сервис-реестр для управления жизненным циклом асинхронных, отменяемых задач.
+ * <p>
+ * Хранит в памяти активные задачи и связанные с ними потоки событий (Sinks),
+ * позволяя асинхронным компонентам отправлять обновления статуса клиенту.
  */
 @Slf4j
 @Service
@@ -30,6 +33,9 @@ public class TaskLifecycleService {
 
     private final AsyncTaskRepository taskRepository;
 
+    /**
+     * Внутренний record для хранения активной задачи и ее потока событий.
+     */
     @Getter
     private static class TaskRecord {
         private final CompletableFuture<?> future;
@@ -41,6 +47,10 @@ public class TaskLifecycleService {
         }
     }
 
+    /**
+     * In-memory кэш для хранения активных задач. Задачи автоматически удаляются
+     * через 30 минут неактивности для предотвращения утечек памяти.
+     */
     private final Cache<UUID, TaskRecord> runningTasks = CacheBuilder.newBuilder()
             .expireAfterWrite(Duration.ofMinutes(30))
             .build();
@@ -65,6 +75,7 @@ public class TaskLifecycleService {
                     final TaskRecord taskRecord = new TaskRecord(taskFuture);
                     runningTasks.put(taskId, taskRecord);
 
+                    // Устанавливаем колбэк на завершение Future для обновления статуса в БД
                     taskFuture.whenComplete((result, throwable) ->
                             updateTaskStatusOnCompletion(taskId, throwable).subscribe()
                     );
@@ -131,26 +142,53 @@ public class TaskLifecycleService {
                 }).then();
     }
 
+    /**
+     * Получает статус задачи из базы данных.
+     *
+     * @param taskId ID задачи.
+     * @return {@link Mono} со статусом задачи.
+     */
     @Transactional(readOnly = true)
     public Mono<TaskStatus> getStatus(UUID taskId) {
         return taskRepository.findById(taskId).map(AsyncTask::getStatus);
     }
 
+    /**
+     * Находит активную (в статусе RUNNING) задачу для указанной сессии.
+     *
+     * @param sessionId ID сессии.
+     * @return {@link Mono} с найденной задачей или пустой Mono.
+     */
     @Transactional(readOnly = true)
     public Mono<AsyncTask> getActiveTaskForSession(UUID sessionId) {
         return taskRepository.findBySessionIdAndStatus(sessionId, TaskStatus.RUNNING);
     }
 
+    /**
+     * Возвращает поток событий (Flux) для указанной задачи, если он существует.
+     *
+     * @param taskId ID задачи.
+     * @return Optional, содержащий {@link Flux} или пустой.
+     */
     public Optional<Flux<UniversalResponse>> getTaskStream(UUID taskId) {
         return Optional.ofNullable(runningTasks.getIfPresent(taskId))
                 .map(record -> record.getSink().asFlux());
     }
 
+    /**
+     * Отправляет событие в поток указанной задачи.
+     *
+     * @param taskId ID задачи.
+     * @param event  Событие для отправки.
+     */
     public void emitEvent(UUID taskId, UniversalResponse event) {
         Optional.ofNullable(runningTasks.getIfPresent(taskId))
                 .ifPresent(record -> record.getSink().tryEmitNext(event));
     }
 
+    /**
+     * "Разворачивает" CompletionException, чтобы получить исходную причину.
+     */
     private static Throwable unwrapCompletionException(Throwable t) {
         if (t == null) return null;
         return (t instanceof java.util.concurrent.CompletionException && t.getCause() != null) ? t.getCause() : t;

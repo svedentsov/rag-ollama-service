@@ -44,7 +44,7 @@ public class CodeGenerationService {
         Prompt prompt = new Prompt(promptString);
 
         return llmClient.callChat(prompt, ModelCapability.BALANCED)
-                .map(generatedCode -> new CodeGenerationResponse(generatedCode, "java"));
+                .map(tuple -> new CodeGenerationResponse(tuple.getT1(), "java", tuple.getT2().getContents()));
     }
 
     /**

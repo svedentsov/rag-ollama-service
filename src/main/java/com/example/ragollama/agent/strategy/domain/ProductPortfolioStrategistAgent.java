@@ -73,8 +73,8 @@ public class ProductPortfolioStrategistAgent implements ToolAgent {
             String inputsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(strategicInputs);
             String promptString = promptService.render("productPortfolioStrategist", Map.of("strategic_inputs_json", inputsJson));
 
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(this::parseLlmResponse)
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                    .map(tuple -> parseLlmResponse(tuple.getT1()))
                     .map(report -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,

@@ -1,14 +1,11 @@
 package com.example.ragollama.shared.config;
 
-import com.example.ragollama.agent.finops.domain.LlmUsageTracker;
-import com.example.ragollama.agent.finops.domain.QuotaService;
 import com.example.ragollama.rag.embedding.NormalizingEmbeddingModel;
 import com.example.ragollama.shared.config.properties.AppProperties;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.LlmGateway;
 import com.example.ragollama.shared.llm.LlmRouterService;
 import com.example.ragollama.shared.llm.ResilientLlmExecutor;
-import com.example.ragollama.shared.tokenization.TokenizationService;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
@@ -39,7 +36,6 @@ import java.util.concurrent.TimeUnit;
 @Configuration
 @RequiredArgsConstructor
 public class AiConfig {
-
     private final AppProperties appProperties;
 
     /**
@@ -95,30 +91,21 @@ public class AiConfig {
     /**
      * Создает и предоставляет наш кастомный фасад {@link LlmClient}.
      *
-     * @param llmGateway          Низкоуровневый шлюз.
-     * @param llmRouterService    Сервис-роутер.
-     * @param resilientExecutor   Декоратор отказоустойчивости.
-     * @param quotaService        Сервис квот.
-     * @param usageTracker        Сервис логирования.
-     * @param tokenizationService Сервис токенизации.
+     * @param llmGateway        Низкоуровневый шлюз.
+     * @param llmRouterService  Сервис-роутер.
+     * @param resilientExecutor Декоратор отказоустойчивости.
      * @return Полностью сконфигурированный {@link LlmClient}.
      */
     @Bean
     public LlmClient llmClient(
             LlmGateway llmGateway,
             LlmRouterService llmRouterService,
-            ResilientLlmExecutor resilientExecutor,
-            QuotaService quotaService,
-            LlmUsageTracker usageTracker,
-            TokenizationService tokenizationService
+            ResilientLlmExecutor resilientExecutor
     ) {
         return new LlmClient(
                 llmGateway,
                 llmRouterService,
-                resilientExecutor,
-                quotaService,
-                usageTracker,
-                tokenizationService
+                resilientExecutor
         );
     }
 }

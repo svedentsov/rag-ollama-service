@@ -77,8 +77,8 @@ public class BugReportSummarizerAgent implements ToolAgent {
 
         String promptString = promptService.render("bugReportSummarizerPrompt", Map.of("rawReport", rawReportText));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(this::parseLlmResponse)
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(summary -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,

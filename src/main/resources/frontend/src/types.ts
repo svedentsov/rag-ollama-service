@@ -1,4 +1,24 @@
 /**
+ * DTO для отчета об оценке доверия к RAG-ответу.
+ */
+export interface TrustScoreReport {
+  finalScore: number;
+  confidenceScore: number;
+  recencyScore: number;
+  authorityScore: number;
+  justification: string;
+}
+
+/**
+ * Представляет один шаг в процессе формирования запроса.
+ */
+export interface QueryFormationStep {
+  stepName: string;
+  description: string;
+  result: string | string[];
+}
+
+/**
  * Представляет одну цитату источника, использованного в RAG-ответе.
  */
 export interface SourceCitation {
@@ -7,6 +27,14 @@ export interface SourceCitation {
   chunkId: string;
   similarityScore?: number;
   metadata: Record<string, any>;
+}
+
+/**
+ * Представляет один шаг в процессе "мышления" AI.
+ */
+export interface ThinkingStep {
+    name: string;
+    status: 'RUNNING' | 'COMPLETED';
 }
 
 /**
@@ -19,7 +47,13 @@ export interface ServerMessageDto {
   parentId: string | null;
   role: 'USER' | 'ASSISTANT';
   content: string;
+  createdAt: string;
   taskId?: string;
+  // Опциональные поля, которые приходят только для RAG-ответов
+  sourceCitations?: SourceCitation[];
+  queryFormationHistory?: QueryFormationStep[];
+  finalPrompt?: string;
+  trustScoreReport?: TrustScoreReport;
 }
 
 /**
@@ -36,10 +70,18 @@ export interface Message {
   type: 'user' | 'assistant';
   /** Текстовое содержимое сообщения. */
   text: string;
+  /** Временная метка создания сообщения. */
+  createdAt: string;
   /** ID родительского (пользовательского) сообщения для ответов ассистента. */
   parentId?: string;
   /** Список источников, подтверждающих ответ ассистента. */
   sources?: SourceCitation[];
+  /** История трансформации исходного запроса. */
+  queryFormationHistory?: QueryFormationStep[];
+  /** Полный текст финального промпта, отправленного в LLM. */
+  finalPrompt?: string;
+  /** Отчет об оценке доверия к ответу. */
+  trustScoreReport?: TrustScoreReport;
   /** Текст ошибки, если она произошла при генерации. */
   error?: string;
   /** Флаг, указывающий, что сообщение находится в процессе генерации (стриминга). */
@@ -63,7 +105,9 @@ export interface ChatSession {
 export type UniversalStreamResponse =
   | { type: 'task_started'; taskId: string }
   | { type: 'status_update'; text: string }
+  | { type: 'thinking_thought'; stepName: string; status: 'RUNNING' | 'COMPLETED' }
   | { type: 'content'; text: string }
-  | { type: 'sources'; sources: SourceCitation[] }
+  | { type: 'sources'; sources: SourceCitation[], queryFormationHistory?: QueryFormationStep[], finalPrompt?: string }
+  | { type: 'code', generatedCode: string, language: string, finalPrompt?: string }
   | { type: 'done'; message: string }
   | { type: 'error'; message: string };

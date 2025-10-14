@@ -1,26 +1,28 @@
-import React from 'react';
+import React, { FC } from 'react';
 import { Search, X } from 'lucide-react';
 import styles from './SearchInput.module.css';
 
 /**
- * Пропсы для компонента SearchInput.
+ * @interface SearchInputProps
+ * @description Пропсы для компонента SearchInput.
  */
 interface SearchInputProps {
-  /** @param value - Текущее значение поля ввода. */
+  /** @param {string} value - Текущее значение поля ввода. */
   value: string;
-  /** @param onChange - Колбэк, вызываемый при изменении значения. */
+  /** @param {(newValue: string) => void} onChange - Колбэк, вызываемый при изменении значения. */
   onChange: (newValue: string) => void;
-  /** @param placeholder - Текст плейсхолдера. */
+  /** @param {string} placeholder - Текст плейсхолдера. */
   placeholder?: string;
-  /** @param ariaLabel - Aria-label для доступности. */
+  /** @param {string} ariaLabel - Aria-label для доступности. */
   ariaLabel?: string;
 }
 
 /**
  * Переиспользуемый компонент поля поиска с иконками и кнопкой очистки.
  * @param {SearchInputProps} props - Пропсы компонента.
+ * @returns {React.ReactElement} Отрендеренный компонент.
  */
-export const SearchInput: React.FC<SearchInputProps> = ({
+export const SearchInput: FC<SearchInputProps> = ({
   value,
   onChange,
   placeholder = "Поиск...",

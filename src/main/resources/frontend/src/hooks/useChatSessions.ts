@@ -7,6 +7,8 @@ const CHAT_SESSIONS_QUERY_KEY = ['chatSessions'];
 
 /**
  * Хук для управления сессиями чата.
+ * Инкапсулирует всю логику взаимодействия с API сессий и управления кэшем React Query.
+ * @returns {object} Объект с данными о сессиях и функциями-мутациями.
  */
 export function useChatSessions() {
     const queryClient = useQueryClient();
@@ -21,7 +23,7 @@ export function useChatSessions() {
         mutationFn: api.createNewChat,
         onSuccess: (newChat) => {
             queryClient.invalidateQueries({ queryKey: CHAT_SESSIONS_QUERY_KEY });
-            navigate(newChat.sessionId);
+            return newChat;
         },
     });
 
@@ -37,12 +39,23 @@ export function useChatSessions() {
 
     const renameChatMutation = useMutation({
         mutationFn: api.updateChatName,
-        onSuccess: (_, { sessionId, newName }) => {
-            queryClient.setQueryData<ChatSession[]>(CHAT_SESSIONS_QUERY_KEY, (oldData) =>
-                oldData?.map(session =>
+        onMutate: async ({ sessionId, newName }) => {
+            await queryClient.cancelQueries({ queryKey: CHAT_SESSIONS_QUERY_KEY });
+            const previousSessions = queryClient.getQueryData<ChatSession[]>(CHAT_SESSIONS_QUERY_KEY);
+            queryClient.setQueryData<ChatSession[]>(CHAT_SESSIONS_QUERY_KEY, (oldData = []) =>
+                oldData.map(session =>
                     session.sessionId === sessionId ? { ...session, chatName: newName } : session
-                ) ?? []
+                )
             );
+            return { previousSessions };
+        },
+        onError: (err, variables, context) => {
+            if (context?.previousSessions) {
+                queryClient.setQueryData(CHAT_SESSIONS_QUERY_KEY, context.previousSessions);
+            }
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: CHAT_SESSIONS_QUERY_KEY });
         },
     });
 
@@ -54,7 +67,7 @@ export function useChatSessions() {
         onMutate: async ({ sessionId, parentId, childId }) => {
             await queryClient.cancelQueries({ queryKey: CHAT_SESSIONS_QUERY_KEY });
             const previousSessions = queryClient.getQueryData<ChatSession[]>(CHAT_SESSIONS_QUERY_KEY);
-            
+
             queryClient.setQueryData<ChatSession[]>(CHAT_SESSIONS_QUERY_KEY, (oldData = []) =>
                 oldData.map(session => {
                     if (session.sessionId === sessionId) {

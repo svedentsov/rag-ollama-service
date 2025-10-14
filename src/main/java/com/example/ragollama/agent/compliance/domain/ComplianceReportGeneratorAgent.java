@@ -75,11 +75,11 @@ public class ComplianceReportGeneratorAgent implements ToolAgent {
             String promptString = promptService.render("complianceReportGeneratorPrompt", Map.of("evidence_json", evidenceJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(markdownReport -> new AgentResult(
+                    .map(tuple -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,
                             "Отчет о соответствии для аудита успешно сгенерирован.",
-                            Map.of("complianceReportMarkdown", markdownReport)
+                            Map.of("complianceReportMarkdown", tuple.getT1())
                     ));
         } catch (JsonProcessingException e) {
             return Mono.error(new ProcessingException("Ошибка сериализации доказательств для отчета", e));

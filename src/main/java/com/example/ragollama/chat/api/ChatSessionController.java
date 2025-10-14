@@ -104,7 +104,6 @@ public class ChatSessionController {
     @GetMapping("/{sessionId}/messages")
     @Operation(summary = "Получить историю сообщений для сессии")
     public Flux<ChatMessageDto> getChatMessages(@PathVariable UUID sessionId) {
-        return chatSessionService.getMessagesForSession(sessionId)
-                .map(ChatMessageDto::fromEntity);
+        return chatSessionService.getMessagesForSession(sessionId);
     }
 }

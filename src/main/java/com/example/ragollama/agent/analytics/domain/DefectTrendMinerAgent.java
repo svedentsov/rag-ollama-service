@@ -131,8 +131,9 @@ public class DefectTrendMinerAgent implements ToolAgent {
 
         String promptString = promptService.render("defectTrendAnalyzerPrompt", Map.of("defectsText", defectsText));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(summaryJson -> {
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                .map(tuple -> {
+                    String summaryJson = tuple.getT1();
                     try {
                         String extractedJson = jsonExtractorUtil.extractJsonBlock(summaryJson);
                         Map<String, String> summaryMap = objectMapper.readValue(extractedJson, new TypeReference<>() {

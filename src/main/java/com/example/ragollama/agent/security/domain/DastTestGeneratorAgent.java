@@ -67,6 +67,7 @@ public class DastTestGeneratorAgent implements ToolAgent {
 
     private Mono<String> generateNegativeTestsForController(String filePath, String code) {
         String promptString = promptService.render("dastTestGeneratorPrompt", Map.of("filePath", filePath, "code", code));
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
+                .map(tuple -> tuple.getT1());
     }
 }

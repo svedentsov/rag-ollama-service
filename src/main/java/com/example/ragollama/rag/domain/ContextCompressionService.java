@@ -55,7 +55,7 @@ public class ContextCompressionService {
         ));
         Prompt prompt = new Prompt(promptString);
         return llmClient.callChat(prompt, ModelCapability.FASTEST)
-                .map(compressedText -> new Document(compressedText, document.getMetadata()))
+                .map(tuple -> new Document(tuple.getT1(), document.getMetadata()))
                 .doOnSuccess(doc -> log.trace("Документ {} успешно сжат.", doc.getId()));
     }
 }

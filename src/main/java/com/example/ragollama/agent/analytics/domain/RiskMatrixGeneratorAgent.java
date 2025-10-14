@@ -91,7 +91,8 @@ public class RiskMatrixGeneratorAgent implements ToolAgent {
         try {
             String itemsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(items);
             String promptString = promptService.render("riskMatrixSummaryPrompt", Map.of("matrixItemsJson", itemsJson));
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
+                    .map(tuple -> tuple.getT1());
         } catch (JsonProcessingException e) {
             return Mono.error(new ProcessingException("Ошибка сериализации элементов матрицы риска", e));
         }

@@ -6,6 +6,8 @@ import com.example.ragollama.agent.QaAgent;
 import com.example.ragollama.agent.registry.ToolRegistryService;
 import com.example.ragollama.optimization.ErrorHandlerAgent;
 import com.example.ragollama.optimization.model.RemediationPlan;
+import com.example.ragollama.orchestration.dto.UniversalResponse;
+import com.example.ragollama.shared.task.TaskLifecycleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -27,6 +29,7 @@ public class DynamicPipelineExecutionService {
     private final ObjectProvider<ToolRegistryService> toolRegistryProvider;
     private final ExecutionStateRepository executionStateRepository;
     private final ErrorHandlerAgent errorHandlerAgent;
+    private final TaskLifecycleService taskLifecycleService;
     private static final int MAX_RECOVERY_ATTEMPTS = 2;
 
     /**
@@ -112,7 +115,7 @@ public class DynamicPipelineExecutionService {
             });
         }
 
-        return executeStep(currentStep, new AgentContext(state.getAccumulatedContext()), toolRegistry)
+        return executeStep(currentStep, new AgentContext(state.getAccumulatedContext()), toolRegistry, state.getSessionId())
                 .flatMap(result -> {
                     accumulatedResults.add(result);
                     state.getAccumulatedContext().putAll(result.details());
@@ -158,15 +161,27 @@ public class DynamicPipelineExecutionService {
                 });
     }
 
-    private Mono<AgentResult> executeStep(PlanStep step, AgentContext currentContext, ToolRegistryService toolRegistry) {
+    private Mono<AgentResult> executeStep(PlanStep step, AgentContext currentContext, ToolRegistryService toolRegistry, UUID sessionId) {
         Map<String, Object> stepPayload = new HashMap<>(currentContext.payload());
         stepPayload.putAll(step.arguments());
         AgentContext stepContext = new AgentContext(stepPayload);
-
         log.debug("Выполнение шага: агент '{}' с контекстом: {}", step.agentName(), stepPayload);
         QaAgent agent = toolRegistry.getAgent(step.agentName())
                 .orElseThrow(() -> new IllegalArgumentException("Агент '" + step.agentName() + "' не найден."));
-
-        return agent.execute(stepContext);
+        // Эмитируем событие о начале выполнения шага
+        taskLifecycleService.getActiveTaskForSession(sessionId)
+                .doOnNext(task -> taskLifecycleService.emitEvent(
+                        task.getId(),
+                        new UniversalResponse.ThinkingThought(step.agentName(), UniversalResponse.ThoughtStatus.RUNNING))
+                ).subscribe();
+        return agent.execute(stepContext)
+                .doOnSuccess(result -> {
+                    // Эмитируем событие об успешном завершении шага
+                    taskLifecycleService.getActiveTaskForSession(sessionId)
+                            .doOnNext(task -> taskLifecycleService.emitEvent(
+                                    task.getId(),
+                                    new UniversalResponse.ThinkingThought(step.agentName(), UniversalResponse.ThoughtStatus.COMPLETED))
+                            ).subscribe();
+                });
     }
 }

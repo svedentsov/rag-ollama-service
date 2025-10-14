@@ -14,6 +14,7 @@
 .assistant {
     justify-content: flex-start;
     margin-right: auto;
+    max-width: 100%;
 }
 
 .contentWrapper {
@@ -35,6 +36,8 @@
 .messageWrapper:not(.isEditing).assistant .contentWrapper {
     align-self: flex-start;
     align-items: flex-start;
+    width: 100%;
+    max-width: 100%;
 }
 
 
@@ -60,9 +63,9 @@
 .assistantBubble {
     background-color: transparent;
     color: hsl(var(--foreground));
-    border-radius: 0;
     border: none;
-    padding: 0 0 0 0;
+    padding: 0;
+    width: 100%;
 }
 
 .isError {
@@ -70,16 +73,7 @@
     border: 1px solid hsl(var(--destructive));
     color: hsl(var(--destructive));
     padding: 0.75rem 1rem;
-}
-
-.thinkingBubble {
-    padding: 0.75rem 1rem;
-    border-radius: 1rem 1rem 1rem 0.25rem;
-    background-color: hsl(var(--secondary));
-    display: flex;
-    align-items: center;
-    height: 2.5rem;
-    box-sizing: border-box;
+    border-radius: var(--radius);
 }
 
 .dotFlashing {
@@ -151,31 +145,36 @@
 .markdownTable thead th { font-weight: 600; background-color: hsl(var(--muted)); }
 .markdownTable tbody tr:nth-of-type(odd) { background-color: hsl(var(--accent)); }
 
+.messageMetaContainer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* --- ИЗМЕНЕНО --- */
+    width: 100%;
+    margin-top: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+    min-height: 32px;
+}
+
+/* --- НОВОЕ ПРАВИЛО --- */
+.user .messageMetaContainer {
+    justify-content: flex-end;
+}
+
+.messageWrapper:hover .messageMetaContainer,
+.messageWrapper:focus-within .messageMetaContainer {
+    opacity: 1;
+}
+
+.metaVisible {
+    opacity: 1;
+}
+
 .messageActions {
     display: flex;
     align-items: center;
     gap: 0;
-    margin-top: 0.5rem;
-    opacity: 0;
-    transition: opacity 0.2s ease-in-out;
-    width: auto;
-    box-sizing: border-box;
-}
-
-.user .messageActions {
-    justify-content: flex-end;
-}
-.assistant .messageActions {
-    justify-content: flex-start;
-}
-
-.messageWrapper:hover .messageActions,
-.messageWrapper:focus-within .messageActions {
-    opacity: 1;
-}
-
-.actionsVisible {
-    opacity: 1;
+    flex-shrink: 0;
 }
 
 .actionButton {

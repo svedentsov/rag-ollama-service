@@ -74,6 +74,29 @@ services:
     networks:
       - rag-net
 
+  # Инициализатор моделей для Ollama.
+  # Этот "одноразовый" контейнер запускается, выполняет скрипт и завершается.
+  ollama-init:
+    image: bash:latest
+    container_name: rag-ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    command: >
+      /bin/sh -c "
+        echo 'Waiting for Ollama to be fully ready...' && sleep 5;
+        echo 'Pulling llama3 model...';
+        curl http://ollama:11434/api/pull -d '{\"name\": \"llama3\"}';
+        echo 'Pulling phi3 model...';
+        curl http://ollama:11434/api/pull -d '{\"name\": \"phi3\"}';
+        echo 'Pulling mxbai-embed-large model...';
+        curl http://ollama:11434/api/pull -d '{\"name\": \"mxbai-embed-large\"}';
+        echo 'Model initialization complete.';
+      "
+    restart: on-failure
+    networks:
+      - rag-net
+
   # Графовая база данных Neo4j
   neo4j:
     image: neo4j:5
@@ -87,9 +110,9 @@ services:
       - NEO4J_AUTH=neo4j/password
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "wget -O /dev/null --post-data='{}' --header='Content-Type:application/json' --header='Authorization: Basic bmVvNGo6cGFzc3dvcmQ=' http://localhost:7474/db/data/transaction/commit' || exit 1" ]
+      test: ["CMD-SHELL", "echo 'RETURN 1' | /var/lib/neo4j/bin/cypher-shell -u neo4j -p password --format plain"]
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 5
       start_period: 20s
     networks:

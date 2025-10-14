@@ -72,9 +72,9 @@ public class BugDuplicateDetectorAgent implements ToolAgent {
                             "draft_report", draftReport,
                             "context_bugs", contextBugs
                     ));
-                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
+                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true);
                 })
-                .map(duplicateAnalysisParser::parse)
+                .map(tuple -> duplicateAnalysisParser.parse(tuple.getT1()))
                 .map(this::buildAgentResult);
     }
 

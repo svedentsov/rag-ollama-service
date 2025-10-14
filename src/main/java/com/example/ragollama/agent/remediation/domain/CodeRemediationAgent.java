@@ -66,9 +66,9 @@ public class CodeRemediationAgent implements ToolAgent {
                             "problemSnippet", codeSnippet != null ? codeSnippet : "N/A"
                     ));
                     Prompt prompt = new Prompt(new UserMessage(promptString));
-                    return llmClient.callChat(prompt, ModelCapability.BALANCED);
+                    return llmClient.callChat(prompt, ModelCapability.BALANCED, true);
                 })
-                .map(this::parseLlmResponse)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(patch -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,

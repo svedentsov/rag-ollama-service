@@ -16,8 +16,8 @@ import java.util.stream.Stream;
 
 /**
  * Универсальный сервис-оркестратор, полностью переведенный на Project Reactor.
- *
- * <p>Эталонная реализация, следующая принципам Clean Architecture и потокобезопасности.
+ * <p>
+ * Эталонная реализация, следующая принципам Clean Architecture и потокобезопасности.
  * Оркестратор реализует модель "Staged Execution" (поэтапное выполнение) в реактивном стиле:
  * <ul>
  *     <li>Агенты внутри одного этапа выполняются <b>параллельно</b>.</li>
@@ -106,22 +106,36 @@ public class AgentOrchestratorService {
         if (pipelines.containsKey(name)) {
             return invokePipeline(pipelines.get(name), initialContext);
         } else if (singleAgents.containsKey(name)) {
-            return invokeSingleAgent(singleAgents.get(name), initialContext);
+            return invokeSingle(name, initialContext).map(List::of);
         }
         log.error("Попытка вызова несуществующего компонента: '{}'.", name);
         return Mono.error(new ProcessingException("Компонент (конвейер или агент) с именем '" + name + "' не найден."));
     }
 
     /**
-     * Запускает одиночного агента и обертывает его результат в список.
+     * Асинхронно запускает одиночного агента по его имени.
+     * <p>
+     * Этот метод предоставляет строго типизированный и безопасный способ
+     * для вызова атомарных операций, возвращая {@code Mono<AgentResult>}.
+     * Он гарантирует, что вызываемый компонент является именно одиночным агентом,
+     * а не конвейером.
      *
-     * @param agent   Агент для запуска.
-     * @param context Контекст для выполнения.
-     * @return {@link Mono} со списком, содержащим один результат работы агента.
+     * @param agentName Имя одиночного агента.
+     * @param context   Контекст для выполнения.
+     * @return {@link Mono} с результатом работы одного агента.
+     * @throws ProcessingException если агент не найден или имя принадлежит конвейеру.
      */
-    private Mono<List<AgentResult>> invokeSingleAgent(QaAgent agent, AgentContext context) {
+    public Mono<AgentResult> invokeSingle(String agentName, AgentContext context) {
+        QaAgent agent = singleAgents.get(agentName);
+        if (agent == null) {
+            log.error("Одиночный агент с именем '{}' не найден. Доступные агенты: {}", agentName, singleAgents.keySet());
+            return Mono.error(new ProcessingException("Одиночный агент с именем '" + agentName + "' не найден."));
+        }
+        if (pipelines.containsKey(agentName)) {
+            return Mono.error(new ProcessingException("Компонент с именем '" + agentName + "' является конвейером. Используйте метод invoke()."));
+        }
         log.info("Запуск одиночного агента '{}'.", agent.getName());
-        return agent.execute(context).map(List::of);
+        return agent.execute(context);
     }
 
     /**

@@ -1,12 +1,12 @@
 .codeBlockWrapper {
-    margin: 0;
+    margin: 1rem 0;
     position: relative;
     border-radius: var(--radius);
     border: 1px solid hsl(var(--border));
     overflow: hidden;
-    background-color: #2b2b2b;
+    background-color: #2b2b2b; /* Фоновый цвет для подсветки */
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-    transition: none;
+    transition: none; /* Убираем лишние transition */
 }
 
 .codeHeader {
@@ -14,8 +14,8 @@
     justify-content: space-between;
     align-items: center;
     padding: 0.5rem 0.75rem;
-    background-color: #3C3F41;
-    color: #bababa;
+    background-color: #3C3F41; /* Более темный заголовок */
+    color: #bababa; /* Светлый текст */
     font-family: var(--font-family-sans);
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-semibold);

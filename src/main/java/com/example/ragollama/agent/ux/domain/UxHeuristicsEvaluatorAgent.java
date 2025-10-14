@@ -54,8 +54,8 @@ public class UxHeuristicsEvaluatorAgent implements ToolAgent {
 
         String promptString = promptService.render("uxHeuristicsEvaluatorPrompt", Map.of("html_content", htmlContent));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(this::parseLlmResponse)
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(report -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,

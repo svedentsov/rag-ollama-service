@@ -53,7 +53,7 @@ public class HybridRetrievalStrategy {
             @Nullable Filter.Expression businessFilter) {
 
         if (processedQueries == null || processedQueries.primaryQuery().isBlank()) {
-            knowledgeGapService.recordGap(originalQuery);
+            knowledgeGapService.recordGap(originalQuery).subscribe();
             return Mono.just(List.of());
         }
 
@@ -78,7 +78,7 @@ public class HybridRetrievalStrategy {
                     }
                     List<Document> fusedDocs = fusionService.reciprocalRankFusion(List.of(vectorResults, ftsResults, graphResults));
                     if (fusedDocs.isEmpty()) {
-                        knowledgeGapService.recordGap(originalQuery);
+                        knowledgeGapService.recordGap(originalQuery).subscribe();
                     }
                     return fusedDocs;
                 });

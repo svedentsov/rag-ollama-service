@@ -79,8 +79,8 @@ public class PrioritizationAgent implements ToolAgent {
                                 "health_report_json", reportJson
                         ));
 
-                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                                .map(this::parseLlmResponse)
+                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                                .map(tuple -> parseLlmResponse(tuple.getT1()))
                                 .map(backlog -> new AgentResult(
                                         getName(),
                                         AgentResult.Status.SUCCESS,

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import { ChatMessage } from './components/ChatMessage';
 import { ChatInput } from './components/ChatInput';
 import { useChatMessages } from './hooks/useChatMessages';
@@ -32,18 +32,7 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
   const { visibleMessages, messageBranchInfo } = useVisibleMessages(sessionId, messages);
   const { containerRef, messagesEndRef, showScrollButton, scrollToBottom } = useScrollManager([visibleMessages]);
 
-  const streamingMessageIds = useStreamingStore((state) => state.streamingMessageIds);
-
-  /**
-   * Вычисляет, идет ли генерация ответа именно в ТЕКУЩЕМ чате.
-   * @returns {boolean} True, если в текущей сессии есть активный стрим.
-   */
-  const isCurrentChatStreaming = useMemo(() => {
-    // Проверяем, есть ли пересечение между глобальным списком стримов
-    // и сообщениями, принадлежащими данной сессии.
-    return messages.some(msg => streamingMessageIds.has(msg.id));
-  }, [messages, streamingMessageIds]);
-
+  const isAnyStreamActive = useStreamingStore((state) => state.activeStreams.size > 0);
 
   const handleUpdateMessage = useCallback((messageId: string, newContent: string) => {
     updateMessage({ messageId, newContent });
@@ -84,7 +73,7 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
       </div>
       <ChatInput
         onSendMessage={handleSendMessage}
-        isLoading={isCurrentChatStreaming}
+        isLoading={isAnyStreamActive}
         onStopGenerating={handleStopGenerating}
         showScrollButton={showScrollButton}
         onScrollToBottom={() => scrollToBottom('smooth')}

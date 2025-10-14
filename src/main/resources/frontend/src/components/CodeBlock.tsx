@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, FC, memo } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { darcula } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import toast from 'react-hot-toast';
@@ -6,28 +6,34 @@ import { Copy, Check } from 'lucide-react';
 import styles from './CodeBlock.module.css';
 
 /**
- * Пропсы для компонента CodeBlock.
+ * @interface CodeBlockProps
+ * @description Пропсы для компонента CodeBlock.
  */
 interface CodeBlockProps {
-  /** Язык программирования для подсветки синтаксиса. */
+  /** @param {string} language - Язык программирования для подсветки синтаксиса. */
   language: string;
-  /** Код для отображения. */
+  /** @param {string} children - Код для отображения. */
   children: string;
 }
 
 /**
  * Компонент для отображения блоков кода с подсветкой синтаксиса и кнопкой копирования.
- * Оптимизирован с помощью React.memo для предотвращения ненужных перерисовок.
+ * Оптимизирован с помощью React.memo для предотвращения ненужных перерисовок,
+ * так как его вывод зависит только от пропсов.
  * @param {CodeBlockProps} props - Пропсы компонента.
+ * @returns {React.ReactElement} Отрендеренный компонент.
  */
-export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({ language, children }) => {
+export const CodeBlock: FC<CodeBlockProps> = memo(({ language, children }) => {
   const [isCopied, setIsCopied] = useState(false);
 
+  /**
+   * Обработчик нажатия на кнопку "Копировать".
+   */
   const handleCopy = () => {
     navigator.clipboard.writeText(children).then(() => {
       setIsCopied(true);
       toast.success('Скопировано в буфер обмена!');
-      setTimeout(() => setIsCopied(false), 2000);
+      setTimeout(() => setIsCopied(false), 2000); // Сбрасываем состояние через 2 секунды
     }, () => {
       toast.error('Не удалось скопировать.');
     });
@@ -43,7 +49,8 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({ language, child
           className={styles.btnCopy}
           onClick={handleCopy}
           title="Скопировать код"
-          aria-label="Скопировать код"
+          aria-label={isCopied ? "Код скопирован" : "Скопировать код"}
+          aria-live="polite"
         >
           <Icon size={14} /> {isCopied ? 'Скопировано!' : 'Копировать'}
         </button>

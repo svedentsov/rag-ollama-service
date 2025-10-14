@@ -3,6 +3,7 @@ package com.example.ragollama.agent.xai.domain;
 import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.ToolAgent;
+import com.example.ragollama.shared.exception.ProcessingException;
 import com.example.ragollama.shared.llm.LlmClient;
 import com.example.ragollama.shared.llm.ModelCapability;
 import com.example.ragollama.shared.prompts.PromptService;
@@ -19,8 +20,9 @@ import java.util.Map;
 /**
  * AI-агент, который объясняет решения и результаты работы других агентов.
  * <p>
- * Выступает в роли "переводчика" с технического языка на человеческий,
- * делая выводы системы прозрачными и понятными для всех членов команды.
+ * Эта версия упрощена: она больше не зависит от интерфейса `Explainable`,
+ * а принимает любой технический контекст, сериализует его в JSON и передает
+ * в LLM для генерации человекочитаемого объяснения.
  */
 @Slf4j
 @Component
@@ -64,23 +66,32 @@ public class ExplainerAgent implements ToolAgent {
         Object technicalContext = context.payload().get("technicalContext");
 
         try {
-            String contextAsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(technicalContext);
+            // Оборачиваем "сырой" контекст в простую структуру для LLM
+            Map<String, Object> contextForPrompt = Map.of(
+                    "summary", "Это технические данные, которые нужно объяснить.",
+                    "data", technicalContext
+            );
+
+            String contextAsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(contextForPrompt);
             String promptString = promptService.render("explainerAgentPrompt", Map.of(
                     "userQuestion", userQuestion,
                     "technicalContextJson", contextAsJson
             ));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(explanation -> new AgentResult(
-                            getName(),
-                            AgentResult.Status.SUCCESS,
-                            "Объяснение успешно сгенерировано.",
-                            Map.of("explanation", explanation)
-                    ));
-
+                    .map(tuple -> {
+                        String explanation = tuple.getT1();
+                        return new AgentResult(
+                                getName(),
+                                AgentResult.Status.SUCCESS,
+                                "Объяснение успешно сгенерировано.",
+                                Map.of("explanation", explanation)
+                        );
+                    });
         } catch (JsonProcessingException e) {
             log.error("Не удалось сериализовать технический контекст для объяснения", e);
-            return Mono.error(e);
+            // Возвращаем ошибку в реактивной цепочке
+            return Mono.error(new ProcessingException("Ошибка сериализации контекста для ExplainerAgent", e));
         }
     }
 }

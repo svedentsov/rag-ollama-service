@@ -15,7 +15,8 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 
 /**
- * Шаг RAG-конвейера для переранжирования, адаптированный для R2DBC.
+ * Шаг RAG-конвейера, отвечающий за переранжирование найденных документов
+ * для повышения их итоговой релевантности.
  */
 @Component
 @Order(25)
@@ -26,6 +27,9 @@ public class RerankingStep implements RagPipelineStep {
     private final RerankingService rerankingService;
     private final TaskLifecycleService taskLifecycleService;
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
         if (context.retrievedDocuments().isEmpty()) {

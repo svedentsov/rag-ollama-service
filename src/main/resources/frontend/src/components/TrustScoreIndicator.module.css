@@ -1,0 +1,98 @@
+.details {
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    margin-top: 1rem;
+    background-color: hsl(var(--secondary) / 0.5);
+    transition: background-color 0.2s ease-in-out;
+}
+
+.details:hover {
+    background-color: hsl(var(--accent));
+}
+
+.summary {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    list-style: none; /* Убираем стандартный маркер */
+}
+
+.summary::-webkit-details-marker { display: none; }
+.summary::marker { display: none; }
+
+.details[open] > .summary {
+    border-bottom: 1px solid hsl(var(--border));
+}
+
+.summaryTitle {
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    font-size: var(--font-size-sm);
+}
+
+.scoreBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 9999px; /* pill shape */
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.highScore {
+    background-color: hsl(142.1 76.2% 36.3% / 0.1);
+    color: hsl(142.1 70.6% 45.3%);
+}
+.mediumScore {
+    background-color: hsl(47.9 95.8% 53.1% / 0.1);
+    color: hsl(38 91% 60%);
+}
+.lowScore {
+    background-color: hsl(0 84.2% 60.2% / 0.1);
+    color: hsl(0 72% 51%);
+}
+
+.breakdown {
+    padding: 0.75rem 1rem 1rem;
+}
+
+.justification {
+    font-size: var(--font-size-sm);
+    color: hsl(var(--muted-foreground));
+    margin: 0 0 1rem 0;
+    font-style: italic;
+}
+
+.metricsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+}
+
+.metricItem {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.metricIcon {
+    color: hsl(var(--muted-foreground));
+    flex-shrink: 0;
+}
+
+.metricName {
+    font-size: var(--font-size-xs);
+    color: hsl(var(--muted-foreground));
+    margin-bottom: 0.125rem;
+}
+
+.metricValue {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    font-variant-numeric: tabular-nums;
+}

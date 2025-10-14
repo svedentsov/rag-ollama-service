@@ -57,8 +57,8 @@ public class WorkflowPlannerAgent {
         ));
         log.info("Запрос к LLM-планировщику для построения workflow: '{}'", goal);
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(this::parseWorkflow)
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                .map(tuple -> parseWorkflow(tuple.getT1()))
                 .doOnSuccess(plan -> log.info("LLM-планировщик сгенерировал workflow из {} узлов.", plan.size()));
     }
 

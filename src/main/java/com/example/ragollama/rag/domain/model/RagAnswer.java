@@ -8,33 +8,31 @@ import java.util.List;
 
 /**
  * DTO для полного, обогащенного ответа от RAG-системы.
- * <p>
- * Агрегирует не только сам ответ и источники, но и метаданные о его
- * качестве и надежности, такие как Оценка Доверия и отчет от AI-критика.
  *
- * @param answer           Финальный текстовый ответ.
- * @param sourceCitations  Список использованных источников.
- * @param trustScoreReport Отчет об оценке доверия.
- * @param validationReport Отчет от AI-критика о качестве.
+ * @param answer                Финальный текстовый ответ.
+ * @param sourceCitations       Список использованных источников.
+ * @param queryFormationHistory История трансформации исходного запроса пользователя.
+ * @param finalPrompt           Полный текст промпта, отправленного в LLM.
+ * @param trustScoreReport      Отчет об оценке доверия к ответу.
+ * @param validationReport      Отчет от AI-критика о качестве ответа.
  */
 @Schema(description = "Результат работы RAG-сервиса")
 public record RagAnswer(
         String answer,
         List<SourceCitation> sourceCitations,
+        List<QueryFormationStep> queryFormationHistory,
+        String finalPrompt,
         TrustScoreReport trustScoreReport,
         ValidationReport validationReport
 ) {
     /**
      * Конструктор для создания ответа без отчетов о качестве.
+     * @param answer                Финальный текстовый ответ.
+     * @param sourceCitations       Список использованных источников.
+     * @param queryFormationHistory История трансформации исходного запроса пользователя.
+     * @param finalPrompt           Полный текст промпта, отправленного в LLM.
      */
-    public RagAnswer(String answer, List<SourceCitation> sourceCitations) {
-        this(answer, sourceCitations, null, null);
-    }
-
-    /**
-     * Конструктор для создания ответа с отчетом о доверии.
-     */
-    public RagAnswer(String answer, List<SourceCitation> sourceCitations, TrustScoreReport trustScoreReport) {
-        this(answer, sourceCitations, trustScoreReport, null);
+    public RagAnswer(String answer, List<SourceCitation> sourceCitations, List<QueryFormationStep> queryFormationHistory, String finalPrompt) {
+        this(answer, sourceCitations, queryFormationHistory, finalPrompt, null, null);
     }
 }

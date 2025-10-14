@@ -31,7 +31,8 @@ public class HyDEAgent implements QueryEnhancementAgent {
         String promptString = promptService.render("hydePrompt", Map.of("query", originalQuery));
         Prompt prompt = new Prompt(promptString);
         return llmClient.callChat(prompt, ModelCapability.FASTEST)
-                .map(hypotheticalDocument -> {
+                .map(tuple -> {
+                    String hypotheticalDocument = tuple.getT1();
                     log.info("HyDE: сгенерирован гипотетический документ для запроса '{}'", originalQuery);
                     return List.of(hypotheticalDocument);
                 });

@@ -72,7 +72,8 @@ public class TestGeneratorAgent implements ToolAgent {
         ));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(generatedCode -> {
+                .map(tuple -> {
+                    String generatedCode = tuple.getT1();
                     String className = fullClassCode.substring(fullClassCode.indexOf("class ") + 6, fullClassCode.indexOf("{")).trim();
                     String testFileName = className + "Test.java";
                     return new GeneratedTestFile(testFileName, generatedCode);

@@ -1,0 +1,67 @@
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding: 0;
+    margin-bottom: 0.5rem; /* Отступ до "пузыря" с сообщением */
+    width: 100%;
+}
+
+/* Общие стили для кнопок в тулбаре (унаследованы от QueryFormationSteps) */
+.inspectorButton {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.6rem;
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    background-color: hsl(var(--secondary));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.inspectorButton:hover:not(:disabled) {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+}
+
+.inspectorButton:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+/* Стили для модального окна */
+.centered {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+    height: 100%;
+}
+
+.spinner {
+    width: 2rem;
+    height: 2rem;
+    border: 0.25em solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spinner-border .75s linear infinite;
+    color: hsl(var(--primary));
+}
+
+@keyframes spinner-border {
+    to { transform: rotate(360deg); }
+}
+
+.errorAlert {
+    padding: 1rem;
+    margin: 1rem;
+    border: 1px solid hsl(var(--destructive));
+    background-color: hsla(var(--destructive), 0.1);
+    color: hsl(var(--destructive-foreground));
+    border-radius: var(--radius);
+}

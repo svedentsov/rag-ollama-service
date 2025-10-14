@@ -104,6 +104,7 @@
     text-align: left;
     font-size: var(--font-size-sm);
     gap: 0.5rem;
+    width: 100%; /* Добавлено для корректной работы flex */
 }
 
 .navLink:hover {
@@ -127,6 +128,7 @@
     color: hsl(var(--foreground));
     font-size: var(--font-size-sm);
     font-family: var(--font-family-sans);
+    box-sizing: border-box; /* Добавлено */
 }
 
 .chatTitle {
@@ -134,8 +136,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     flex-grow: 1;
-    min-width: 0; /* Ключевое исправление для работы text-overflow в flex-контейнере */
+    min-width: 0;
     font-weight: var(--font-weight-medium);
+    text-align: left; /* Добавлено */
 }
 
 .chatItemActions {
@@ -144,7 +147,6 @@
     flex-shrink: 0; /* Предотвращает сжатие контейнера с кнопками */
 }
 
-/* Стили для кнопки "три точки" */
 .moreButton {
     background: none;
     border: none;
@@ -161,7 +163,6 @@
     justify-content: center;
 }
 
-/* Показываем кнопку при наведении на родительский элемент */
 .navLink:hover .moreButton {
     opacity: 1;
 }
@@ -169,7 +170,6 @@
     background-color: hsl(var(--muted));
     color: hsl(var(--foreground));
 }
-
 
 .contextMenu {
     position: fixed;

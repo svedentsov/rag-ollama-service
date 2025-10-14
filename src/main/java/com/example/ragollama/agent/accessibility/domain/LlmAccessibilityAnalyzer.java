@@ -41,7 +41,8 @@ public class LlmAccessibilityAnalyzer {
      * Асинхронно анализирует список технических нарушений доступности с помощью LLM.
      * <p>
      * Корректно обрабатывает случай, когда список нарушений пуст, возвращая
-     * соответствующий "пустой" отчет без вызова LLM.
+     * соответствующий "пустой" отчет без вызова LLM. Все потенциально блокирующие
+     * операции выполняются на специализированном планировщике.
      *
      * @param violations Список технических нарушений, обнаруженных сканером.
      * @return {@link Mono}, который по завершении будет содержать
@@ -51,25 +52,23 @@ public class LlmAccessibilityAnalyzer {
     public Mono<AccessibilityReport> analyze(List<AccessibilityViolation> violations) {
         if (violations == null || violations.isEmpty()) {
             String summary = "Аудит завершен. Нарушений доступности не найдено.";
+            log.info(summary);
             return Mono.just(new AccessibilityReport(summary, Collections.emptyList(), Collections.emptyList()));
         }
-
-        // Оборачиваем потенциально блокирующую операцию сериализации в `Mono.fromCallable`.
         return Mono.fromCallable(() -> {
                     try {
                         return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(violations);
                     } catch (JsonProcessingException e) {
                         log.error("Критическая ошибка: не удалось сериализовать список нарушений a11y в JSON.", e);
-                        // Оборачиваем в кастомное непроверяемое исключение
                         throw new ProcessingException("Ошибка сериализации нарушений a11y", e);
                     }
                 })
-                .subscribeOn(Schedulers.boundedElastic()) // Указываем, что операцию нужно выполнить на отдельном потоке
+                .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(violationsJson -> {
                     String promptString = promptService.render("accessibilityAudit", Map.of("violationsJson", violationsJson));
                     log.debug("Отправка запроса к LLM для анализа {} нарушений доступности.", violations.size());
                     return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true);
                 })
-                .map(llmResponse -> reportParser.parse(llmResponse, violations));
+                .map(tuple -> reportParser.parse(tuple.getT1(), violations));
     }
 }

@@ -87,7 +87,7 @@ public class AuthTestBuilderAgent implements ToolAgent {
         ));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(code -> new GeneratedTestFile(fileName, code));
+                .map(tuple -> new GeneratedTestFile(fileName, tuple.getT1()));
     }
 
     private String generateTestClassName(EndpointInfo endpoint) {

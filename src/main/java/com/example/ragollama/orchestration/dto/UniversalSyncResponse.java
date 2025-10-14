@@ -5,6 +5,7 @@ import com.example.ragollama.agent.codegeneration.api.dto.CodeGenerationResponse
 import com.example.ragollama.agent.routing.QueryIntent;
 import com.example.ragollama.chat.api.dto.ChatResponse;
 import com.example.ragollama.rag.api.dto.RagQueryResponse;
+import com.example.ragollama.rag.domain.model.QueryFormationStep;
 import com.example.ragollama.rag.domain.model.SourceCitation;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -16,7 +17,7 @@ import java.util.stream.Collectors;
 /**
  * DTO для полного, синхронного (не-потокового) ответа от оркестратора.
  * <p>
- * Этот DTO теперь включает новый фабричный метод `from(List<UniversalResponse>, ...)`
+ * Эта версия включает новый фабричный метод `from(List<UniversalResponse>, ...)`
  * для корректной сборки финального ответа из потоковых частей.
  */
 @Schema(description = "Универсальный DTO для полного (не-потокового) ответа")
@@ -26,6 +27,8 @@ public record UniversalSyncResponse(
         String generatedCode,
         String language,
         List<SourceCitation> sourceCitations,
+        List<QueryFormationStep> queryFormationHistory,
+        String finalPrompt,
         UUID sessionId,
         QueryIntent intent,
         BugAnalysisReport bugAnalysisResponse
@@ -34,35 +37,44 @@ public record UniversalSyncResponse(
      * Фабричный метод для создания ответа на основе RAG-результата.
      */
     public static UniversalSyncResponse from(RagQueryResponse response, QueryIntent intent) {
-        return new UniversalSyncResponse(response.answer(), null, null, response.sourceCitations(), response.sessionId(), intent, null);
+        return new UniversalSyncResponse(
+                response.answer(), null, null, response.sourceCitations(),
+                response.queryFormationHistory(), response.finalPrompt(),
+                response.sessionId(), intent, null);
     }
 
     /**
      * Фабричный метод для создания ответа на основе Chat-результата.
      */
     public static UniversalSyncResponse from(ChatResponse response, QueryIntent intent) {
-        return new UniversalSyncResponse(response.responseMessage(), null, null, null, response.sessionId(), intent, null);
+        return new UniversalSyncResponse(
+                response.responseMessage(), null, null, null,
+                null, response.finalPrompt(),
+                response.sessionId(), intent, null);
     }
 
     /**
      * Фабричный метод для создания ответа на основе результата кодогенерации.
      */
     public static UniversalSyncResponse from(CodeGenerationResponse response, QueryIntent intent) {
-        return new UniversalSyncResponse(null, response.generatedCode(), response.language(), null, null, intent, null);
+        return new UniversalSyncResponse(
+                null, response.generatedCode(), response.language(), null,
+                null, response.finalPrompt(),
+                null, intent, null);
     }
 
     /**
      * Фабричный метод для создания ответа на основе результата анализа бага.
      */
     public static UniversalSyncResponse from(BugAnalysisReport response, QueryIntent intent) {
-        return new UniversalSyncResponse(null, null, null, null, null, intent, response);
+        return new UniversalSyncResponse(null, null, null, null, null, null, null, intent, response);
     }
 
     /**
      * Фабричный метод для создания ответа на основе результата саммаризации.
      */
     public static UniversalSyncResponse from(String summary, QueryIntent intent) {
-        return new UniversalSyncResponse(summary, null, null, null, null, intent, null);
+        return new UniversalSyncResponse(summary, null, null, null, null, null, null, intent, null);
     }
 
     /**
@@ -78,12 +90,12 @@ public record UniversalSyncResponse(
                 .map(p -> ((UniversalResponse.Content) p).text())
                 .collect(Collectors.joining());
 
-        List<SourceCitation> sources = parts.stream()
+        UniversalResponse.Sources sourcesPart = parts.stream()
                 .filter(p -> p instanceof UniversalResponse.Sources)
-                .flatMap(p -> ((UniversalResponse.Sources) p).sources().stream())
-                .toList();
+                .map(p -> (UniversalResponse.Sources) p)
+                .findFirst().orElse(null);
 
-        UniversalResponse.Code code = parts.stream()
+        UniversalResponse.Code codePart = parts.stream()
                 .filter(p -> p instanceof UniversalResponse.Code)
                 .map(p -> (UniversalResponse.Code) p)
                 .findFirst().orElse(null);
@@ -95,9 +107,11 @@ public record UniversalSyncResponse(
 
         return new UniversalSyncResponse(
                 answer.isEmpty() ? null : answer,
-                (code != null) ? code.generatedCode() : null,
-                (code != null) ? code.language() : null,
-                sources.isEmpty() ? null : sources,
+                (codePart != null) ? codePart.generatedCode() : null,
+                (codePart != null) ? codePart.language() : null,
+                (sourcesPart != null) ? sourcesPart.sources() : null,
+                (sourcesPart != null) ? sourcesPart.queryFormationHistory() : null,
+                (sourcesPart != null) ? sourcesPart.finalPrompt() : null,
                 null, // Session ID is not available from stream parts
                 intent,
                 bugAnalysis

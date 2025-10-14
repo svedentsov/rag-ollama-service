@@ -71,8 +71,8 @@ public class RagOptimizerAgent implements ToolAgent {
                         String snapshotJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(snapshot);
                         String promptString = promptService.render("ragOptimizerPrompt", Map.of("performance_snapshot_json", snapshotJson));
 
-                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                                .map(this::parseLlmResponse)
+                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                                .map(tuple -> parseLlmResponse(tuple.getT1()))
                                 .map(report -> new AgentResult(
                                         getName(),
                                         AgentResult.Status.SUCCESS,

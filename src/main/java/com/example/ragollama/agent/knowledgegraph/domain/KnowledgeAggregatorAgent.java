@@ -80,7 +80,8 @@ public class KnowledgeAggregatorAgent implements ToolAgent {
                         ));
 
                         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                                .map(naturalLanguageResponse -> {
+                                .map(tuple -> {
+                                    String naturalLanguageResponse = tuple.getT1();
                                     KnowledgeGraphResponse finalResponse = new KnowledgeGraphResponse(
                                             naturalLanguageResponse,
                                             cypherQuery,

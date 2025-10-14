@@ -81,8 +81,8 @@ public class KnowledgeRouterAgent implements ToolAgent {
                 "domains", domainsForPrompt
         ));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.FAST_RELIABLE)
-                .map(this::parseLlmResponse)
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.FAST_RELIABLE, true)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(selectedDomains -> {
                     log.info("Маршрутизатор выбрал домены {} для запроса: '{}'", selectedDomains.domains(), query);
                     return new AgentResult(

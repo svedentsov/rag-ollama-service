@@ -109,8 +109,8 @@ public class PerformanceBottleneckFinderAgent implements ToolAgent {
                             "antiPatternType", pattern.getType(),
                             "codeSnippet", pattern.getCodeSnippet()
                     ));
-                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                            .map(this::parseLlmResponse);
+                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                            .map(tuple -> parseLlmResponse(tuple.getT1()));
                 })
                 .collectList();
     }

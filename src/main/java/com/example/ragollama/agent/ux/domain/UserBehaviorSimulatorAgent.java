@@ -78,9 +78,10 @@ public class UserBehaviorSimulatorAgent implements ToolAgent {
                 "goal", goal, "history", history, "current_dom", dom
         ));
 
-        llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
+        llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
                 .subscribe(
-                        llmResponse -> {
+                        tuple -> {
+                            String llmResponse = tuple.getT1();
                             try {
                                 AgentCommand command = parseLlmResponse(llmResponse);
                                 history.add(command);

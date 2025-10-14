@@ -105,7 +105,7 @@ public class BugPatternDetectorAgent implements ToolAgent {
             String promptString = promptService.render("bugPatternDetectorPrompt", Map.of("bug_cluster_json", clusterJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
-                    .map(this::parseLlmResponse);
+                    .map(tuple -> parseLlmResponse(tuple.getT1()));
         } catch (JsonProcessingException e) {
             return Mono.error(new ProcessingException("Ошибка сериализации кластера багов", e));
         }

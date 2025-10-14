@@ -1,5 +1,6 @@
 package com.example.ragollama.rag.api.dto;
 
+import com.example.ragollama.rag.domain.model.QueryFormationStep;
 import com.example.ragollama.rag.domain.model.SourceCitation;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
@@ -36,12 +37,15 @@ public sealed interface StreamingResponsePart {
     }
 
     /**
-     * Представляет список документов-источников, использованных для ответа.
+     * Представляет список документов-источников, историю формирования запроса и финальный промпт.
      *
-     * @param sources Список структурированных цитат.
+     * @param sources               Список структурированных цитат.
+     * @param queryFormationHistory История обработки запроса.
+     * @param finalPrompt           Полный текст промпта, отправленного в LLM.
      */
-    @Schema(description = "Список структурированных цитат, использованных для ответа")
-    record Sources(List<SourceCitation> sources) implements StreamingResponsePart {
+    @Schema(description = "Список источников, история запроса и финальный промпт")
+    record Sources(List<SourceCitation> sources, List<QueryFormationStep> queryFormationHistory,
+                   String finalPrompt) implements StreamingResponsePart {
     }
 
     /**

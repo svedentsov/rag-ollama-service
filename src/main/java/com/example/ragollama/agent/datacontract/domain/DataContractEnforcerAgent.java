@@ -68,9 +68,9 @@ public class DataContractEnforcerAgent implements ToolAgent {
                             "old_dto_code", contents.getT1(),
                             "new_dto_code", contents.getT2()
                     ));
-                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
+                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true);
                 })
-                .map(this::parseLlmResponse)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(result -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,

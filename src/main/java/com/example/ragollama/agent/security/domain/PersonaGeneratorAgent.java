@@ -81,8 +81,8 @@ public class PersonaGeneratorAgent implements ToolAgent {
             String rbacJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(rbacRules);
             String promptString = promptService.render("personaGeneratorPrompt", Map.of("rbac_rules_json", rbacJson));
 
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(this::parseLlmResponse)
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                    .map(tuple -> parseLlmResponse(tuple.getT1()))
                     .map(attackPersonas -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,

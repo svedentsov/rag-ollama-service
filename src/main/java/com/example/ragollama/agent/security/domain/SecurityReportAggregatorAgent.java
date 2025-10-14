@@ -77,8 +77,8 @@ public class SecurityReportAggregatorAgent implements ToolAgent {
             String findingsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(allFindings);
             String promptString = promptService.render("securityReportAggregatorPrompt", Map.of("all_findings_json", findingsJson));
 
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(this::parseLlmResponse)
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                    .map(tuple -> parseLlmResponse(tuple.getT1()))
                     .map(report -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,

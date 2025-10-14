@@ -90,8 +90,8 @@ public class KnowledgeConsistencyGuardianAgent implements ToolAgent {
         ));
 
         final Document finalDocB = docB;
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(this::parseLlmResponse)
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(result -> {
                     if (result.isContradictory()) {
                         log.warn("!!! ОБНАРУЖЕНО ПРОТИВОРЕЧИЕ: {}", result.justification());

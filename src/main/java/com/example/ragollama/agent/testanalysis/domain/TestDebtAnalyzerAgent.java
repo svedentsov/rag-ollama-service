@@ -72,7 +72,8 @@ public class TestDebtAnalyzerAgent implements ToolAgent {
                         String debtJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(allItems);
                         String promptString = promptService.render("testDebtSummaryPrompt", Map.of("debtItemsJson", debtJson));
                         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                                .map(summary -> {
+                                .map(responseTuple -> {
+                                    String summary = responseTuple.getT1();
                                     TestDebtReport report = new TestDebtReport(summary, allItems);
                                     return new AgentResult(getName(), AgentResult.Status.SUCCESS, "Отчет о тестовом техдолге успешно сгенерирован.", Map.of("testDebtReport", report));
                                 });

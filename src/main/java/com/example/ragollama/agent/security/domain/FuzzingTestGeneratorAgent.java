@@ -61,11 +61,11 @@ public class FuzzingTestGeneratorAgent implements ToolAgent {
             ));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(generatedCode -> new AgentResult(
+                    .map(tuple -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,
                             "Код Fuzzing-теста успешно сгенерирован.",
-                            Map.of("generatedFuzzTest", generatedCode)
+                            Map.of("generatedFuzzTest", tuple.getT1())
                     ));
         } catch (JsonProcessingException e) {
             return Mono.error(new RuntimeException("Ошибка сериализации данных для Fuzzing-генератора", e));

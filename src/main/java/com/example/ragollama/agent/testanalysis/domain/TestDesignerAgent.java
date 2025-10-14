@@ -54,8 +54,8 @@ public class TestDesignerAgent implements ToolAgent {
         String requirements = (String) context.payload().get("requirementsText");
         String promptString = promptService.render("testDesignerPrompt", Map.of("requirements", requirements));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(this::parseLlmResponse)
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(testCase -> {
                     log.info("TestDesignerAgent успешно сгенерировал позитивный тест: {}", testCase.testName());
                     return new AgentResult(

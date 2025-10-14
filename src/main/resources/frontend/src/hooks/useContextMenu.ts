@@ -32,12 +32,10 @@ export function useContextMenu<T>(menuRef: RefObject<HTMLDivElement>) {
 
   /**
    * Открывает меню, позиционируя его по координатам клика.
-   * Важно: этот метод НЕ вызывает event.preventDefault(). Это ответственность вызывающего кода.
    * @param {React.MouseEvent} event - Событие мыши.
    * @param {T} item - Элемент, для которого открывается меню.
    */
   const openMenu = useCallback((event: React.MouseEvent, item: T) => {
-    // Не вызываем preventDefault здесь, чтобы дать контроль компоненту
     setMenuState({ show: true, x: event.clientX, y: event.clientY, item });
   }, []);
 

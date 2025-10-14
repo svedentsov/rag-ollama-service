@@ -52,11 +52,11 @@ public class SimulationAnalysisAgent implements ToolAgent {
             ));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(report -> new AgentResult(
+                    .map(tuple -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,
                             "Анализ симуляции завершен.",
-                            Map.of("simulationReport", report)
+                            Map.of("simulationReport", tuple.getT1())
                     ));
         } catch (JsonProcessingException e) {
             return Mono.error(new ProcessingException("Ошибка сериализации результатов симуляции.", e));

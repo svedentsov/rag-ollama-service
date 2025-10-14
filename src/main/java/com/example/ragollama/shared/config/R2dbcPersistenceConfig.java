@@ -1,5 +1,7 @@
 package com.example.ragollama.shared.config;
 
+import com.example.ragollama.rag.domain.model.QueryFormationStep;
+import com.example.ragollama.rag.domain.model.SourceCitation;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -92,15 +94,17 @@ public class R2dbcPersistenceConfig {
         List<Converter<?, ?>> converters = List.of(
                 new MapToJsonConverter(objectMapper),
                 new JsonToMapConverter(objectMapper),
+                new ListSourceCitationToJsonConverter(objectMapper),
+                new JsonToListSourceCitationConverter(objectMapper),
+                new ListQueryFormationStepToJsonConverter(objectMapper),
+                new JsonToListQueryFormationStepConverter(objectMapper),
                 new OffsetDateTimeReadConverter(),
                 new OffsetDateTimeWriteConverter()
         );
         return R2dbcCustomConversions.of(PostgresDialect.INSTANCE, converters);
     }
 
-    /**
-     * Конвертер для чтения {@link OffsetDateTime} из БД (хранится как {@link LocalDateTime} в UTC).
-     */
+    // --- Converters for OffsetDateTime ---
     @ReadingConverter
     private static class OffsetDateTimeReadConverter implements Converter<LocalDateTime, OffsetDateTime> {
         @Override
@@ -109,9 +113,6 @@ public class R2dbcPersistenceConfig {
         }
     }
 
-    /**
-     * Конвертер для записи {@link OffsetDateTime} в БД (преобразуется в {@link LocalDateTime} UTC).
-     */
     @WritingConverter
     private static class OffsetDateTimeWriteConverter implements Converter<OffsetDateTime, LocalDateTime> {
         @Override
@@ -120,9 +121,7 @@ public class R2dbcPersistenceConfig {
         }
     }
 
-    /**
-     * Конвертер для записи Java {@link Map} в колонку PostgreSQL типа JSONB.
-     */
+    // --- Converters for Map<String, Object> <-> JSONB ---
     @WritingConverter
     @RequiredArgsConstructor
     private static class MapToJsonConverter implements Converter<Map<String, Object>, Json> {
@@ -131,10 +130,7 @@ public class R2dbcPersistenceConfig {
         @Override
         public Json convert(@NonNull Map<String, Object> source) {
             try {
-                if (source.isEmpty()) {
-                    return Json.of("{}");
-                }
-                return Json.of(objectMapper.writeValueAsBytes(source));
+                return source.isEmpty() ? Json.of("{}") : Json.of(objectMapper.writeValueAsBytes(source));
             } catch (JsonProcessingException e) {
                 log.error("Не удалось сериализовать Map в JSONB", e);
                 throw new IllegalStateException("Ошибка сериализации в JSONB", e);
@@ -142,9 +138,6 @@ public class R2dbcPersistenceConfig {
         }
     }
 
-    /**
-     * Конвертер для чтения из колонки PostgreSQL типа JSONB в Java {@link Map}.
-     */
     @ReadingConverter
     @RequiredArgsConstructor
     private static class JsonToMapConverter implements Converter<Json, Map<String, Object>> {
@@ -157,10 +150,74 @@ public class R2dbcPersistenceConfig {
                 if (jsonString == null || jsonString.isBlank() || "null".equalsIgnoreCase(jsonString.trim())) {
                     return Collections.emptyMap();
                 }
-                return objectMapper.readValue(jsonString, new TypeReference<>() {});
+                return objectMapper.readValue(jsonString, new TypeReference<>() {
+                });
             } catch (IOException e) {
                 log.error("Не удалось десериализовать JSONB в Map", e);
                 return Collections.emptyMap();
+            }
+        }
+    }
+
+    // --- Converters for List<SourceCitation> <-> JSONB ---
+    @WritingConverter
+    @RequiredArgsConstructor
+    private static class ListSourceCitationToJsonConverter implements Converter<List<SourceCitation>, Json> {
+        private final ObjectMapper objectMapper;
+
+        @Override
+        public Json convert(@NonNull List<SourceCitation> source) {
+            try {
+                return Json.of(objectMapper.writeValueAsBytes(source));
+            } catch (JsonProcessingException e) {
+                throw new IllegalStateException("Ошибка сериализации List<SourceCitation> в JSONB", e);
+            }
+        }
+    }
+
+    @ReadingConverter
+    @RequiredArgsConstructor
+    private static class JsonToListSourceCitationConverter implements Converter<Json, List<SourceCitation>> {
+        private final ObjectMapper objectMapper;
+
+        @Override
+        public List<SourceCitation> convert(@NonNull Json source) {
+            try {
+                return objectMapper.readValue(source.asString(), new TypeReference<>() {
+                });
+            } catch (IOException e) {
+                return Collections.emptyList();
+            }
+        }
+    }
+
+    @WritingConverter
+    @RequiredArgsConstructor
+    private static class ListQueryFormationStepToJsonConverter implements Converter<List<QueryFormationStep>, Json> {
+        private final ObjectMapper objectMapper;
+
+        @Override
+        public Json convert(@NonNull List<QueryFormationStep> source) {
+            try {
+                return Json.of(objectMapper.writeValueAsBytes(source));
+            } catch (JsonProcessingException e) {
+                throw new IllegalStateException("Ошибка сериализации List<QueryFormationStep> в JSONB", e);
+            }
+        }
+    }
+
+    @ReadingConverter
+    @RequiredArgsConstructor
+    private static class JsonToListQueryFormationStepConverter implements Converter<Json, List<QueryFormationStep>> {
+        private final ObjectMapper objectMapper;
+
+        @Override
+        public List<QueryFormationStep> convert(@NonNull Json source) {
+            try {
+                return objectMapper.readValue(source.asString(), new TypeReference<>() {
+                });
+            } catch (IOException e) {
+                return Collections.emptyList();
             }
         }
     }

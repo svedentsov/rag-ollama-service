@@ -76,9 +76,9 @@ public class FeatureGapAnalysisAgent implements ToolAgent {
                             "our_features_json", tuple.getT1(),
                             "competitor_features_json", tuple.getT2()
                     ));
-                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
+                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true);
                 })
-                .map(this::parseLlmResponse)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(report -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,
@@ -97,7 +97,8 @@ public class FeatureGapAnalysisAgent implements ToolAgent {
 
     private Mono<String> extractFeaturesFromText(String text) {
         String promptString = promptService.render("featureExtractionPrompt", Map.of("context", text));
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                .map(tuple -> tuple.getT1());
     }
 
     private FeatureGapReport parseLlmResponse(String jsonResponse) {

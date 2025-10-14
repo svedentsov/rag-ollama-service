@@ -46,12 +46,12 @@ public class ResponseValidationStep implements RagPipelineStep {
     /**
      * Конструктор для внедрения всех необходимых зависимостей.
      *
-     * @param llmClient              Клиент для взаимодействия с LLM.
-     * @param promptService          Сервис для рендеринга шаблонов промптов.
-     * @param objectMapper           Маппер для работы с JSON.
-     * @param appProperties          Конфигурация приложения для условной активации.
-     * @param taskLifecycleService   Сервис для управления задачами и отправки статусов.
-     * @param jsonExtractorUtil      Утилита для надежного извлечения JSON из текста.
+     * @param llmClient            Клиент для взаимодействия с LLM.
+     * @param promptService        Сервис для рендеринга шаблонов промптов.
+     * @param objectMapper         Маппер для работы с JSON.
+     * @param appProperties        Конфигурация приложения для условной активации.
+     * @param taskLifecycleService Сервис для управления задачами и отправки статусов.
+     * @param jsonExtractorUtil    Утилита для надежного извлечения JSON из текста.
      */
     public ResponseValidationStep(
             LlmClient llmClient,
@@ -96,7 +96,7 @@ public class ResponseValidationStep implements RagPipelineStep {
         ));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
-                .map(this::parseLlmResponse)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(validationReport -> {
                     if (!validationReport.isValid()) {
                         log.warn("!!! AI-Критик обнаружил проблемы в ответе: {}", validationReport.findings());
@@ -107,6 +107,8 @@ public class ResponseValidationStep implements RagPipelineStep {
                     RagAnswer finalAnswer = new RagAnswer(
                             originalAnswer.answer(),
                             originalAnswer.sourceCitations(),
+                            originalAnswer.queryFormationHistory(),
+                            originalAnswer.finalPrompt(),
                             originalAnswer.trustScoreReport(),
                             validationReport
                     );

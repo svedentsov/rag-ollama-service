@@ -92,8 +92,8 @@ public class PerformancePredictorAgent implements ToolAgent {
                     try {
                         String profilesJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(profiles);
                         String promptString = promptService.render("performancePredictor", Map.of("dossier_json", profilesJson));
-                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                                .map(this::parseLlmResponse)
+                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                                .map(tuple -> parseLlmResponse(tuple.getT1()))
                                 .map(report -> new AgentResult(
                                         getName(),
                                         AgentResult.Status.SUCCESS,

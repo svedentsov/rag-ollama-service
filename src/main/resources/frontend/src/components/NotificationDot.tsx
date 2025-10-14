@@ -3,6 +3,7 @@ import styles from './NotificationDot.module.css';
 
 /**
  * Простой UI-компонент, отображающий анимированную точку-уведомление.
+ * @returns {React.ReactElement} Отрендеренный компонент.
  */
 export const NotificationDot: React.FC = () => {
   return <span className={styles.notificationDot} aria-label="Новое сообщение"></span>;

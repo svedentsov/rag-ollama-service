@@ -35,6 +35,6 @@ public class ReturnFixedAnswerStrategy implements NoContextStrategy {
      */
     @Override
     public Mono<RagAnswer> handle(Prompt prompt) {
-        return Mono.just(new RagAnswer(NO_CONTEXT_ANSWER, Collections.emptyList()));
+        return Mono.just(new RagAnswer(NO_CONTEXT_ANSWER, Collections.emptyList(), Collections.emptyList(), null));
     }
 }

@@ -46,7 +46,8 @@ public class SummarizationService {
                 "style", style
         ));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
+                .map(tuple -> tuple.getT1());
     }
 
     public record SummaryOptions(String style) {

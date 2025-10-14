@@ -88,8 +88,8 @@ public class GeoLegalNavigatorAgent implements ToolAgent {
                                 "jurisdiction", jurisdiction,
                                 "changed_code_json", codeJson
                         ));
-                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                                .map(this::parseLlmResponse)
+                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                                .map(tuple -> parseLlmResponse(tuple.getT1()))
                                 .map(report -> new AgentResult(
                                         getName(),
                                         AgentResult.Status.SUCCESS,

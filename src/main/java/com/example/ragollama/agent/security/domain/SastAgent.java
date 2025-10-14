@@ -92,8 +92,8 @@ public class SastAgent implements ToolAgent {
             return Mono.just(Collections.emptyList());
         }
         String promptString = promptService.render("sastAgentPrompt", Map.of("filePath", filePath, "code", content));
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(this::parseLlmResponse);
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                .map(tuple -> parseLlmResponse(tuple.getT1()));
     }
 
     private List<SecurityFinding> parseLlmResponse(String jsonResponse) {

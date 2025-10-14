@@ -31,7 +31,8 @@ public class StepBackQueryAgent implements QueryEnhancementAgent {
         String promptString = promptService.render("stepBackPrompt", Map.of("query", originalQuery));
         Prompt prompt = new Prompt(promptString);
         return llmClient.callChat(prompt, ModelCapability.FASTEST)
-                .map(stepBackQuery -> {
+                .map(tuple -> {
+                    String stepBackQuery = tuple.getT1();
                     log.info("Step-Back: для запроса '{}' сгенерирован концептуальный запрос '{}'", originalQuery, stepBackQuery);
                     return List.of(stepBackQuery);
                 });

@@ -73,8 +73,8 @@ public class KnowledgeGapClustererAgent implements ToolAgent {
             String queriesJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(gapQueries);
             String promptString = promptService.render("knowledgeGapAnalyzer", Map.of("gap_queries_json", queriesJson));
 
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(this::parseLlmResponse)
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                    .map(tuple -> parseLlmResponse(tuple.getT1()))
                     .map(report -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,

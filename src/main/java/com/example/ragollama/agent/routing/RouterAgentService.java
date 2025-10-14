@@ -46,7 +46,7 @@ public class RouterAgentService {
         String promptString = promptService.render("routerAgentPrompt", Map.of("query", query));
         Prompt prompt = new Prompt(promptString);
         return llmClient.callChat(prompt, ModelCapability.FAST_RELIABLE, true)
-                .map(this::parseIntentFromLlmResponse)
+                .map(tuple -> parseIntentFromLlmResponse(tuple.getT1()))
                 .doOnSuccess(intent -> log.info("Запрос '{}' классифицирован с намерением: {}", query, intent))
                 .onErrorResume(e -> {
                     log.warn("Ошибка при маршрутизации запроса '{}'. Используется fallback.", query, e);
@@ -71,11 +71,11 @@ public class RouterAgentService {
 
     private QueryIntent fallbackLogic(String query) {
         String lowerCaseQuery = query.toLowerCase();
-        if (lowerCaseQuery.matches(".*\\b(код|code|пример|example|sample|java|python|javascript|selenide)\\b.*")) {
+        if (lowerCaseQuery.matches(".\b(код|code|пример|example|sample|java|python|javascript|selenide)\b.")) {
             log.debug("Fallback: запрос содержит ключевые слова для кода, классифицируем как CODE_GENERATION.");
             return QueryIntent.CODE_GENERATION;
         }
-        if (lowerCaseQuery.matches(".*(что|где|когда|кто|как|почему|сколько|какой|whose|what|where|when|who|how|why).*") || lowerCaseQuery.endsWith("?")) {
+        if (lowerCaseQuery.matches(".(что|где|когда|кто|как|почему|сколько|какой|whose|what|where|when|who|how|why).") || lowerCaseQuery.endsWith("?")) {
             log.debug("Fallback: запрос похож на вопрос, классифицируем как RAG_QUERY.");
             return QueryIntent.RAG_QUERY;
         }

@@ -68,12 +68,12 @@ public class BugReproScriptGeneratorAgent implements ToolAgent {
         String promptString = promptService.render("bugReproScriptGeneratorPrompt", Map.of("summary", summary));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(generatedCode -> new AgentResult(
+                .map(tuple -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,
                         "Скрипт для воспроизведения бага успешно сгенерирован.",
                         Map.of(
-                                "generatedScript", generatedCode,
+                                "generatedScript", tuple.getT1(),
                                 "language", "java"
                         )
                 ));

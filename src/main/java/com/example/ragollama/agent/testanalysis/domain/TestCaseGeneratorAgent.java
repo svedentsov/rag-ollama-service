@@ -58,8 +58,8 @@ public class TestCaseGeneratorAgent implements ToolAgent {
 
         String promptString = promptService.render("testCaseGenerationPrompt", Map.of("requirements", requirementsText));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(this::parseLlmResponse)
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(testCases -> {
                     String summary = String.format("Генерация завершена. Создано %d тест-кейсов.", testCases.size());
                     log.info(summary);

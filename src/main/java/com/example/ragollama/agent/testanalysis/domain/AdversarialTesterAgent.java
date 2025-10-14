@@ -63,8 +63,8 @@ public class AdversarialTesterAgent implements ToolAgent {
                     "initial_test_json", initialTestJson
             ));
 
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(this::parseLlmResponse)
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                    .map(tuple -> parseLlmResponse(tuple.getT1()))
                     .map(adversarialCases -> {
                         log.info("AdversarialTesterAgent сгенерировал {} дополнительных тестов.", adversarialCases.size());
                         return new AgentResult(

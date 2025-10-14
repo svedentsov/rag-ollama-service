@@ -19,14 +19,15 @@
 
 .searchInput {
     width: 100%;
-    padding: 0.5rem 2.25rem; /* Оставляем место для иконок с обеих сторон */
+    padding: 0.5rem 2.25rem;
     border-radius: var(--radius);
     border: 1px solid hsl(var(--border));
     background-color: hsl(var(--secondary));
     color: hsl(var(--foreground));
     font-family: var(--font-family-sans);
     font-size: var(--font-size-sm);
-    box-sizing: border-box; /* Гарантирует правильный рендеринг padding */
+    box-sizing: border-box;
+    transition: border-color 0.2s ease-in-out;
 }
 
 .searchInput:focus {
@@ -52,6 +53,7 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
+    transition: color 0.2s, background-color 0.2s;
 }
 
 .clearButton:hover {

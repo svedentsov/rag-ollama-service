@@ -83,8 +83,8 @@ public class AuthRiskDetectorAgent implements ToolAgent {
             String rulesAsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(extractedRules);
             String promptString = promptService.render("authRiskDetectorPrompt", Map.of("rulesAsJson", rulesAsJson));
 
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(this::parseLlmResponse)
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                    .map(tuple -> parseLlmResponse(tuple.getT1()))
                     .map(risks -> {
                         String summary = String.format("Анализ рисков завершен. Найдено %d потенциальных проблем.", risks.size());
                         log.info(summary);

@@ -78,8 +78,8 @@ public class ExperimentAnalysisAgent implements ToolAgent {
             String resultsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(results);
             String promptString = promptService.render("experimentAnalyzerPrompt", Map.of("results_json", resultsJson));
 
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(this::parseLlmResponse)
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                    .map(tuple -> parseLlmResponse(tuple.getT1()))
                     .map(report -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,

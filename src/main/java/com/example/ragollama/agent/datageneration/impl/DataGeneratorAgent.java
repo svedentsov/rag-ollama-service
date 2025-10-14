@@ -70,8 +70,8 @@ public class DataGeneratorAgent implements ToolAgent {
                                 "record_count", count
                         ));
 
-                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                                .map(this::parseLlmResponse)
+                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                                .map(tuple -> parseLlmResponse(tuple.getT1()))
                                 .map(syntheticData -> new AgentResult(
                                         getName(),
                                         AgentResult.Status.SUCCESS,

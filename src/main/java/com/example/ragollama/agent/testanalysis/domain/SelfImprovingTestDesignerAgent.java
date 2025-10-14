@@ -88,7 +88,8 @@ public class SelfImprovingTestDesignerAgent implements ToolAgent {
         ));
         Prompt prompt = new Prompt(new UserMessage(promptString));
         return llmClient.callChat(prompt, ModelCapability.BALANCED)
-                .map(generatedCode -> {
+                .map(tuple -> {
+                    String generatedCode = tuple.getT1();
                     String className = classCode.substring(classCode.indexOf("class ") + 6, classCode.indexOf("{")).trim();
                     String testFileName = className + "Test.java";
                     return new GeneratedTestFile(testFileName, generatedCode);

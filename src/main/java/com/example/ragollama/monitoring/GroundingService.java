@@ -40,11 +40,11 @@ public class GroundingService {
             metricService.recordGroundingResult(false);
             return;
         }
-
         String promptString = promptService.render("groundingPrompt", Map.of("context", context, "answer", answer));
         llmClient.callChat(new Prompt(promptString), ModelCapability.FASTEST)
                 .subscribe(
-                        response -> {
+                        tuple -> {
+                            String response = tuple.getT1();
                             boolean isGrounded = response.trim().equalsIgnoreCase("GROUNDED");
                             metricService.recordGroundingResult(isGrounded);
                             if (!isGrounded) {

@@ -78,11 +78,11 @@ public class TestMetricsAnalyzerAgent implements ToolAgent {
         String promptString = promptService.render("testTrendAnalyzerPrompt", Map.of("days", days, "metricsData", dataForLlm));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(analysis -> new AgentResult(
+                .map(tuple -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,
                         "Анализ метрик тестирования завершен.",
-                        Map.of("analysisReport", analysis)
+                        Map.of("analysisReport", tuple.getT1())
                 ));
     }
 }

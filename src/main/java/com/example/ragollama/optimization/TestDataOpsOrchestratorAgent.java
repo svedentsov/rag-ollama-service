@@ -86,8 +86,8 @@ public class TestDataOpsOrchestratorAgent implements ToolAgent {
             ));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
-                    .flatMap(llmResponse -> {
-                        PlanStep stepToExecute = parseLlmResponse(llmResponse);
+                    .flatMap(tuple -> {
+                        PlanStep stepToExecute = parseLlmResponse(tuple.getT1());
                         return executionService.executePlan(List.of(stepToExecute), context, null)
                                 .map(results -> results.get(0));
                     });

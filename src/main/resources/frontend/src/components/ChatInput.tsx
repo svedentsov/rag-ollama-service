@@ -1,22 +1,22 @@
-import React, { useState, useRef, useEffect, FC } from 'react';
+import React, { useState, useRef, useEffect, FC, FormEvent, KeyboardEvent } from 'react';
 import { Send, Square } from 'lucide-react';
 import { ScrollToBottomButton } from "./ScrollToBottomButton";
 import styles from './ChatInput.module.css';
 
 /**
- * @interface ChatInputProps
- * @description Пропсы для компонента ChatInput.
+ * Пропсы для компонента ChatInput.
+ * @interface
  */
 interface ChatInputProps {
-  /** @param {(text: string) => void} onSendMessage - Колбэк для отправки нового сообщения. */
+  /** Колбэк для отправки нового сообщения. */
   onSendMessage: (text: string) => void;
-  /** @param {() => void} onStopGenerating - Колбэк для остановки всех активных генераций. */
+  /** Колбэк для остановки всех активных генераций. */
   onStopGenerating: () => void;
-  /** @param {boolean} isLoading - Флаг, указывающий, активен ли хотя бы один процесс генерации. */
+  /** Флаг, указывающий, активен ли хотя бы один процесс генерации. */
   isLoading: boolean;
-  /** @param {boolean} showScrollButton - Флаг для отображения кнопки прокрутки вниз. */
+  /** Флаг для отображения кнопки прокрутки вниз. */
   showScrollButton: boolean;
-  /** @param {() => void} onScrollToBottom - Колбэк для плавной прокрутки вниз. */
+  /** Колбэк для плавной прокрутки вниз. */
   onScrollToBottom: () => void;
 }
 
@@ -27,71 +27,83 @@ interface ChatInputProps {
  * @param {ChatInputProps} props - Пропсы компонента.
  * @returns {React.ReactElement} Отрендеренный компонент.
  */
-export const ChatInput: FC<ChatInputProps> = ({ onSendMessage, onStopGenerating, isLoading, showScrollButton, onScrollToBottom }) => {
-    const [inputText, setInputText] = useState('');
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
+export const ChatInput: FC<ChatInputProps> = ({
+  onSendMessage,
+  onStopGenerating,
+  isLoading,
+  showScrollButton,
+  onScrollToBottom
+}) => {
+  const [inputText, setInputText] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    useEffect(() => {
-        const textarea = textareaRef.current;
-        if (textarea) {
-            textarea.style.height = 'auto'; // Сбрасываем высоту
-            const scrollHeight = textarea.scrollHeight;
-            textarea.style.height = `${scrollHeight}px`;
-        }
-    }, [inputText]);
+  /**
+   * Эффект для автоматического изменения высоты поля ввода при изменении текста.
+   */
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto'; // Сбрасываем высоту для корректного пересчета
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  }, [inputText]);
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (inputText.trim()) {
-            onSendMessage(inputText);
-            setInputText('');
-        }
-    };
+  /**
+   * Обработчик отправки формы.
+   * @param {FormEvent} e - Событие формы.
+   */
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (inputText.trim() && !isLoading) {
+      onSendMessage(inputText);
+      setInputText('');
+    }
+  };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSubmit(e as unknown as React.FormEvent);
-        }
-    };
+  /**
+   * Обработчик нажатия клавиш для отправки по Enter.
+   * @param {KeyboardEvent<HTMLTextAreaElement>} e - Событие клавиатуры.
+   */
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e as unknown as FormEvent);
+    }
+  };
 
-    return (
-        <div className={styles.chatInputContainer}>
-            {showScrollButton && <ScrollToBottomButton onClick={onScrollToBottom} />}
-            <form onSubmit={handleSubmit} className={styles.chatInputForm}>
-                <textarea
-                    ref={textareaRef}
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Спросите что-нибудь..."
-                    className={styles.textarea}
-                    rows={1}
-                    aria-label="Поле для ввода сообщения"
-                />
-                {/*
-                  Контейнер теперь управляет состоянием анимации.
-                  Кнопки просто меняют свою видимость.
-                */}
-                <div className={`${styles.buttonContainer} ${isLoading ? styles.loading : ''}`}>
-                    <button
-                        type="submit"
-                        disabled={!inputText.trim()}
-                        className={`${styles.actionButton} ${styles.sendButton} ${!isLoading ? styles.visible : styles.hidden}`}
-                        aria-label="Отправить сообщение"
-                    >
-                        <Send size={18} />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={onStopGenerating}
-                        className={`${styles.actionButton} ${styles.stopButton} ${isLoading ? styles.visible : styles.hidden}`}
-                        aria-label="Остановить генерацию"
-                    >
-                        <Square size={18} />
-                    </button>
-                </div>
-            </form>
+  return (
+    <div className={styles.chatInputContainer}>
+      {showScrollButton && <ScrollToBottomButton onClick={() => onScrollToBottom()} />}
+      <form onSubmit={handleSubmit} className={styles.chatInputForm}>
+        <textarea
+          ref={textareaRef}
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Спросите что-нибудь..."
+          className={styles.textarea}
+          rows={1}
+          aria-label="Поле для ввода сообщения"
+        />
+        <div className={styles.buttonContainer}>
+          <button
+            type="submit"
+            disabled={!inputText.trim() || isLoading}
+            className={`${styles.sendButton} ${!isLoading ? styles.visible : styles.hidden}`}
+            aria-label="Отправить сообщение"
+          >
+            <Send size={20} />
+          </button>
+          <button
+            type="button"
+            onClick={onStopGenerating}
+            className={`${styles.stopButton} ${isLoading ? styles.visible : styles.hidden}`}
+            aria-label="Остановить генерацию"
+          >
+            <Square size={20} />
+          </button>
         </div>
-    );
-}
+      </form>
+    </div>
+  );
+};

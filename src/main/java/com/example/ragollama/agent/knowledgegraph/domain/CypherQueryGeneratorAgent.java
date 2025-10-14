@@ -65,7 +65,8 @@ public class CypherQueryGeneratorAgent implements ToolAgent {
         ));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, false)
-                .map(cypherQuery -> {
+                .map(tuple -> {
+                    String cypherQuery = tuple.getT1();
                     String cleanedQuery = cypherQuery.replaceAll("(?i)```cypher|```", "").trim();
                     log.info("Сгенерирован Cypher-запрос для вопроса: '{}'", question);
                     return new AgentResult(

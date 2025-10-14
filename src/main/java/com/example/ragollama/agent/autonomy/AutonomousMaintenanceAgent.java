@@ -87,9 +87,9 @@ public class AutonomousMaintenanceAgent implements QaAgent {
                     try {
                         String reportsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(healthReport);
                         String promptString = promptService.render("autonomousTriagePrompt", Map.of("reportsJson", reportsJson));
-                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                                .flatMap(llmResponse -> {
-                                    List<JiraTicketRequest> ticketsToCreate = parseLlmResponse(llmResponse);
+                        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                                .flatMap(tuple -> {
+                                    List<JiraTicketRequest> ticketsToCreate = parseLlmResponse(tuple.getT1());
                                     if (ticketsToCreate.isEmpty()) {
                                         return Mono.just(new AgentResult(getName(), AgentResult.Status.SUCCESS, "Анализ завершен. Новых задач по техдолгу не создано.", Map.of()));
                                     }

@@ -72,8 +72,8 @@ public class SdlcOrchestratorAgent {
                 "context", initialContext.payload()
         ));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(this::parseStrategicPlan)
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                .map(tuple -> parseStrategicPlan(tuple.getT1()))
                 .flatMap(plan -> {
                     if (plan.isEmpty()) {
                         log.warn("SDLC Orchestrator: LLM-планировщик не смог составить план для цели: '{}'", highLevelGoal);

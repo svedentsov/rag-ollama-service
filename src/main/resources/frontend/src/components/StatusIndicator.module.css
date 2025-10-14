@@ -1,14 +1,9 @@
-.statusWrapper {
+.statusContent {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    background-color: hsl(var(--secondary));
-    border: 1px solid hsl(var(--border));
-    border-radius: var(--radius);
-    max-width: 85%;
-    margin-bottom: 1rem;
-    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
 }
 
 .spinner {

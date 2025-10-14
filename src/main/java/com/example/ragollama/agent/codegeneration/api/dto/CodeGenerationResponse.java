@@ -7,12 +7,15 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *
  * @param generatedCode Сгенерированный фрагмент кода.
  * @param language      Язык программирования, на котором написан код (например, "java").
+ * @param finalPrompt   Полный текст промпта, отправленного в LLM.
  */
 @Schema(description = "DTO с результатом генерации кода")
 public record CodeGenerationResponse(
         @Schema(description = "Сгенерированный код")
         String generatedCode,
         @Schema(description = "Язык программирования", example = "java")
-        String language
+        String language,
+        @Schema(description = "Финальный промпт, отправленный в LLM")
+        String finalPrompt
 ) {
 }

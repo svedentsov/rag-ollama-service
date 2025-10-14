@@ -55,7 +55,8 @@ public class ContextualCompressionStep implements RagPipelineStep {
         ));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.FASTEST, false)
-                .map(compressedText -> {
+                .map(tuple -> {
+                    String compressedText = tuple.getT1();
                     log.info("Контекст успешно сжат.");
                     return context.withCompressedContext(compressedText);
                 });

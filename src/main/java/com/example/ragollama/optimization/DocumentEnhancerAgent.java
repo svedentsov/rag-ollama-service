@@ -74,8 +74,8 @@ public class DocumentEnhancerAgent implements ToolAgent {
         String fullText = (String) context.payload().get("document_text");
         String promptString = promptService.render("documentEnhancerPrompt", Map.of("document_text", fullText));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(this::parseLlmResponse)
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(metadata -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,
@@ -92,8 +92,8 @@ public class DocumentEnhancerAgent implements ToolAgent {
                     }
                     String promptString = promptService.render("documentEnhancerPrompt", Map.of("document_text", fullText));
 
-                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                            .map(this::parseLlmResponse)
+                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                            .map(tuple -> parseLlmResponse(tuple.getT1()))
                             .flatMap(metadata -> {
                                 Map<String, Object> updates = Map.of(
                                         "summary", metadata.summary(),

@@ -56,8 +56,8 @@ public class ArchitecturalHealthGovernorAgent implements ToolAgent {
             String contextJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(context.payload());
             String promptString = promptService.render("architecturalHealthGovernor", Map.of("context_json", contextJson));
 
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(this::parseLlmResponse)
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                    .map(tuple -> parseLlmResponse(tuple.getT1()))
                     .map(report -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,

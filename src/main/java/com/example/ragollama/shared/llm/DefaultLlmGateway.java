@@ -1,5 +1,7 @@
 package com.example.ragollama.shared.llm;
 
+import com.example.ragollama.shared.llm.aop.LlmQuotaCheck;
+import com.example.ragollama.shared.llm.aop.LlmUsageTracking;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -15,9 +17,11 @@ import java.util.StringJoiner;
 
 /**
  * Стандартная реализация {@link LlmGateway}, использующая Spring AI {@link ChatClient}.
- * <p> Этот компонент отвечает исключительно за прямое, "сырое" взаимодействие с LLM.
+ * <p>
+ * Этот компонент отвечает исключительно за прямое, "сырое" взаимодействие с LLM.
  * Он выполняется в выделенном пуле потоков для I/O-операций и включает
  * детализированное логирование параметров вызова для улучшения наблюдаемости.
+ * <p> Методы этого класса аннотированы для активации AOP-аспектов.
  */
 @Slf4j
 @Component
@@ -30,6 +34,8 @@ public class DefaultLlmGateway implements LlmGateway {
      * {@inheritDoc}
      */
     @Override
+    @LlmQuotaCheck
+    @LlmUsageTracking
     public Mono<ChatResponse> call(Prompt prompt, OllamaOptions options) {
         log.debug("Выполнение не-потокового вызова к LLM. {}", formatOptionsForLogging(options));
         return Mono.fromCallable(() -> chatClient.prompt(prompt)
@@ -43,6 +49,8 @@ public class DefaultLlmGateway implements LlmGateway {
      * {@inheritDoc}
      */
     @Override
+    @LlmQuotaCheck
+    @LlmUsageTracking
     public Flux<ChatResponse> stream(Prompt prompt, OllamaOptions options) {
         log.debug("Выполнение потокового вызова к LLM. {}", formatOptionsForLogging(options));
         return Flux.defer(() -> chatClient.prompt(prompt)

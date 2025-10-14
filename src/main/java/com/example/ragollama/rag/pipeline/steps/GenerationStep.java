@@ -2,6 +2,7 @@ package com.example.ragollama.rag.pipeline.steps;
 
 import com.example.ragollama.rag.api.dto.StreamingResponsePart;
 import com.example.ragollama.rag.domain.GenerationService;
+import com.example.ragollama.rag.domain.model.QueryFormationStep;
 import com.example.ragollama.rag.pipeline.RagFlowContext;
 import com.example.ragollama.rag.pipeline.RagPipelineStep;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +39,8 @@ public class GenerationStep implements RagPipelineStep {
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
         log.info("Шаг [40] Generation: делегирование генерации полного ответа...");
-        return generationService.generate(context.finalPrompt(), context.rerankedDocuments())
+        List<QueryFormationStep> history = context.processedQueries() != null ? context.processedQueries().formationHistory() : List.of();
+        return generationService.generate(context.finalPrompt(), context.rerankedDocuments(), history)
                 .map(context::withFinalAnswer);
     }
 
@@ -47,12 +49,13 @@ public class GenerationStep implements RagPipelineStep {
      * <p>
      * Этот метод вызывается напрямую оркестратором для потоковых сценариев.
      *
-     * @param prompt    Финальный промпт для LLM.
-     * @param documents Документы, использованные в качестве контекста.
+     * @param prompt                Финальный промпт для LLM.
+     * @param documents             Документы, использованные в качестве контекста.
+     * @param queryFormationHistory История формирования запроса.
      * @return Реактивный поток {@link Flux} со структурированными частями ответа.
      */
-    public Flux<StreamingResponsePart> generateStructuredStream(Prompt prompt, List<Document> documents) {
+    public Flux<StreamingResponsePart> generateStructuredStream(Prompt prompt, List<Document> documents, List<QueryFormationStep> queryFormationHistory) {
         log.info("Шаг [40] Generation (Stream): делегирование генерации потокового ответа...");
-        return generationService.generateStructuredStream(prompt, documents);
+        return generationService.generateStructuredStream(prompt, documents, queryFormationHistory);
     }
 }

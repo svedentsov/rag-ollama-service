@@ -47,13 +47,11 @@ public class CustomerImpactAnalyzerAgent implements ToolAgent {
 
     @Override
     public boolean canHandle(AgentContext context) {
-        return context.payload().containsKey("changedFiles") &&
-                context.payload().containsKey("oldRef") &&
+        return context.payload().containsKey("oldRef") &&
                 context.payload().containsKey("newRef");
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public Mono<AgentResult> execute(AgentContext context) {
         String oldRef = (String) context.payload().get("oldRef");
         String newRef = (String) context.payload().get("newRef");
@@ -63,9 +61,9 @@ public class CustomerImpactAnalyzerAgent implements ToolAgent {
                     String promptString = promptService.render("customerImpactAnalyzerPrompt", Map.of(
                             "codeDiff", diff.isBlank() ? "Изменений в коде не найдено." : diff
                     ));
-                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED);
+                    return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true);
                 })
-                .map(this::parseLlmResponse)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(report -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,

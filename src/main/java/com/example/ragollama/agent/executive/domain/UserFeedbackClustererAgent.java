@@ -73,8 +73,8 @@ public class UserFeedbackClustererAgent implements ToolAgent {
             String feedbackJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(rawFeedback);
             String promptString = promptService.render("userFeedbackClusterer", Map.of("raw_feedback_json", feedbackJson));
 
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(this::parseLlmResponse)
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                    .map(tuple -> parseLlmResponse(tuple.getT1()))
                     .map(report -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,

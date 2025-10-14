@@ -66,7 +66,7 @@ public class CanaryAnalyzerAgent implements ToolAgent {
             String promptString = promptService.render("canaryAnalysisPrompt", Map.of("statistical_results_json", statsJson));
 
             return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
-                    .map(llmResponse -> parseAndCombine(llmResponse, statisticalResults))
+                    .map(tuple -> parseAndCombine(tuple.getT1(), statisticalResults))
                     .map(report -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,

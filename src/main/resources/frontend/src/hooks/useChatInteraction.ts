@@ -16,6 +16,7 @@ export function useChatInteraction(sessionId: string) {
   const queryClient = useQueryClient();
   const { startStream, stopStream } = useStreamManager();
   const { messages } = useChatMessages(sessionId);
+  const activeStreams = useStreamingStore((state) => state.activeStreams);
 
   /**
    * Отправляет новое сообщение от пользователя и инициирует поток ответа от ассистента.
@@ -44,26 +45,22 @@ export function useChatInteraction(sessionId: string) {
   }, [messages, queryClient, sessionId, startStream]);
 
   /**
-   * Останавливает активную генерацию ответа в текущей сессии (для основной кнопки "Стоп").
+   * Останавливает все активные генерации ответов.
    */
   const handleStopGenerating = useCallback(() => {
-    const streamingMessage = messages.find(msg => msg.isStreaming);
-    if (streamingMessage) {
-      stopStream(streamingMessage.id);
-    } else {
-      const globalStreamingIds = useStreamingStore.getState().streamingMessageIds;
-      const firstId = Array.from(globalStreamingIds)[0];
-      if (firstId) {
-        console.warn(`Не найдено активного стрима в сессии ${sessionId}. Остановка первого глобального стрима в качестве fallback.`);
-        stopStream(firstId);
+    if (activeStreams.size > 0) {
+      for (const messageId of activeStreams.keys()) {
+        stopStream(messageId);
       }
+    } else {
+        console.warn("Stop generating called, but no active streams found in the global store.");
     }
-  }, [messages, stopStream, sessionId]);
+  }, [activeStreams, stopStream]);
 
   return {
     handleSendMessage,
     handleRegenerate,
     handleStopGenerating,
-    stopStream, // Явно экспортируем функцию для использования в дочерних компонентах
+    stopStream,
   };
 }

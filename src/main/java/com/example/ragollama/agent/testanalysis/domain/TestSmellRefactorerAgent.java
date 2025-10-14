@@ -70,8 +70,8 @@ public class TestSmellRefactorerAgent implements ToolAgent {
 
         String promptString = promptService.render("testSmellRefactorerPrompt", Map.of("testCode", testCode));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(this::parseLlmResponse)
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                .map(tuple -> parseLlmResponse(tuple.getT1()))
                 .map(refactoringResult -> new AgentResult(
                         getName(),
                         AgentResult.Status.SUCCESS,

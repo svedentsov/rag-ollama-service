@@ -1,5 +1,6 @@
-package com.example.ragollama.optimization;
+package com.example.ragollama.rag.pipeline.steps;
 
+import com.example.ragollama.optimization.SourceAnalyzerService;
 import com.example.ragollama.optimization.model.TrustScoreReport;
 import com.example.ragollama.rag.domain.model.RagAnswer;
 import com.example.ragollama.rag.pipeline.RagFlowContext;
@@ -19,7 +20,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
-import java.util.List;
+import java.util.Collections;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -40,6 +41,12 @@ public class TrustScoringStep implements RagPipelineStep {
     private final ObjectMapper objectMapper;
     private final JsonExtractorUtil jsonExtractorUtil;
 
+    /**
+     * Выполняет полный цикл вычисления Trust Score.
+     *
+     * @param context Текущий контекст RAG-конвейера.
+     * @return {@link Mono} с обновленным контекстом, содержащим отчет об оценке.
+     */
     @Override
     public Mono<RagFlowContext> process(RagFlowContext context) {
         log.info("Шаг [60] Trust Scoring: вычисление оценки доверия...");
@@ -47,10 +54,11 @@ public class TrustScoringStep implements RagPipelineStep {
         if (context.finalAnswer() == null || context.rerankedDocuments().isEmpty()) {
             metricService.recordTrustScore(0);
             TrustScoreReport emptyReport = new TrustScoreReport(0, 0, 0, 0, "Нет данных для оценки.");
-            RagAnswer answer = context.finalAnswer() != null ? context.finalAnswer() : new RagAnswer("", List.of());
-            return Mono.just(context.withFinalAnswer(new RagAnswer(answer.answer(), answer.sourceCitations(), emptyReport)));
+            RagAnswer answer = context.finalAnswer() != null ? context.finalAnswer() : new RagAnswer("", Collections.emptyList(), Collections.emptyList(), "");
+            return Mono.just(context.withFinalAnswer(new RagAnswer(answer.answer(), answer.sourceCitations(), answer.queryFormationHistory(), answer.finalPrompt(), emptyReport, answer.validationReport())));
         }
 
+        // 1. Детерминированная оценка источников
         int recencyScore = sourceAnalyzer.analyzeRecency(context.rerankedDocuments());
         int authorityScore = sourceAnalyzer.analyzeAuthority(context.rerankedDocuments());
 
@@ -65,9 +73,12 @@ public class TrustScoringStep implements RagPipelineStep {
                 "answer", context.finalAnswer().answer()
         ));
 
+        // 2. Оценка от AI-критика
         return llmClient.callChat(new Prompt(promptString), ModelCapability.FAST_RELIABLE, true)
-                .map(llmResponse -> {
+                .map(tuple -> {
+                    String llmResponse = tuple.getT1();
                     TrustScoreReport partialReport = parseLlmResponse(llmResponse);
+                    // 3. Вычисление финальной оценки
                     int finalScore = calculateFinalScore(partialReport.confidenceScore(), recencyScore, authorityScore);
                     TrustScoreReport fullReport = new TrustScoreReport(
                             finalScore, partialReport.confidenceScore(), recencyScore,
@@ -77,8 +88,9 @@ public class TrustScoringStep implements RagPipelineStep {
                     log.info("Оценка доверия для запроса '{}': {}", context.originalQuery(), fullReport);
                     metricService.recordTrustScore(finalScore);
 
+                    // 4. Обогащение финального ответа
                     RagAnswer originalAnswer = context.finalAnswer();
-                    RagAnswer answerWithScore = new RagAnswer(originalAnswer.answer(), originalAnswer.sourceCitations(), fullReport);
+                    RagAnswer answerWithScore = new RagAnswer(originalAnswer.answer(), originalAnswer.sourceCitations(), originalAnswer.queryFormationHistory(), originalAnswer.finalPrompt(), fullReport, originalAnswer.validationReport());
 
                     return context.withFinalAnswer(answerWithScore);
                 }).onErrorResume(ex -> {
@@ -86,12 +98,21 @@ public class TrustScoringStep implements RagPipelineStep {
                     metricService.recordTrustScore(0);
                     TrustScoreReport errorReport = new TrustScoreReport(0, 0, 0, 0, "Ошибка при вычислении оценки.");
                     RagAnswer originalAnswer = context.finalAnswer();
-                    RagAnswer answerWithScore = new RagAnswer(originalAnswer.answer(), originalAnswer.sourceCitations(), errorReport);
+                    RagAnswer answerWithScore = new RagAnswer(originalAnswer.answer(), originalAnswer.sourceCitations(), originalAnswer.queryFormationHistory(), originalAnswer.finalPrompt(), errorReport, originalAnswer.validationReport());
                     return Mono.just(context.withFinalAnswer(answerWithScore));
                 });
     }
 
+    /**
+     * Вычисляет финальную оценку как взвешенное среднее.
+     *
+     * @param confidence Оценка от AI-критика (0-100).
+     * @param recency    Оценка актуальности (0-100).
+     * @param authority  Оценка авторитетности (0-100).
+     * @return Финальная оценка (0-100).
+     */
     private int calculateFinalScore(int confidence, int recency, int authority) {
+        // Веса: 60% - уверенность LLM, 20% - актуальность, 20% - авторитетность
         return (int) (confidence * 0.6 + recency * 0.2 + authority * 0.2);
     }
 

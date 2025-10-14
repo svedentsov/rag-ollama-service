@@ -1,13 +1,15 @@
 import { useEffect, RefObject } from 'react';
 
+type Event = MouseEvent | TouchEvent;
+
 /**
  * Кастомный хук, который отслеживает клики за пределами указанного элемента.
- * @param ref - Ref-объект, указывающий на DOM-элемент, для которого нужно отслеживать клики снаружи.
- * @param handler - Функция, которая будет вызвана при клике за пределами элемента.
+ * @param {RefObject<HTMLElement>} ref - Ref-объект, указывающий на DOM-элемент, для которого нужно отслеживать клики снаружи.
+ * @param {() => void} handler - Функция, которая будет вызвана при клике за пределами элемента.
  */
 export function useClickOutside(ref: RefObject<HTMLElement>, handler: () => void) {
   useEffect(() => {
-    const listener = (event: MouseEvent | TouchEvent) => {
+    const listener = (event: Event) => {
       // Ничего не делаем, если ref не существует или клик был внутри самого элемента
       if (!ref.current || ref.current.contains(event.target as Node)) {
         return;

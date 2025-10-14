@@ -1,5 +1,6 @@
 package com.example.ragollama.monitoring.model;
 
+import com.example.ragollama.rag.domain.model.QueryFormationStep;
 import com.example.ragollama.rag.domain.model.SourceCitation;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
@@ -13,7 +14,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Сущность RagAuditLog, адаптированная для R2DBC.
+ * Сущность для хранения полного аудиторского следа RAG-взаимодействия.
+ * Включает в себя всю информацию, необходимую для отладки, анализа и
+ * обеспечения трассируемости ответов.
  */
 @Getter
 @Builder
@@ -29,6 +32,9 @@ public class RagAuditLog {
 
     @Column("request_id")
     private String requestId;
+
+    @Column("task_id")
+    private UUID taskId;
 
     @Column("session_id")
     private UUID sessionId;
@@ -47,6 +53,9 @@ public class RagAuditLog {
 
     @Column("llm_answer")
     private String llmAnswer;
+
+    @Column("query_formation_history")
+    private List<QueryFormationStep> queryFormationHistory;
 
     @CreatedDate
     @Column("created_at")

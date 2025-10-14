@@ -102,6 +102,6 @@ public class DataSubsetMaskerAgent implements ToolAgent {
         ));
 
         return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                .map(response -> response.replaceAll("(?i)```sql|```", "").trim());
+                .map(tuple -> tuple.getT1().replaceAll("(?i)```sql|```", "").trim());
     }
 }

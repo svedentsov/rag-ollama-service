@@ -47,7 +47,7 @@ public class ChecklistBuilderAgent implements ToolAgent {
 
     @Override
     public boolean canHandle(AgentContext context) {
-        return context.payload().containsKey("goal") && context.payload().containsKey("changedFiles");
+        return context.payload().containsKey("goal") && context.payload().containsKey("analysis_results_json");
     }
 
     @Override
@@ -63,8 +63,8 @@ public class ChecklistBuilderAgent implements ToolAgent {
                     "analysis_results_json", analysisJson
             ));
 
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(this::parseLlmResponse)
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                    .map(tuple -> parseLlmResponse(tuple.getT1()))
                     .map(checklist -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,

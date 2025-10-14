@@ -43,7 +43,8 @@ public class RagApplicationService {
                                         turnContext.history(),
                                         request.topK(),
                                         request.similarityThreshold(),
-                                        turnContext.sessionId()
+                                        turnContext.sessionId(),
+                                        taskId
                                 )
                                 .flatMap(ragAnswer ->
                                         dialogManager.endTurn(turnContext.sessionId(), turnContext.userMessageId(), ragAnswer.answer(), MessageRole.ASSISTANT, taskId)
@@ -51,6 +52,8 @@ public class RagApplicationService {
                                                         ragAnswer.answer(),
                                                         ragAnswer.sourceCitations(),
                                                         turnContext.sessionId(),
+                                                        ragAnswer.queryFormationHistory(),
+                                                        ragAnswer.finalPrompt(),
                                                         ragAnswer.trustScoreReport(),
                                                         ragAnswer.validationReport()
                                                 ))
@@ -74,7 +77,8 @@ public class RagApplicationService {
                                     turnContext.history(),
                                     request.topK(),
                                     request.similarityThreshold(),
-                                    turnContext.sessionId()
+                                    turnContext.sessionId(),
+                                    taskId
                             )
                             .doOnNext(part -> {
                                 if (part instanceof StreamingResponsePart.Content content) {

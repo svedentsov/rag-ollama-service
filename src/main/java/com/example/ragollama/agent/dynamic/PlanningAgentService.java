@@ -47,7 +47,8 @@ public class PlanningAgentService {
         log.info("Запрос к AI-маршрутизатору для выбора Toolbox для задачи: '{}'", taskDescription);
 
         return llmClient.callChat(new Prompt(routerPrompt), ModelCapability.FAST_RELIABLE)
-                .flatMap(toolboxName -> {
+                .flatMap(tuple -> {
+                    String toolboxName = tuple.getT1();
                     String trimmedToolboxName = toolboxName.trim();
                     log.info("AI-маршрутизатор выбрал Toolbox: '{}'", trimmedToolboxName);
 
@@ -78,7 +79,7 @@ public class PlanningAgentService {
         Prompt prompt = new Prompt(new UserMessage(promptString));
 
         return llmClient.callChat(prompt, ModelCapability.BALANCED, true)
-                .map(this::parsePlanFromLlmResponse)
+                .map(tuple -> parsePlanFromLlmResponse(tuple.getT1()))
                 .doOnSuccess(plan -> log.info("LLM-планировщик сгенерировал план из {} шагов.", plan.size()))
                 .doOnError(e -> log.error("Ошибка при создании плана для задачи '{}'", taskDescription, e));
     }

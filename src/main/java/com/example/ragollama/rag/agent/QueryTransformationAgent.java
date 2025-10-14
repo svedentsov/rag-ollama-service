@@ -37,8 +37,9 @@ public class QueryTransformationAgent implements QueryEnhancementAgent {
 
         String promptString = promptService.render("queryTransformationPrompt", Map.of("query", originalQuery));
 
-        return llmClient.callChat(new Prompt(promptString), ModelCapability.FASTEST)
-                .map(llmResponse -> {
+        return llmClient.callChat(new Prompt(promptString), ModelCapability.FASTEST, true)
+                .map(tuple -> {
+                    String llmResponse = tuple.getT1();
                     try {
                         String cleanedJson = llmResponse.replaceAll("(?s)```json\\s*|\\s*```", "").trim();
                         ExtractedQueryTerms terms = objectMapper.readValue(cleanedJson, ExtractedQueryTerms.class);

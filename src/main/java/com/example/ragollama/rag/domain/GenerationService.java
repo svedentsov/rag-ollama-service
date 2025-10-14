@@ -2,6 +2,7 @@ package com.example.ragollama.rag.domain;
 
 import com.example.ragollama.rag.api.dto.StreamingResponsePart;
 import com.example.ragollama.rag.domain.generation.NoContextStrategy;
+import com.example.ragollama.rag.domain.model.QueryFormationStep;
 import com.example.ragollama.rag.domain.model.RagAnswer;
 import com.example.ragollama.rag.domain.model.SourceCitation;
 import com.example.ragollama.shared.exception.GenerationException;
@@ -35,19 +36,21 @@ public class GenerationService {
     /**
      * Асинхронно генерирует полный ответ.
      *
-     * @param prompt    Промпт для LLM.
-     * @param documents Документы, использованные в контексте.
+     * @param prompt                Промпт для LLM.
+     * @param documents             Документы, использованные в контексте.
+     * @param queryFormationHistory История формирования запроса.
      * @return {@link Mono} с {@link RagAnswer}.
      */
-    public Mono<RagAnswer> generate(Prompt prompt, List<Document> documents) {
+    public Mono<RagAnswer> generate(Prompt prompt, List<Document> documents, List<QueryFormationStep> queryFormationHistory) {
         if (documents == null || documents.isEmpty()) {
             log.warn("На этап Generation не передано документов. Применяется стратегия '{}'.", noContextStrategy.getClass().getSimpleName());
             return noContextStrategy.handle(prompt);
         }
-        return llmClient.callChat(prompt, ModelCapability.BALANCED)
-                .map(generatedAnswer -> {
+        return llmClient.callChat(prompt, ModelCapability.BALANCED, true)
+                .map(tuple -> {
+                    String generatedAnswer = tuple.getT1();
                     List<SourceCitation> sourceCitations = extractCitations(documents);
-                    return new RagAnswer(generatedAnswer, sourceCitations);
+                    return new RagAnswer(generatedAnswer, sourceCitations, queryFormationHistory, prompt.getContents());
                 })
                 .onErrorMap(ex -> {
                     log.error("Ошибка на этапе генерации ответа LLM", ex);
@@ -58,11 +61,12 @@ public class GenerationService {
     /**
      * Генерирует ответ в виде структурированного потока.
      *
-     * @param prompt    Промпт для LLM.
-     * @param documents Документы, использованные в контексте.
+     * @param prompt                Промпт для LLM.
+     * @param documents             Документы, использованные в качестве контекста.
+     * @param queryFormationHistory История формирования запроса.
      * @return {@link Flux} со {@link StreamingResponsePart}.
      */
-    public Flux<StreamingResponsePart> generateStructuredStream(Prompt prompt, List<Document> documents) {
+    public Flux<StreamingResponsePart> generateStructuredStream(Prompt prompt, List<Document> documents, List<QueryFormationStep> queryFormationHistory) {
         if (documents == null || documents.isEmpty()) {
             log.warn("В потоковом запросе на этап Generation не передано документов.");
             return noContextStrategy.handle(prompt)
@@ -76,7 +80,7 @@ public class GenerationService {
                 .map(StreamingResponsePart.Content::new);
 
         Flux<StreamingResponsePart> tailStream = Flux.just(
-                new StreamingResponsePart.Sources(extractCitations(documents)),
+                new StreamingResponsePart.Sources(extractCitations(documents), queryFormationHistory, prompt.getContents()),
                 new StreamingResponsePart.Done("Успешно завершено")
         );
 

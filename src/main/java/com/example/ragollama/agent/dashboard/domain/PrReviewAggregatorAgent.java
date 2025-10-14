@@ -19,12 +19,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.Map;
 
-/**
- * AI-агент, выступающий в роли "AI Team Lead".
- * <p>
- * Агрегирует отчеты от всех аналитических агентов (покрытие, безопасность, архитектура)
- * и синтезирует из них единый, исчерпывающий отчет-ревью для Pull Request.
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -56,8 +50,8 @@ public class PrReviewAggregatorAgent implements ToolAgent {
             String analysisJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(context.payload());
             String promptString = promptService.render("prReviewAggregatorPrompt", Map.of("analysis_reports_json", analysisJson));
 
-            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED)
-                    .map(this::parseLlmResponse)
+            return llmClient.callChat(new Prompt(promptString), ModelCapability.BALANCED, true)
+                    .map(tuple -> parseLlmResponse(tuple.getT1()))
                     .map(report -> new AgentResult(
                             getName(),
                             AgentResult.Status.SUCCESS,
