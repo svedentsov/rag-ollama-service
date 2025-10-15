@@ -1,6 +1,7 @@
 package com.example.ragollama.agent.accessibility.api;
 
 import com.example.ragollama.agent.AgentOrchestratorService;
+import com.example.ragollama.agent.AgentResult;
 import com.example.ragollama.agent.accessibility.api.dto.AccessibilityAuditRequest;
 import com.example.ragollama.agent.accessibility.api.dto.AccessibilityAuditResponse;
 import com.example.ragollama.agent.accessibility.mappers.AccessibilityMapper;
@@ -18,19 +19,19 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 /**
  * Контроллер для AI-агента, выполняющего аудит доступности (a11y).
  * <p>
  * Эталонная реализация Web-слоя в Clean Architecture. Его обязанности строго ограничены:
  * <ul>
  *     <li>Прием и валидация входящих DTO (Data Transfer Objects).</li>
- *     <li>Делегирование всей бизнес-логики сервисному слою ({@link AgentOrchestratorService}).</li>
- *     <li>Преобразование внутреннего результата в публичный DTO ответа с помощью маппера.</li>
+ *     <li>Делегирование всей бизнес-логики сервисному слою через вызов именованного конвейера.</li>
+ *     <li>Преобразование финального результата конвейера в публичный DTO ответа.</li>
  * </ul>
- * <p>
- * Благодаря использованию {@link AgentOrchestratorService#invokeSingle(String, com.example.ragollama.agent.AgentContext)},
- * контроллер работает со строго типизированным {@code Mono<AgentResult>}, что повышает надежность
- * и устраняет необходимость в ручном извлечении результата из списка.
+ * Использование `invoke()` вместо `invokeSingle()` обеспечивает слабую связанность
+ * и позволяет изменять состав конвейера без модификации контроллера.
  */
 @RestController
 @RequestMapping("/api/v1/agents/accessibility")
@@ -42,19 +43,19 @@ public class AccessibilityAgentController {
     private final AccessibilityMapper accessibilityMapper;
 
     /**
-     * Запускает асинхронный аудит HTML-кода на предмет нарушений доступности.
+     * Запускает асинхронный конвейер для аудита HTML-кода на предмет нарушений доступности.
      * <p>
-     * Вызывает одиночного агента {@code accessibility-auditor} напрямую, что делает
-     * вызов декларативным и независимым от концепции "конвейеров" для простых операций.
+     * Вызывает именованный конвейер {@code accessibility-audit-pipeline}, который инкапсулирует
+     * всю логику выполнения. Контроллер не имеет знаний о том, из каких агентов состоит конвейер.
      *
      * @param request DTO с HTML-кодом для анализа. Должен быть валидным.
-     * @return {@link Mono}, который по завершении будет содержать результат работы агента,
+     * @return {@link Mono}, который по завершении будет содержать результат работы конвейера,
      * преобразованный в DTO ответа. Spring WebFlux автоматически обработает асинхронный ответ.
      */
     @PostMapping("/audit")
     @Operation(
             summary = "Провести аудит доступности (a11y) для HTML-кода",
-            description = "Принимает HTML-код страницы и асинхронно запускает агент для его анализа. " +
+            description = "Принимает HTML-код страницы и асинхронно запускает конвейер для его анализа. " +
                     "Возвращает отчет с резюме, рекомендациями и списком технических нарушений.")
     @ApiResponse(
             responseCode = "200",
@@ -62,7 +63,23 @@ public class AccessibilityAgentController {
             content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = AccessibilityAuditResponse.class)))
     @ApiResponse(responseCode = "400", description = "Некорректный запрос (например, пустой HTML)")
     public Mono<AccessibilityAuditResponse> auditAccessibility(@Valid @RequestBody AccessibilityAuditRequest request) {
-        return orchestratorService.invokeSingle("accessibility-auditor", request.toAgentContext())
+        return orchestratorService.invoke("accessibility-audit-pipeline", request.toAgentContext())
+                .map(this::extractFinalResult)
                 .map(accessibilityMapper::toResponseDto);
+    }
+
+    /**
+     * Извлекает результат последнего агента из списка результатов конвейера.
+     *
+     * @param results Список результатов от всех агентов в конвейере.
+     * @return Финальный {@link AgentResult}.
+     * @throws IllegalStateException если конвейер не вернул ни одного результата.
+     */
+    private AgentResult extractFinalResult(List<AgentResult> results) {
+        if (results == null || results.isEmpty()) {
+            throw new IllegalStateException("Внутренняя ошибка: конвейер не вернул результат.");
+        }
+        // В последовательном конвейере нас интересует результат последнего шага.
+        return results.getLast();
     }
 }

@@ -4,39 +4,44 @@ import com.example.ragollama.agent.AgentContext;
 import com.example.ragollama.agent.codegeneration.api.dto.CodeGenerationRequest;
 import com.example.ragollama.agent.openapi.api.dto.OpenApiSourceRequest;
 import com.example.ragollama.chat.api.dto.ChatRequest;
+import com.example.ragollama.orchestration.validation.ValidRequestPayload;
 import com.example.ragollama.rag.api.dto.RagQueryRequest;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 /**
  * Универсальный DTO для всех входящих запросов к оркестратору.
- * <p>
- * Эта версия включает исправленный метод `toAgentContext`, который корректно
- * собирает все возможные параметры в единый контекст для передачи
- * в систему агентов.
+ * Валидируется с помощью кастомной аннотации {@link ValidRequestPayload}.
  *
  * @param query         Основной текстовый запрос или инструкция от пользователя.
  * @param sessionId     Опциональный идентификатор сессии.
  * @param context       Опциональный дополнительный контекст (например, для кодогенерации).
+ * @param history       Опциональная история сообщений для сохранения контекста при регенерации.
  * @param ragOptions    Опциональные, но валидируемые параметры для RAG-поиска.
  * @param openApiSource Опциональный источник OpenAPI спецификации для анализа.
  */
 @Schema(description = "Универсальный DTO для запросов к AI-оркестратору")
+@ValidRequestPayload
 public record UniversalRequest(
-        @Schema(description = "Основной запрос или инструкция от пользователя", requiredMode = Schema.RequiredMode.REQUIRED, example = "Могу ли я получить деньги за неиспользованный отпуск?")
-        @NotBlank @Size(max = 4096)
+        @Schema(description = "Основной запрос или инструкция от пользователя", example = "Могу ли я получить деньги за неиспользованный отпуск?")
+        @Size(max = 4096) // Убираем @NotBlank, так как валидация теперь на уровне класса
         String query,
 
         @Schema(description = "Опциональный ID сессии для продолжения диалога", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
         UUID sessionId,
 
-        @Schema(description = "Опциональный дополнительный контекст (например, для генерации кода)", example = "string")
+        @Schema(description = "Опциональный дополнительный контекст (например, содержимое файла)", example = "string")
         String context,
+
+        @Schema(description = "Опциональная история сообщений для контекста регенерации")
+        @Valid
+        List<MessageDto> history,
 
         @Schema(description = "Опциональные параметры для RAG-поиска")
         @Valid
@@ -60,6 +65,9 @@ public record UniversalRequest(
         }
         if (context != null) {
             payload.put("context", context);
+        }
+        if (history != null) {
+            payload.put("history", history);
         }
         if (ragOptions != null) {
             payload.put("ragOptions", ragOptions);

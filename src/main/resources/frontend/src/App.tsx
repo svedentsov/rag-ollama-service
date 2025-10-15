@@ -19,14 +19,15 @@ interface AppProps {
 
 /**
  * Главный компонент-контейнер для чата.
- * Этот компонент является "глупым" (dumb component), делегируя всю бизнес-логику кастомным хукам.
- * Его задача - композиция UI-компонентов и передача им пропсов.
  * @param {AppProps} props - Пропсы компонента.
  * @returns {React.ReactElement} Отрендеренный компонент чата.
  */
 const App: React.FC<AppProps> = ({ sessionId }) => {
   const { messages, isLoading: isLoadingHistory, error: historyError, updateMessage, deleteMessage } = useChatMessages(sessionId);
+
+  // --- ИЗМЕНЕНИЕ: Хук снова принимает sessionId, чтобы корректно работать с кэшем React Query ---
   const { handleSendMessage, handleRegenerate, handleStopGenerating, stopStream } = useChatInteraction(sessionId);
+
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
   const { visibleMessages, messageBranchInfo } = useVisibleMessages(sessionId, messages);

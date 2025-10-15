@@ -1,29 +1,27 @@
-import React, { useState, useRef, useEffect, FC, FormEvent, KeyboardEvent } from 'react';
-import { Send, Square } from 'lucide-react';
+import React, { useState, useRef, useEffect, FC, FormEvent, KeyboardEvent, ChangeEvent } from 'react';
+import toast from 'react-hot-toast';
+import { Send, Square, Plus, X, FileText } from 'lucide-react';
 import { ScrollToBottomButton } from "./ScrollToBottomButton";
+import { useAttachmentStore } from '../state/attachmentStore';
+import { useSessionStore } from '../state/sessionStore';
 import styles from './ChatInput.module.css';
 
 /**
- * Пропсы для компонента ChatInput.
- * @interface
+ * @interface ChatInputProps
+ * @description Пропсы для компонента ChatInput.
  */
 interface ChatInputProps {
-  /** Колбэк для отправки нового сообщения. */
-  onSendMessage: (text: string) => void;
-  /** Колбэк для остановки всех активных генераций. */
+  onSendMessage: (text: string, context?: string) => void;
   onStopGenerating: () => void;
-  /** Флаг, указывающий, активен ли хотя бы один процесс генерации. */
   isLoading: boolean;
-  /** Флаг для отображения кнопки прокрутки вниз. */
   showScrollButton: boolean;
-  /** Колбэк для плавной прокрутки вниз. */
   onScrollToBottom: () => void;
 }
 
+const MAX_FILE_SIZE_MB = 5;
+
 /**
- * Компонент для ввода и отправки сообщений в чат.
- * Управляет состоянием текстового поля, его автоматическим расширением
- * и отображением кнопок "Отправить" или "Стоп" с плавной анимацией.
+ * Компонент для ввода и отправки сообщений в чат с классическим дизайном.
  * @param {ChatInputProps} props - Пропсы компонента.
  * @returns {React.ReactElement} Отрендеренный компонент.
  */
@@ -36,36 +34,50 @@ export const ChatInput: FC<ChatInputProps> = ({
 }) => {
   const [inputText, setInputText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  /**
-   * Эффект для автоматического изменения высоты поля ввода при изменении текста.
-   */
+  const sessionId = useSessionStore((state) => state.currentSessionId);
+  const { attachment, setAttachment, clearAttachment } = useAttachmentStore((state) => ({
+    attachment: state.attachments.get(sessionId || '') || null,
+    setAttachment: (file: { name: string; content: string }) => sessionId && state.setAttachment(sessionId, file),
+    clearAttachment: () => sessionId && state.clearAttachment(sessionId),
+  }));
+
   useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {
-      textarea.style.height = 'auto'; // Сбрасываем высоту для корректного пересчета
+      textarea.style.height = 'auto';
       textarea.style.height = `${textarea.scrollHeight}px`;
     }
   }, [inputText]);
 
-  /**
-   * Обработчик отправки формы.
-   * @param {FormEvent} e - Событие формы.
-   */
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+        toast.error(`Файл слишком большой. Максимальный размер: ${MAX_FILE_SIZE_MB} МБ.`);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result as string;
+        setAttachment({ name: file.name, content });
+      };
+      reader.onerror = () => { toast.error('Не удалось прочитать файл.'); };
+      reader.readAsText(file);
+    }
+  };
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (inputText.trim() && !isLoading) {
-      onSendMessage(inputText);
+    if ((inputText.trim() || attachment) && !isLoading) {
+      onSendMessage(inputText, attachment?.content);
       setInputText('');
     }
   };
 
-  /**
-   * Обработчик нажатия клавиш для отправки по Enter.
-   * @param {KeyboardEvent<HTMLTextAreaElement>} e - Событие клавиатуры.
-   */
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !isLoading) {
       e.preventDefault();
       handleSubmit(e as unknown as FormEvent);
     }
@@ -75,33 +87,65 @@ export const ChatInput: FC<ChatInputProps> = ({
     <div className={styles.chatInputContainer}>
       {showScrollButton && <ScrollToBottomButton onClick={() => onScrollToBottom()} />}
       <form onSubmit={handleSubmit} className={styles.chatInputForm}>
-        <textarea
-          ref={textareaRef}
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Спросите что-нибудь..."
-          className={styles.textarea}
-          rows={1}
-          aria-label="Поле для ввода сообщения"
-        />
-        <div className={styles.buttonContainer}>
-          <button
-            type="submit"
-            disabled={!inputText.trim() || isLoading}
-            className={`${styles.sendButton} ${!isLoading ? styles.visible : styles.hidden}`}
-            aria-label="Отправить сообщение"
-          >
-            <Send size={20} />
-          </button>
+        {attachment && (
+          <div className={styles.attachmentPill}>
+            <FileText size={16} />
+            <span className={styles.attachmentName}>{attachment.name}</span>
+            <button
+              type="button"
+              className={styles.removeAttachmentButton}
+              onClick={clearAttachment}
+              aria-label="Удалить прикрепленный файл"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+        <div className={styles.inputRow}>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept=".txt,.md,.json,.java,.log,.xml,.yaml,.yml"
+            style={{ display: 'none' }}
+          />
           <button
             type="button"
-            onClick={onStopGenerating}
-            className={`${styles.stopButton} ${isLoading ? styles.visible : styles.hidden}`}
-            aria-label="Остановить генерацию"
+            className={styles.iconButton}
+            aria-label="Прикрепить файл"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!!attachment}
           >
-            <Square size={20} />
+            <Plus size={20} />
           </button>
+          <textarea
+            ref={textareaRef}
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={attachment ? "Опишите, что сделать с файлом..." : "Спросите что-нибудь..."}
+            className={styles.textarea}
+            rows={1}
+            aria-label="Поле для ввода сообщения"
+          />
+          <div className={styles.buttonContainer}>
+            <button
+              type="submit"
+              disabled={!inputText.trim() && !isLoading && !attachment}
+              className={`${styles.sendButton} ${!isLoading ? styles.visible : styles.hidden}`}
+              aria-label="Отправить сообщение"
+            >
+              <Send size={20} />
+            </button>
+            <button
+              type="button"
+              onClick={onStopGenerating}
+              className={`${styles.stopButton} ${isLoading ? styles.visible : styles.hidden}`}
+              aria-label="Остановить генерацию"
+            >
+              <Square size={20} />
+            </button>
+          </div>
         </div>
       </form>
     </div>

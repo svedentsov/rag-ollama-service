@@ -49,7 +49,6 @@ export interface ServerMessageDto {
   content: string;
   createdAt: string;
   taskId?: string;
-  // Опциональные поля, которые приходят только для RAG-ответов
   sourceCitations?: SourceCitation[];
   queryFormationHistory?: QueryFormationStep[];
   finalPrompt?: string;
@@ -107,7 +106,7 @@ export type UniversalStreamResponse =
   | { type: 'status_update'; text: string }
   | { type: 'thinking_thought'; stepName: string; status: 'RUNNING' | 'COMPLETED' }
   | { type: 'content'; text: string }
-  | { type: 'sources'; sources: SourceCitation[], queryFormationHistory?: QueryFormationStep[], finalPrompt?: string }
+  | { type: 'sources'; sources: SourceCitation[], queryFormationHistory?: QueryFormationStep[], finalPrompt?: string, trustScoreReport?: TrustScoreReport }
   | { type: 'code', generatedCode: string, language: string, finalPrompt?: string }
   | { type: 'done'; message: string }
   | { type: 'error'; message: string };

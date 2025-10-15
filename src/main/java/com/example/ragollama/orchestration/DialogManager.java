@@ -6,6 +6,7 @@ import com.example.ragollama.chat.domain.ChatSessionService;
 import com.example.ragollama.chat.domain.model.ChatMessage;
 import com.example.ragollama.chat.domain.model.ChatSession;
 import com.example.ragollama.chat.domain.model.MessageRole;
+import com.example.ragollama.orchestration.dto.MessageDto;
 import com.example.ragollama.shared.config.properties.AppProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,7 @@ import reactor.core.publisher.Mono;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Сервис-оркестратор для управления "ходом" в диалоге, адаптированный для R2DBC.
@@ -26,7 +28,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DialogManager {
 
-    public record TurnContext(UUID sessionId, UUID userMessageId, List<Message> history) {}
+    public record TurnContext(UUID sessionId, UUID userMessageId, List<Message> history) {
+    }
 
     private final ChatHistoryService chatHistoryService;
     private final ChatSessionService chatSessionService;
@@ -52,6 +55,24 @@ public class DialogManager {
                         fullHistory.add(currentMessage);
                         return new TurnContext(finalSessionId, tuple.getT1().getId(), fullHistory);
                     });
+        });
+    }
+
+    /**
+     * Перегруженный метод для начала хода с уже существующей историей.
+     */
+    public Mono<TurnContext> startTurnWithHistory(UUID sessionId, String userMessage, List<MessageDto> historyDto) {
+        Mono<ChatSession> sessionMono = chatSessionService.findOrCreateSession(sessionId);
+        List<Message> history = historyDto.stream()
+                .map(dto -> (Message) new UserMessage(dto.content())) // Упрощенное преобразование
+                .collect(Collectors.toList());
+
+        return sessionMono.flatMap(session -> {
+            // В этом сценарии мы не сохраняем пользовательское сообщение заново,
+            // так как оно уже является частью истории, переданной с клиента.
+            // Нам просто нужен ID последнего сообщения в истории как parentId.
+            // Для простоты, пока оставим parentId null.
+            return Mono.just(new TurnContext(session.getSessionId(), null, history));
         });
     }
 

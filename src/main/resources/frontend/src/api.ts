@@ -1,4 +1,4 @@
-import { ChatSession, ServerMessageDto, UniversalStreamResponse } from './types';
+import { ChatSession, ServerMessageDto, UniversalStreamResponse, Message } from './types';
 
 const API_BASE_URL = '/api/v1';
 
@@ -47,12 +47,10 @@ async function apiClient<T>(endpoint: string, options?: RequestInit): Promise<T>
       return undefined as T;
     }
 
-    // Добавляем проверку на наличие тела ответа перед парсингом JSON
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
         return response.json();
     }
-    // Для ответов без JSON-тела (например, простой текст) возвращаем undefined
     return undefined as T;
 
   } catch (error) {
@@ -100,24 +98,35 @@ export const api = {
  * @param {string} query - Текст запроса пользователя.
  * @param {string} sessionId - ID текущей сессии.
  * @param {AbortSignal} signal - Сигнал для отмены запроса.
- * @returns {AsyncGenerator<UniversalStreamResponse, void, undefined>} Асинхронный генератор, который выдает части ответа.
+ * @param {Message[]} history - История сообщений для контекста.
+ * @param {string} [context] - Опциональный контекст (содержимое файла).
+ * @returns {AsyncGenerator<UniversalStreamResponse, void, undefined>} Асинхронный генератор.
  */
 export async function* streamChatResponse(
     query: string,
     sessionId: string,
-    signal: AbortSignal
+    signal: AbortSignal,
+    history: Message[],
+    context?: string
 ): AsyncGenerator<UniversalStreamResponse, void, undefined> {
+    const historyDto = history.map(m => ({ type: m.type.toUpperCase(), content: m.text }));
     const response = await fetch('/api/v1/orchestrator/ask-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-        body: JSON.stringify({ query, sessionId }),
+        body: JSON.stringify({ query, sessionId, history: historyDto, context }), // --- ИСПРАВЛЕНИЕ: Добавлено поле context ---
         signal,
     });
 
     if (!response.body) throw new Error('Stream body is missing');
     if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`HTTP error! Status: ${response.status}, message: ${errorText}`);
+        let errorJson;
+        try {
+            errorJson = JSON.parse(errorText);
+        } catch {
+            errorJson = { detail: errorText };
+        }
+        throw new Error(`HTTP error! Status: ${response.status}, message: ${errorJson.detail || errorText}`);
     }
 
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();

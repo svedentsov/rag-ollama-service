@@ -104,7 +104,6 @@
     text-align: left;
     font-size: var(--font-size-sm);
     gap: 0.5rem;
-    width: 100%; /* Добавлено для корректной работы flex */
 }
 
 .navLink:hover {
@@ -136,7 +135,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     flex-grow: 1;
-    min-width: 0;
+    min-width: 0; /* --- ИСПРАВЛЕНИЕ --- */
     font-weight: var(--font-weight-medium);
     text-align: left; /* Добавлено */
 }

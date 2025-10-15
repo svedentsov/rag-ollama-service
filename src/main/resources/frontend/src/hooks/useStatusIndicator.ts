@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useStreamingStore } from '../state/streamingStore';
 
 /**
  * Форматирует прошедшее время в секундах.
@@ -9,33 +8,37 @@ import { useStreamingStore } from '../state/streamingStore';
 const formatTime = (seconds: number): string => `${seconds}s`;
 
 /**
- * Хук для управления состоянием индикатора загрузки.
- * Инкапсулирует логику таймера и форматирования статусного текста.
+ * Хук для управления состоянием индикатора загрузки, инкапсулирующий логику таймера.
  * @param {boolean} isRunning - Флаг, указывающий, активна ли операция.
  * @param {string | null} statusText - Текст текущего статуса (например, "Ищу информацию...").
+ * @param {number | null} startTime - Временная метка начала выполнения задачи в миллисекундах.
  * @returns {string} Отформатированную строку статуса для отображения в UI или пустую строку.
  */
 export function useStatusIndicator(isRunning: boolean, statusText: string | null, startTime: number | null): string {
-    const [currentTime, setCurrentTime] = useState(Date.now());
+    const [elapsedTime, setElapsedTime] = useState(0);
 
     useEffect(() => {
         let timer: number | undefined;
-        if (isRunning) {
-            // Обновляем текущее время каждую секунду для перерисовки таймера
+
+        if (isRunning && startTime) {
+            // Устанавливаем таймер, который будет обновлять только внутреннее состояние хука
             timer = window.setInterval(() => {
-                setCurrentTime(Date.now());
+                setElapsedTime(Math.round((Date.now() - startTime) / 1000));
             }, 1000);
         } else {
+            // Сбрасываем таймер и время, когда операция завершается
             clearInterval(timer);
+            setElapsedTime(0);
         }
-        return () => window.clearInterval(timer);
-    }, [isRunning]);
 
-    if (!isRunning || !startTime) {
+        // Очистка при размонтировании компонента или изменении зависимостей
+        return () => window.clearInterval(timer);
+    }, [isRunning, startTime]); // Эффект зависит только от isRunning и startTime
+
+    if (!isRunning) {
         return '';
     }
 
-    const elapsedTime = Math.round((currentTime - startTime) / 1000);
     const baseText = statusText || 'Думаю...';
 
     return `${baseText} ${formatTime(elapsedTime)}`;

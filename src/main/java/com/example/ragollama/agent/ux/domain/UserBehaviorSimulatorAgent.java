@@ -13,6 +13,8 @@ import com.example.ragollama.shared.prompts.PromptService;
 import com.example.ragollama.shared.util.JsonExtractorUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Playwright;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -26,18 +28,22 @@ import java.util.Map;
 
 /**
  * Автономный AI-агент, который симулирует поведение пользователя в веб-браузере.
+ * <p>
+ * Эта версия использует идиоматичный для Project Reactor паттерн {@code Mono.usingWhen}
+ * для надежного управления жизненным циклом ресурсов Playwright, обеспечивая
+ * полную изоляцию и потокобезопасность для каждой симуляции.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class UserBehaviorSimulatorAgent implements ToolAgent {
 
-    private final PlaywrightActionService playwright;
+    private final PlaywrightActionService playwrightService;
     private final LlmClient llmClient;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
-    private static final int MAX_STEPS = 10;
     private final JsonExtractorUtil jsonExtractorUtil;
+    private static final int MAX_STEPS = 10;
 
     @Override
     public String getName() {
@@ -58,22 +64,51 @@ public class UserBehaviorSimulatorAgent implements ToolAgent {
     public Mono<AgentResult> execute(AgentContext context) {
         String startUrl = (String) context.payload().get("startUrl");
         String goal = (String) context.payload().get("goal");
-        List<AgentCommand> history = new ArrayList<>();
 
-        playwright.startSession();
-        playwright.goTo(startUrl);
+        // `usingWhen` - идеальный оператор для управления ресурсами с жизненным циклом.
+        // Теперь мы управляем жизненным циклом Browser, а не Page.
+        return Mono.usingWhen(
+                // 1. Асинхронное создание ресурса (Playwright Browser)
+                Mono.fromCallable(() -> {
+                    log.info("Создание нового изолированного сеанса Playwright для симуляции...");
+                    Playwright playwright = Playwright.create();
+                    return playwright.chromium().launch();
+                }).doOnSuccess(b -> log.debug("Экземпляр Browser успешно создан.")),
 
-        return Mono.<AgentResult>create(sink -> runNextStep(goal, history, 0, sink))
-                .doFinally(signalType -> playwright.closeSession());
+                // 2. Логика, использующая ресурс (создаем Page и запускаем цикл)
+                browser -> {
+                    Page page = browser.newPage();
+                    playwrightService.goTo(page, startUrl);
+                    return Mono.create(sink -> runNextStep(goal, new ArrayList<>(), 0, page, sink));
+                },
+
+                // 3. Асинхронная очистка ресурса (успешное завершение)
+                browser -> Mono.fromRunnable(() -> {
+                    log.info("Симуляция успешно завершена. Закрытие сеанса Playwright...");
+                    browser.close();
+                }),
+
+                // 4. Асинхронная очистка при ошибке
+                (browser, error) -> Mono.fromRunnable(() -> {
+                    log.error("Ошибка во время симуляции. Гарантированное закрытие сеанса Playwright.", error);
+                    browser.close();
+                }),
+
+                // 5. Асинхронная очистка при отмене
+                browser -> Mono.fromRunnable(() -> {
+                    log.warn("Симуляция была отменена. Гарантированное закрытие сеанса Playwright.");
+                    browser.close();
+                })
+        );
     }
 
-    private void runNextStep(String goal, List<AgentCommand> history, int step, MonoSink<AgentResult> sink) {
+    private void runNextStep(String goal, List<AgentCommand> history, int step, Page page, MonoSink<AgentResult> sink) {
         if (step >= MAX_STEPS) {
             finishSimulation(goal, history, "FAILURE", "Достигнут максимальный лимит шагов.", sink);
             return;
         }
 
-        String dom = playwright.getDom();
+        String dom = playwrightService.getDom(page);
         String promptString = promptService.render("userBehaviorSimulatorPrompt", Map.of(
                 "goal", goal, "history", history, "current_dom", dom
         ));
@@ -85,12 +120,12 @@ public class UserBehaviorSimulatorAgent implements ToolAgent {
                             try {
                                 AgentCommand command = parseLlmResponse(llmResponse);
                                 history.add(command);
-                                executeCommand(command);
+                                executeCommand(page, command);
 
                                 if ("finish".equalsIgnoreCase(command.command())) {
                                     finishSimulation(goal, history, "SUCCESS", command.thought(), sink);
                                 } else {
-                                    runNextStep(goal, history, step + 1, sink);
+                                    runNextStep(goal, history, step + 1, page, sink);
                                 }
                             } catch (Exception e) {
                                 log.error("Ошибка на шаге {} симуляции: {}", step, e.getMessage(), e);
@@ -104,13 +139,15 @@ public class UserBehaviorSimulatorAgent implements ToolAgent {
                 );
     }
 
-    private void executeCommand(AgentCommand command) {
+    private void executeCommand(Page page, AgentCommand command) {
         Map<String, Object> args = command.arguments();
         switch (command.command().toLowerCase()) {
-            case "click" -> playwright.click((String) args.get("selector"));
-            case "fill" -> playwright.fill((String) args.get("selector"), (String) args.get("text"));
-            case "assert" -> playwright.assertText((String) args.get("selector"), (String) args.get("text"));
+            case "click" -> playwrightService.click(page, (String) args.get("selector"));
+            case "fill" -> playwrightService.fill(page, (String) args.get("selector"), (String) args.get("text"));
+            case "assert" ->
+                    playwrightService.assertText(page, (String) args.get("selector"), (String) args.get("text"));
             case "finish" -> {
+                // No-op, завершение обрабатывается в вызывающем методе
             }
             default -> throw new IllegalArgumentException("Неизвестная команда: " + command.command());
         }

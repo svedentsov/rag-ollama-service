@@ -5,6 +5,7 @@ import { useStreamManager } from './useStreamManager';
 import { Message } from '../types';
 import { useChatMessages } from './useChatMessages';
 import { useStreamingStore } from '../state/streamingStore';
+import { useAttachmentStore } from '../state/attachmentStore';
 
 /**
  * Хук, инкапсулирующий всю бизнес-логику действий пользователя в чате.
@@ -17,30 +18,44 @@ export function useChatInteraction(sessionId: string) {
   const { startStream, stopStream } = useStreamManager();
   const { messages } = useChatMessages(sessionId);
   const activeStreams = useStreamingStore((state) => state.activeStreams);
+  const { clearAttachment } = useAttachmentStore();
 
   /**
    * Отправляет новое сообщение от пользователя и инициирует поток ответа от ассистента.
    */
-  const handleSendMessage = useCallback((inputText: string) => {
-    const userMessage: Message = { id: uuidv4(), type: 'user', text: inputText };
-    const assistantMessage: Message = { id: uuidv4(), type: 'assistant', text: '', parentId: userMessage.id, isStreaming: true };
+  const handleSendMessage = useCallback((inputText: string, context?: string) => {
+    const userMessage: Message = { id: uuidv4(), type: 'user', text: inputText, createdAt: new Date().toISOString(), context };
+    const assistantMessage: Message = { id: uuidv4(), type: 'assistant', text: '', parentId: userMessage.id, isStreaming: true, createdAt: new Date().toISOString() };
 
     queryClient.setQueryData<Message[]>(['messages', sessionId], (old = []) => [...old, userMessage, assistantMessage]);
-    startStream(sessionId, inputText, assistantMessage.id);
-  }, [queryClient, sessionId, startStream]);
+    startStream(sessionId, inputText, assistantMessage.id, messages, context);
+
+    // Очищаем аттачмент только после успешной отправки
+    if (context && sessionId) {
+        clearAttachment(sessionId);
+    }
+  }, [queryClient, sessionId, startStream, messages, clearAttachment]);
 
   /**
    * Запускает повторную генерацию для существующего ответа ассистента.
    */
-  const handleRegenerate = useCallback((assistantMessage: Message) => {
-    if (!assistantMessage.parentId) return;
+  const handleRegenerate = useCallback((assistantMessageToRegenerate: Message) => {
+    if (!assistantMessageToRegenerate.parentId) return;
 
-    const parentMessage = messages.find(m => m.id === assistantMessage.parentId);
-    if (parentMessage) {
-      const newAssistantMessage: Message = { id: uuidv4(), type: 'assistant', text: '', parentId: parentMessage.id, isStreaming: true };
-
-      queryClient.setQueryData<Message[]>(['messages', sessionId], (old = []) => [...old, newAssistantMessage]);
-      startStream(sessionId, parentMessage.text, newAssistantMessage.id);
+    const parentMessageIndex = messages.findIndex(m => m.id === assistantMessageToRegenerate.parentId);
+    if (parentMessageIndex > -1) {
+        const parentMessage = messages[parentMessageIndex];
+        const historyUpToParent = messages.slice(0, parentMessageIndex + 1);
+        const newAssistantMessage: Message = {
+            id: uuidv4(),
+            type: 'assistant',
+            text: '',
+            parentId: parentMessage.id,
+            isStreaming: true,
+            createdAt: new Date().toISOString()
+        };
+        queryClient.setQueryData<Message[]>(['messages', sessionId], (old = []) => [...old, newAssistantMessage]);
+        startStream(sessionId, parentMessage.text, newAssistantMessage.id, historyUpToParent, parentMessage.context);
     }
   }, [messages, queryClient, sessionId, startStream]);
 

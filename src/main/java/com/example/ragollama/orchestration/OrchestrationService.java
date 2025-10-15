@@ -25,6 +25,8 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Сервис-оркестратор, адаптированный для работы с реактивными сервисами.
+ * Отвечает за маршрутизацию входящих запросов к соответствующим обработчикам
+ * на основе определенного намерения (intent).
  */
 @Slf4j
 @Service
@@ -34,6 +36,14 @@ public class OrchestrationService {
     private final Map<QueryIntent, IntentHandler> handlerMap;
     private final TaskLifecycleService taskService;
 
+    /**
+     * Конструктор для внедрения зависимостей. Автоматически обнаруживает
+     * все бины, реализующие {@link IntentHandler}, и регистрирует их.
+     *
+     * @param handlers    Список всех доступных обработчиков намерений.
+     * @param router      Сервис для определения намерения пользователя.
+     * @param taskService Сервис для управления жизненным циклом асинхронных задач.
+     */
     @Autowired
     public OrchestrationService(List<IntentHandler> handlers, RouterAgentService router, TaskLifecycleService taskService) {
         this.router = router;
@@ -47,16 +57,25 @@ public class OrchestrationService {
         });
     }
 
+    /**
+     * Инициализирует сервис и логирует зарегистрированные обработчики.
+     */
     @PostConstruct
     public void init() {
         log.info("OrchestrationService: {} обработчиков зарегистрировано для интентов: {}", handlerMap.size(), handlerMap.keySet());
     }
 
+    /**
+     * Асинхронно запускает выполнение задачи и немедленно возвращает ее ID.
+     *
+     * @param request Унифицированный DTO с запросом от пользователя.
+     * @return Объект с ID задачи для отслеживания.
+     */
     public TaskSubmissionResponse processAsync(UniversalRequest request) {
         CompletableFuture<UniversalSyncResponse> taskFuture = new CompletableFuture<>();
         UUID taskId = taskService.register(taskFuture, request.sessionId()).block();
 
-        router.route(request.query())
+        router.route(request.query(), request.context())
                 .flatMap(intent -> {
                     log.info("Маршрутизация запроса с намерением: {}. TaskID: {}", intent, taskId);
                     IntentHandler handler = findHandler(intent);
@@ -69,8 +88,14 @@ public class OrchestrationService {
         return new TaskSubmissionResponse(taskId);
     }
 
+    /**
+     * Обрабатывает любой пользовательский запрос в потоковом режиме (Server-Sent Events).
+     *
+     * @param request Унифицированный DTO с запросом от пользователя.
+     * @return Реактивный поток {@link UniversalResponse}.
+     */
     public Flux<UniversalResponse> processStream(UniversalRequest request) {
-        return router.route(request.query())
+        return router.route(request.query(), request.context())
                 .flatMapMany(intent ->
                         taskService.register(new CompletableFuture<Void>(), request.sessionId())
                                 .flatMapMany(taskId -> {
@@ -97,6 +122,13 @@ public class OrchestrationService {
                 });
     }
 
+    /**
+     * Находит подходящий обработчик для заданного намерения.
+     *
+     * @param intent Намерение, для которого нужен обработчик.
+     * @return Найденный {@link IntentHandler}.
+     * @throws IllegalStateException если обработчик не найден.
+     */
     private IntentHandler findHandler(QueryIntent intent) {
         IntentHandler handler = handlerMap.get(intent);
         if (handler == null) {

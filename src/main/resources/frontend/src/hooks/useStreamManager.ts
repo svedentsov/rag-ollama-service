@@ -53,6 +53,7 @@ export function useStreamManager() {
             updatedMsg.sources = event.sources;
             updatedMsg.queryFormationHistory = event.queryFormationHistory;
             updatedMsg.finalPrompt = event.finalPrompt;
+            updatedMsg.trustScoreReport = event.trustScoreReport;
             break;
           case 'code':
              updateStreamState(assistantMessageId, { statusText: null, thinkingSteps: new Map() });
@@ -76,18 +77,20 @@ export function useStreamManager() {
    * @param {string} sessionId - ID сессии.
    * @param {string} query - Текст запроса пользователя.
    * @param {string} assistantMessageId - ID сообщения-плейсхолдера для ассистента.
+   * @param {Message[]} history - История сообщений для контекста.
    */
   const startStream = useCallback(async (
     sessionId: string,
     query: string,
-    assistantMessageId: string
+    assistantMessageId: string,
+    history: Message[]
   ) => {
     startStreamInStore(assistantMessageId);
     const abortController = new AbortController();
     abortControllersRef.current.set(assistantMessageId, abortController);
 
     try {
-      for await (const event of streamChatResponse(query, sessionId, abortController.signal)) {
+      for await (const event of streamChatResponse(query, sessionId, abortController.signal, history)) {
         processStreamEvent(sessionId, assistantMessageId, event);
       }
     } catch (error) {

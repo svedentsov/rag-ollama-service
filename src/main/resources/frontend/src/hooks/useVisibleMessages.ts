@@ -30,7 +30,6 @@ export const useVisibleMessages = (sessionId: string, messages: Message[]): UseV
     if (!messages.length) {
       return { visibleMessages: [], messageBranchInfo: new Map() };
     }
-
     const childrenMap = new Map<string, Message[]>();
     messages.forEach(m => {
       if (m.parentId) {
@@ -40,6 +39,7 @@ export const useVisibleMessages = (sessionId: string, messages: Message[]): UseV
         childrenMap.get(m.parentId)!.push(m);
       }
     });
+    childrenMap.forEach(children => children.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
 
     const hiddenIds = new Set<string>();
     childrenMap.forEach((children, parentId) => {
@@ -58,11 +58,10 @@ export const useVisibleMessages = (sessionId: string, messages: Message[]): UseV
 
     const branchInfo = new Map<string, { total: number; current: number; siblings: Message[] }>();
     messages.forEach(msg => {
-      if (msg.type === 'assistant' && msg.parentId) {
+      if (msg.type === 'assistant' && msg.parentId && !hiddenIds.has(msg.id)) {
         const siblings = childrenMap.get(msg.parentId) || [];
         if (siblings.length > 1) {
-          const activeId = activeBranches[msg.parentId] || siblings[siblings.length - 1].id;
-          const currentIndex = siblings.findIndex(s => s.id === activeId);
+          const currentIndex = siblings.findIndex(s => s.id === msg.id);
           branchInfo.set(msg.id, { total: siblings.length, current: currentIndex + 1, siblings });
         }
       }

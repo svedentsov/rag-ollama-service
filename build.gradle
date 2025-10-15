@@ -106,7 +106,6 @@ dependencies {
     // JAXB API for Java 11+ compatibility with swagger-parser and other libraries
     implementation 'jakarta.xml.bind:jakarta.xml.bind-api:4.0.0'
     runtimeOnly 'org.glassfish.jaxb:jaxb-runtime:4.0.2'
-    implementation 'javax.xml.bind:jaxb-api:2.3.1'
 
     // Testing
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
@@ -127,6 +126,7 @@ tasks.named('npm_run_build') {
     dependsOn(tasks.named('npmInstall'))
 }
 
+// Связываем сборку фронтенда с жизненным циклом сборки бэкенда
 processResources.dependsOn(tasks.named('npm_run_build'))
 
 tasks.withType(Test) {
@@ -135,7 +135,7 @@ tasks.withType(Test) {
 
 bootJar {
     archiveFileName = 'app.jar'
-    from("src/main/resources/static/assets") {
+    from("src/main/resources/frontend/dist") {
         into "static/assets"
     }
 }

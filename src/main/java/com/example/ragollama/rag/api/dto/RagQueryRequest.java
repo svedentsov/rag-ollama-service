@@ -30,6 +30,6 @@ public record RagQueryRequest(
 
     public UniversalRequest toUniversalRequest() {
         UniversalRequest.RagOptions ragOptions = new UniversalRequest.RagOptions(this.topK, this.similarityThreshold);
-        return new UniversalRequest(this.query, this.sessionId, null, ragOptions, null);
+        return new UniversalRequest(this.query, this.sessionId, null, null, ragOptions, null);
     }
 }

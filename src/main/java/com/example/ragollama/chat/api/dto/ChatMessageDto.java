@@ -2,7 +2,9 @@ package com.example.ragollama.chat.api.dto;
 
 import com.example.ragollama.chat.domain.model.ChatMessage;
 import com.example.ragollama.chat.domain.model.MessageRole;
+import com.example.ragollama.evaluation.model.ValidationReport;
 import com.example.ragollama.monitoring.model.RagAuditLog;
+import com.example.ragollama.optimization.model.TrustScoreReport;
 import com.example.ragollama.rag.domain.model.QueryFormationStep;
 import com.example.ragollama.rag.domain.model.SourceCitation;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -24,6 +26,8 @@ import java.util.UUID;
  * @param sourceCitations       (Опционально) Источники для RAG-ответа.
  * @param queryFormationHistory (Опционально) История трансформации запроса.
  * @param finalPrompt           (Опционально) Финальный промпт, отправленный в LLM.
+ * @param trustScoreReport      (Опционально) Отчет об оценке доверия к ответу.
+ * @param validationReport      (Опционально) Отчет от AI-критика о качестве ответа.
  */
 @Schema(description = "DTO для одного сообщения в чате с полным RAG-контекстом")
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -36,7 +40,9 @@ public record ChatMessageDto(
         UUID taskId,
         List<SourceCitation> sourceCitations,
         List<QueryFormationStep> queryFormationHistory,
-        String finalPrompt
+        String finalPrompt,
+        TrustScoreReport trustScoreReport,
+        ValidationReport validationReport
 ) {
     /**
      * Фабричный метод для преобразования базовой сущности ChatMessage в DTO.
@@ -52,7 +58,7 @@ public record ChatMessageDto(
                 entity.getContent(),
                 entity.getCreatedAt(),
                 entity.getTaskId(),
-                null, null, null
+                null, null, null, null, null
         );
     }
 
@@ -60,7 +66,7 @@ public record ChatMessageDto(
      * Фабричный метод для создания обогащенного DTO из сообщения и аудиторской записи.
      *
      * @param message  Сущность сообщения.
-     * @param auditLog Запись из аудиторского журнала.
+     * @param auditLog Запись из аудиторского журнала, содержащая все метаданные.
      * @return Новый экземпляр DTO с полным RAG-контекстом.
      */
     public static ChatMessageDto fromEntityWithAudit(ChatMessage message, RagAuditLog auditLog) {
@@ -73,7 +79,9 @@ public record ChatMessageDto(
                 message.getTaskId(),
                 auditLog.getSourceCitations(),
                 auditLog.getQueryFormationHistory(),
-                auditLog.getFinalPrompt()
+                auditLog.getFinalPrompt(),
+                null,
+                null
         );
     }
 }

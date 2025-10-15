@@ -59,7 +59,6 @@ export const ChatMessage: FC<ChatMessageProps> = React.memo(({
     }
   }, [sessionId, message.parentId, setActiveBranch]);
 
-  // Условие для показа "пузыря мышления": сообщение стримится и еще не имеет текста.
   if (message.isStreaming && !message.text) {
     return (
         <div className={`${styles.messageWrapper} ${styles.assistant}`}>
@@ -84,7 +83,7 @@ export const ChatMessage: FC<ChatMessageProps> = React.memo(({
             {message.trustScoreReport && <TrustScoreIndicator report={message.trustScoreReport} />}
           </>
         )}
-        <div className={`${styles.messageMetaContainer} ${isLastInTurn || isEditing ? styles.metaVisible : ''}`}>
+        <div className={`${styles.messageMetaContainer} ${isLastInTurn || isEditing || branchInfo ? styles.metaVisible : ''}`}>
           <div className={styles.messageActions}>
               {branchInfo && message.parentId && !isEditing && (
                 <BranchControls

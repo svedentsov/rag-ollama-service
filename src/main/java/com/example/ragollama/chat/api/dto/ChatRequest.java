@@ -23,6 +23,6 @@ public record ChatRequest(
      * @return Экземпляр UniversalRequest.
      */
     public UniversalRequest toUniversalRequest() {
-        return new UniversalRequest(this.message, this.sessionId, null, null, null);
+        return new UniversalRequest(this.message, this.sessionId, null, null, null, null);
     }
 }

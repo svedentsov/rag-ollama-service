@@ -5,7 +5,12 @@ import { StatusIndicator } from './StatusIndicator';
 import { useStatusIndicator } from '../hooks/useStatusIndicator';
 import styles from './ThinkingThoughts.module.css';
 
+/**
+ * @interface ThinkingThoughtsProps
+ * @description Пропсы для компонента, визуализирующего процесс "мышления" AI-агента.
+ */
 interface ThinkingThoughtsProps {
+  /** @param {string} assistantMessageId - ID сообщения ассистента, для которого отображается статус. */
   assistantMessageId: string;
 }
 
@@ -13,14 +18,16 @@ interface ThinkingThoughtsProps {
  * Компонент, который визуализирует процесс "мышления" AI-агента.
  * Он подписывается на `useStreamingStore` и отображает анимированный
  * список шагов по мере их выполнения для конкретной задачи.
- * @returns {React.ReactElement} Отрендеренный компонент.
+ * @param {ThinkingThoughtsProps} props - Пропсы компонента.
+ * @returns {React.ReactElement | null} Отрендеренный компонент.
  */
 export const ThinkingThoughts: FC<ThinkingThoughtsProps> = ({ assistantMessageId }) => {
     const taskState = useStreamingStore((state) => state.activeStreams.get(assistantMessageId));
     const isStreaming = useStreamingStore(state => state.activeStreams.has(assistantMessageId));
 
-    // Используем хук для получения отформатированного текста статуса с таймером
-    const statusIndicatorText = useStatusIndicator(isStreaming, taskState?.statusText ?? null);
+    // Хук теперь инкапсулирует таймер и получает только startTime.
+    // Компонент ThinkingThoughts больше не перерисовывается каждую секунду.
+    const statusIndicatorText = useStatusIndicator(isStreaming, taskState?.statusText ?? null, taskState?.startTime ?? null);
 
     if (!taskState) {
         return null;
@@ -59,7 +66,7 @@ export const ThinkingThoughts: FC<ThinkingThoughtsProps> = ({ assistantMessageId
         <div className={styles.thinkingContainer}>
             <div className={styles.initialThinking}>
                 <div className={styles.spinner}></div>
-                <span>Анализирую ваш запрос...</span>
+                <span>Анализирую ваш вопрос...</span>
             </div>
         </div>
     );
