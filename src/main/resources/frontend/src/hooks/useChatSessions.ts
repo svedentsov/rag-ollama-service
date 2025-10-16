@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { api } from '../api';
 import { ChatSession } from '../types';
 import { useRouter } from './useRouter';
@@ -27,8 +28,6 @@ export function useChatSessions() {
     const { data: sessions = [], ...queryInfo } = useQuery<ChatSession[]>({
         queryKey: CHAT_SESSIONS_QUERY_KEY,
         queryFn: api.getChatSessions,
-        // ИСПРАВЛЕНИЕ: Синхронизация состояния перенесена в onSuccess.
-        // React Query гарантирует, что этот колбэк не будет вызван для размонтированного компонента.
         onSuccess: (data) => {
             setSessions(data);
         },
@@ -38,7 +37,7 @@ export function useChatSessions() {
         mutationFn: api.createNewChat,
         onSuccess: (newChat) => {
             queryClient.invalidateQueries({ queryKey: CHAT_SESSIONS_QUERY_KEY });
-            navigate(newChat.sessionId);
+            navigate(`/chat?sessionId=${newChat.sessionId}`);
             return newChat;
         },
     });

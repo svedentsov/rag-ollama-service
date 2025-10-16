@@ -1,0 +1,40 @@
+.rootSidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: hsl(var(--secondary));
+    border-right: 1px solid hsl(var(--border));
+    width: 64px;
+    flex-shrink: 0;
+    padding: 1rem 0;
+    box-sizing: border-box;
+}
+
+.nav {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.navItem {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius);
+    color: hsl(var(--muted-foreground));
+    background-color: transparent;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.navItem:hover {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+}
+
+.navItem.active {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+}

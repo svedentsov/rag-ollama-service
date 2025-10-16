@@ -6,68 +6,80 @@ import { useSessionStore } from '../state/sessionStore';
  * @description Определяет контракт для контекста роутера.
  */
 interface RouterContextType {
+  /** @property {string} pathname - Текущий путь в URL (например, "/chat" или "/files"). */
+  pathname: string;
   /** @property {string | null} sessionId - ID текущей активной сессии из URL. */
   sessionId: string | null;
   /**
    * @function navigate
    * @description Функция для программной навигации, которая обновляет URL и состояние.
-   * @param {string | null} sessionId - ID сессии для навигации или null для перехода на главную.
+   * @param {string | null} path - Целевой путь. Если `null`, переходит на главную.
    */
-  navigate: (sessionId: string | null) => void;
+  navigate: (path: string | null) => void;
 }
 
-/**
- * Контекст React для предоставления доступа к состоянию роутера.
- */
 const RouterContext = createContext<RouterContextType | null>(null);
 
 /**
+ * @description Хук для получения текущего состояния URL.
+ * @returns {{ pathname: string, sessionId: string | null }}
+ */
+const useLocationState = () => {
+    const [state, setState] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        return {
+            pathname: window.location.pathname,
+            sessionId: params.get('sessionId')
+        };
+    });
+
+    useEffect(() => {
+        const handlePopState = () => {
+            const params = new URLSearchParams(window.location.search);
+            setState({
+                pathname: window.location.pathname,
+                sessionId: params.get('sessionId')
+            });
+        };
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
+
+    const setLocation = useCallback((pathname: string, sessionId: string | null) => {
+        const newUrl = sessionId ? `${pathname}?sessionId=${sessionId}` : pathname;
+        const currentUrl = window.location.pathname + window.location.search;
+        if (newUrl !== currentUrl) {
+            window.history.pushState({ pathname, sessionId }, '', newUrl);
+            setState({ pathname, sessionId });
+        }
+    }, []);
+
+    return { ...state, setLocation };
+};
+
+/**
  * Провайдер, который инкапсулирует всю логику легковесного роутера.
- * Он синхронизирует состояние React с URL браузера, являясь единым источником правды.
  * @param {{ children: ReactNode }} props - Дочерние компоненты.
  */
 export const RouterProvider = ({ children }: { children: ReactNode }) => {
   const setCurrentSessionIdInStore = useSessionStore((state) => state.setCurrentSessionId);
+  const { pathname, sessionId, setLocation } = useLocationState();
 
-  /**
-   * Инициализирует состояние из URL при первой загрузке.
-   */
-  const [sessionId, setSessionId] = useState<string | null>(() => {
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get('sessionId');
-    setCurrentSessionIdInStore(id); // Первичная синхронизация с глобальным стором
-    return id;
-  });
-
-  /**
-   * Подписывается на события навигации браузера (кнопки "вперед/назад").
-   */
   useEffect(() => {
-    const handlePopState = () => {
-      const params = new URLSearchParams(window.location.search);
-      const id = params.get('sessionId');
-      setSessionId(id);
-      setCurrentSessionIdInStore(id);
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [setCurrentSessionIdInStore]);
+    setCurrentSessionIdInStore(sessionId);
+  }, [sessionId, setCurrentSessionIdInStore]);
 
-  /**
-   * Функция для программной навигации.
-   */
-  const navigate = useCallback((newSessionId: string | null) => {
-    const newUrl = newSessionId ? `/chat?sessionId=${newSessionId}` : '/';
-    const currentUrl = window.location.pathname + window.location.search;
-
-    if (newUrl !== currentUrl) {
-      window.history.pushState({ sessionId: newSessionId }, '', newUrl);
-      setSessionId(newSessionId);
-      setCurrentSessionIdInStore(newSessionId);
+  const navigate = useCallback((path: string | null) => {
+    if (path === null) {
+        setLocation('/', null);
+        return;
     }
-  }, [setCurrentSessionIdInStore]);
+    const url = new URL(path, window.location.origin);
+    const newSessionId = url.searchParams.get('sessionId');
+    setLocation(url.pathname, newSessionId);
+  }, [setLocation]);
 
-  const value = { sessionId, navigate };
+  const value = { pathname, sessionId, navigate };
 
   return (
     <RouterContext.Provider value={value}>
@@ -78,7 +90,7 @@ export const RouterProvider = ({ children }: { children: ReactNode }) => {
 
 /**
  * Хук для удобного доступа к состоянию и функциям роутера из любого компонента.
- * @returns {RouterContextType} Объект с `sessionId` и функцией `navigate`.
+ * @returns {RouterContextType} Объект с `pathname`, `sessionId` и функцией `navigate`.
  */
 export const useRouter = (): RouterContextType => {
   const context = useContext(RouterContext);

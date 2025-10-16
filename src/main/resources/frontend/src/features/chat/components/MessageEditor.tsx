@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, FC } from 'react';
-import { useClickOutside } from '../hooks/useClickOutside';
+import { useClickOutside } from '../../../hooks/useClickOutside';
 import styles from './ChatMessage.module.css';
 
 /**
@@ -19,7 +19,6 @@ export interface MessageEditorProps {
 
 /**
  * Компонент для встроенного редактирования текста сообщения.
- * Инкапсулирует поле ввода, кнопки управления и логику авто-изменения высоты.
  * @param {MessageEditorProps} props - Пропсы компонента.
  * @returns {React.ReactElement} Отрендеренный компонент редактора.
  */

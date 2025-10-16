@@ -1,47 +1,62 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import App from './App.tsx';
-import { ChatSidebar } from './ChatSidebar.tsx';
-import { WelcomePage } from './WelcomePage.tsx';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
-import { RouterProvider, useRouter } from './hooks/useRouter.tsx';
 
-/**
- * Клиент TanStack Query для управления состоянием сервера.
- */
+// Pages
+import { WelcomePage } from './pages/WelcomePage';
+
+// Features
+import { App as ChatApp } from './features/chat/App';
+import { ChatSidebar } from './features/chat/ChatSidebar';
+import { FileManager } from './features/file-manager/FileManager';
+
+// Shared UI Components
+import { RootSidebar } from './components/RootSidebar';
+
+// App Logic
+import { RouterProvider, useRouter } from './hooks/useRouter';
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 минут
+      staleTime: 1000 * 60 * 5,
       refetchOnWindowFocus: false,
     },
   },
 });
 
-/**
- * Корневой компонент приложения, который управляет основной маршрутизацией
- * и отображением либо страницы приветствия, либо интерфейса чата.
- */
-const RootContent = () => {
-    const { sessionId } = useRouter();
+const MainContent = () => {
+    const { pathname, sessionId } = useRouter();
 
+    if (pathname.startsWith('/files')) {
+        return <FileManager />;
+    }
+
+    if (pathname.startsWith('/chat') || pathname === '/') {
+        return (
+            <>
+                <ChatSidebar currentSessionId={sessionId} />
+                <main>
+                    {sessionId ? <ChatApp sessionId={sessionId} /> : <WelcomePage />}
+                </main>
+            </>
+        );
+    }
+
+    return <WelcomePage />;
+};
+
+const RootContent = () => {
     return (
         <div id="root-layout">
-            <ChatSidebar currentSessionId={sessionId} />
-            <main>
-                {sessionId ? <App sessionId={sessionId} /> : <WelcomePage />}
-            </main>
+            <RootSidebar />
+            <MainContent />
         </div>
     );
 };
 
-
-/**
- * Точка входа приложения.
- * Оборачивает все приложение в необходимые провайдеры.
- */
 const Root = () => {
     return (
         <QueryClientProvider client={queryClient}>

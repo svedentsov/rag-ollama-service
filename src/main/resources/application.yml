@@ -2,15 +2,13 @@
 # Основные настройки сервера
 # ===================================================================
 server:
-  port: 8080 # Порт, на котором будет работать приложение
+  port: 8080
   error:
-    # Включать stacktrace в ответ об ошибке только при наличии параметра ?trace=true.
-    # Безопасная настройка для production.
     include-stacktrace: on_param
 
 spring:
   application:
-    name: rag-ollama-service # Имя приложения, используется в логах и метриках
+    name: rag-ollama-service
   lifecycle:
     timeout-per-shutdown-phase: 30s
 
@@ -34,31 +32,26 @@ spring:
 
   # --- FreeMarker Template Engine Configuration ---
   freemarker:
-    # Явно указываем Spring Boot, где искать наши шаблоны.
-    # Путь должен начинаться с 'classpath:' и указывать на директорию.
     template-loader-path: classpath:/templates/, classpath:/prompts/
     expose-request-attributes: true
     expose-spring-macro-helpers: true
     suffix: .ftl
-    # Глобальная настройка для форматирования boolean-значений.
-    # 'c' выводит true/false без кавычек, что безопасно для LLM и предотвращает ошибки.
     settings:
       boolean_format: c
 
   flyway:
     enabled: true
-    locations: classpath:db/migration # Путь к SQL-миграциям.
+    locations: classpath:db/migration
 
   cache:
     type: simple
     cache-names:
-      - vector_search_results # Кэш для результатов RAG-поиска.
-      - token_counts # Кэш для подсчета токенов.
-      - ollama_available_models # Кэш для списка доступных моделей
-      - copilot_sessions # Кэш для сессий
-      - analytics_cache # Кэш для результатов аналитических запросов
+      - vector_search_results
+      - token_counts
+      - ollama_available_models
+      - copilot_sessions
+      - analytics_cache
     caffeine:
-      # Общие настройки для всех кэшей. Для кэша сессий задаем время жизни.
       spec: "maximumSize=500,expireAfterAccess=30m"
 
   # ===================================================================
@@ -66,26 +59,21 @@ spring:
   # ===================================================================
   ai:
     ollama:
-      # ВАЖНО: При запуске приложения на хост-машине используется `localhost`.
-      # Если бы приложение запускалось в Docker в той же сети,
-      # нужно было бы использовать имя сервиса: `http://rag-ollama:11434`.
       base-url: http://localhost:11434
       chat:
-        # Теперь это конфигурация ПО УМОЛЧАНИЮ. Она будет использоваться, если модель не переопределена роутером.
         options:
-          model: llama3 # Модель по умолчанию, если роутер не сработает
+          model: llama3
           temperature: 0.7
       embedding:
         options:
-          # Модель для создания векторных представлений (эмбеддингов).
           model: mxbai-embed-large
           model-version: "1.0.0"
     vectorstore:
       pgvector:
-        table-name: vector_store # Имя таблицы для хранения векторов.
-        index-type: HNSW # Тип индекса для быстрого поиска (Hierarchical Navigable Small World).
-        distance-type: COSINE_DISTANCE # Метрика для измерения схожести векторов.
-        dimensions: 1024 # Размерность вектора (зависит от embedding-модели).
+        table-name: vector_store
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: 1024
 
 # ===================================================================
 # Observability (Monitoring & Metrics)
@@ -94,23 +82,20 @@ management:
   endpoints:
     web:
       exposure:
-        # Убираем prometheus из списка, так как мы удалили его из docker-compose
         include: health, info, metrics, rageval
   endpoint:
     health:
-      show-details: always # Показывать детали для health-чеков.
+      show-details: always
   tracing:
-    enabled: false # Явно отключаем автоконфигурацию трассировки
+    enabled: false
     sampling:
-      probability: 0.0 # На всякий случай устанавливаем вероятность семплирования в 0
+      probability: 0.0
   metrics:
     tags:
-      application: ${spring.application.name} # Глобальный тег для всех метрик.
+      application: ${spring.application.name}
     distribution:
-      # Включить гистограммы для метрики времени ответа HTTP-сервера.
       percentiles-histogram:
         http.server.requests: true
-      # Определить "корзины" (SLA) для гистограмм времени ответа.
       sla:
         http.server.requests: 50ms, 100ms, 200ms, 500ms, 1s, 2s
 
@@ -119,9 +104,9 @@ management:
 # ===================================================================
 springdoc:
   api-docs:
-    path: /api-docs # Путь к JSON-спецификации OpenAPI
+    path: /api-docs
   swagger-ui:
-    path: /swagger-ui.html # Путь к интерактивной документации Swagger UI
+    path: /swagger-ui.html
   default-consumes-media-type: application/json
   default-produces-media-type: application/json
 
@@ -131,13 +116,13 @@ springdoc:
 resilience4j:
   circuitbreaker:
     instances:
-      ollama: # Конфигурация для Ollama
+      ollama:
         register-health-indicator: true
-        sliding-window-size: 10 # Количество вызовов для анализа.
-        minimum-number-of-calls: 3 # Мин. вызовов для срабатывания.
-        failure-rate-threshold: 60 # % ошибок для размыкания цепи.
-        wait-duration-in-open-state: 15s # Время в "разомкнутом" состоянии.
-        record-exceptions: # Считать DataAccessException как сбой
+        sliding-window-size: 10
+        minimum-number-of-calls: 3
+        failure-rate-threshold: 60
+        wait-duration-in-open-state: 15s
+        record-exceptions:
           - org.springframework.web.reactive.function.client.WebClientRequestException
           - java.util.concurrent.TimeoutException
       database:
@@ -149,16 +134,16 @@ resilience4j:
         record-exceptions:
           - io.r2dbc.spi.R2dbcTransientResourceException
           - java.util.concurrent.TimeoutException
-      jira: # Конфигурация для Jira API
+      jira:
         register-health-indicator: true
         sliding-window-size: 20
         minimum-number-of-calls: 5
         failure-rate-threshold: 50
-        wait-duration-in-open-state: 30s # Более долгое ожидание, т.к. Jira может быть временно недоступна
+        wait-duration-in-open-state: 30s
         record-exceptions:
           - java.util.concurrent.TimeoutException
           - org.springframework.web.reactive.function.client.WebClientResponseException$ServiceUnavailable
-      confluence: # Конфигурация для Confluence API
+      confluence:
         register-health-indicator: true
         sliding-window-size: 20
         minimum-number-of-calls: 5
@@ -198,15 +183,16 @@ resilience4j:
   timelimiter:
     instances:
       ollama:
-        timeout-duration: 20m
+        # ИЗМЕНЕНИЕ: Увеличиваем таймаут для большей устойчивости в dev-окружении
+        timeout-duration: 30m
         cancel-running-future: true
       database:
         timeout-duration: 10s
         cancel-running-future: true
-      jira: # Конфигурация для Jira API
-        timeout-duration: 15s # Внешние API должны отвечать быстро
+      jira:
+        timeout-duration: 15s
         cancel-running-future: true
-      confluence: # Конфигурация для Confluence API
+      confluence:
         timeout-duration: 20s
         cancel-running-future: true
 
@@ -214,13 +200,25 @@ resilience4j:
 # Custom Application Properties (app.*)
 # ===================================================================
 app:
-  llm: # Конфигурация LLM Роутера
-    fallback-model: "phi3" # Имя модели, которая будет использоваться, если основная модель недоступна.
-    models: # Маппинг абстрактных возможностей на конкретные имена моделей в Ollama.
-      FASTEST: "phi3" # Для задач, где скорость > точность формата
-      FAST_RELIABLE: "phi3" # Используем llama3 для надежных задач
-      BALANCED: "llama3" # Основная модель для RAG и чата
-      VISION: "llava" # Мультимодальная модель для анализа изображений
+  file-storage:
+    upload-dir: "uploads"
+    max-file-size-mb: 10
+    allowed-mime-types:
+      - "text/plain"
+      - "text/markdown"
+      - "application/json"
+      - "application/xml"
+      - "text/xml"
+      - "application/pdf"
+      - "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+  llm:
+    fallback-model: "phi3"
+    models:
+      FASTEST: "phi3"
+      FAST_RELIABLE: "phi3"
+      BALANCED: "llama3"
+      VISION: "llava"
 
   prompt:
     rag-template-path: "rag-prompt.ftl"
@@ -238,7 +236,7 @@ app:
   rate-limiting:
     enabled: true
     limits:
-      - endpoint: "/api/v1/orchestrator/ask"
+      - endpoint: "/api/v1/orchestrator/ask-stream"
         capacity: 20
         refill-period-minutes: 1
 
@@ -250,63 +248,48 @@ app:
 
   chat:
     history:
-      max-messages: 10 # Количество последних сообщений для поддержания контекста.
-
-  ingestion:
-    chunking:
-      default-chunk-size: 256
-      chunk-overlap: 32
+      max-messages: 10
 
   http-client:
-    connect-timeout: 5s
+    connect-timeout: 10s
     response-timeout: 30s
     read-write-timeout: 30s
     ollama:
-      response-timeout: 15m
-      read-write-timeout: 15m
+      # ИЗМЕНЕНИЕ: Увеличиваем таймауты для большей устойчивости в dev-окружении
+      response-timeout: 25m
+      read-write-timeout: 25m
 
-  task-executor: # Настройки основного пула потоков для @Async задач.
+  task-executor:
     core-pool-size: 4
     max-pool-size: 16
     queue-capacity: 100
     thread-name-prefix: "app-async-"
 
-  llm-executor: # Конфигурация для выделенного пула потоков LLM
-    core-pool-size: 8 # Больше потоков, т.к. операции долгие
+  llm-executor:
+    core-pool-size: 8
     max-pool-size: 32
     queue-capacity: 200
     thread-name-prefix: "llm-async-"
 
-  db-executor: # Конфигурация для выделенного пула потоков БД
-    core-pool-size: 2 # Меньше потоков, т.к. операции быстрые
+  db-executor:
+    core-pool-size: 2
     max-pool-size: 8
     queue-capacity: 50
     thread-name-prefix: "db-async-"
 
-  vector-store: # Настройки для векторного хранилища (pgvector)
-    # Параметры HNSW-индекса для тюнинга производительности и точности.
-    # Изменять с осторожностью, требуется профилирование.
+  vector-store:
     index:
-      # Количество соседей на слой графа.
-      # Trade-off: выше значение -> лучше точность, медленнее индексация.
       m: 32
-      # Глубина поиска при построении индекса.
-      # Trade-off: выше значение -> лучше качество индекса, значительно медленнее индексация.
       ef-construction: 128
-      # Глубина поиска во время запроса.
-      # Trade-off: выше значение -> лучше точность (recall), выше задержка (latency).
       ef-search: 64
 
-  rag: # Настройки RAG-конвейера
-    # Стратегия поведения, если поиск не нашел документов.
-    # "fixed" - вернуть стандартный ответ (быстро, безопасно).
-    # "delegate" - (потребует реализации) попросить LLM ответить из общих знаний.
+  rag:
     no-context-strategy: fixed
     arrangement-strategy: sandwich
     summarizer:
       enabled: false
     validation:
-      enabled: true # Включаем AI-Критика
+      enabled: true
     retrieval:
       hybrid:
         expansion-min-docs-threshold: 3
@@ -324,78 +307,59 @@ app:
     f1-score-threshold: 0.85
     scheduler:
       enabled: true
-      cron: "0 0 3 * * ?" # Запускать каждый день в 3:00 ночи
+      cron: "0 0 3 * * ?"
 
   optimization:
     index:
       enabled: true
-      cron: "0 0 4 * * ?" # Каждый день в 4 часа утра
+      cron: "0 0 4 * * ?"
       stale-document-detection:
         enabled: true
     embedding-drift:
       scheduler:
         enabled: true
-        cron: "0 0 2 * * ?" # Каждый день в 2 часа ночи
+        cron: "0 0 2 * * ?"
     guardian:
       scheduler:
         enabled: true
-        cron: "0 0 1 * * ?" # Каждый день в 1 час ночи
+        cron: "0 0 1 * * ?"
 
-  curation: # Настройки для Knowledge Curator Agent
+  curation:
     scheduler:
       enabled: true
-      cron: "0 0 5 * * ?" # Каждый день в 5 утра
+      cron: "0 0 5 * * ?"
 
-  analysis: # Настройки для аналитических агентов
+  analysis:
     flakiness:
-      # Порог в процентах. Тест считается "flaky", если падает чаще, чем в 5% случаев.
       failure-rate-threshold: 5.0
-      # Минимальное количество запусков теста, чтобы он попал в анализ.
-      # Предотвращает ложные срабатывания для новых тестов.
       min-runs-threshold: 10
     cost-model:
       per-dev-hour: 100.0
       per-support-ticket: 25.0
       per-lost-user: 200.0
     autonomy:
-      cron: "0 0 7 * * MON-FRI" # Запуск автономного анализа в 7 утра по будням
+      cron: "0 0 7 * * MON-FRI"
 
   health-monitor:
     scheduler:
       enabled: true
-      # Запускать каждый понедельник в 8 утра
       cron: "0 0 8 * * MON"
 
   integrations:
     github:
-      # Секрет, который вы настраиваете в GitHub для подписи веб-хуков.
-      # !!! ВАЖНО: В production вынести в переменные окружения или Vault.
       webhook-secret: "your_super_secret_string_here"
-      # Персональный токен доступа (PAT) для аутентификации в GitHub API.
-      # !!! ВАЖНО: В production вынести в переменные окружения или Vault.
       api-token: "ghp_YourGitHubPersonalAccessToken"
     jira:
-      # Jira не использует HMAC-подпись по умолчанию.
-      # Часто используется Basic Auth или API Token в заголовке для "секретности".
-      # Здесь мы будем использовать простой токен для проверки.
       webhook-secret-token: "your_jira_secret_token"
-      # URL вашего инстанса Jira
       base-url: "https://your-domain.atlassian.net"
-      # Email пользователя для API
       api-user: "your-email@example.com"
-      # API токен, сгенерированный в Jira
       api-token: "YourJiraApiToken"
     confluence:
-      # URL вашего инстанса Confluence. Пример: https://your-domain.atlassian.net
       base-url: "https://your-domain.atlassian.net"
-      # Email пользователя для API
       api-user: "your-email@example.com"
-      # API токен, сгенерированный в Confluence
       api-token: "YourConfluenceApiToken"
     git:
-      # URL вашего Git-репозитория
       repository-url: "https://github.com/your-organization/your-repository.git"
-      # Ваш персональный токен доступа (PAT) с правами на чтение репозитория
       personal-access-token: "ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
     ci:
       base-url: "http://your-jenkins-instance:8080"
@@ -407,23 +371,14 @@ app:
       username: "neo4j"
       password: "password"
 
-  security: # Настройки безопасности
+  security:
     pii-redaction:
-      # Глобальный переключатель для сервиса маскирования.
-      # Установите в 'false' для отключения маскирования.
       enabled: true
-      # Список регулярных выражений для поиска чувствительных данных.
-      # ВАЖНО: Тщательно протестируйте паттерны на ваших данных.
       patterns:
-        # Универсальный паттерн для Email
         - "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b"
-        # Паттерн для номеров телефонов (упрощенный, для примера)
         - "\\b(?:\\+?7|8)?[\\s\\-]?\\(?\\d{3}\\)?[\\s\\-]?\\d{3}[\\s\\-]?\\d{2}[\\s\\-]?\\d{2}\\b"
-        # Паттерн для поиска API-ключей (например, GitHub ghp_..., Stripe sk_live_...)
         - "\\b(ghp|sk_live|rk_live)_[a-zA-Z0-9]{20,}\\b"
-        # Паттерн для поиска JWT токенов
         - "ey[a-zA-Z0-9_\\-]+\\.[a-zA-Z0-9_\\-]+\\.[a-zA-Z0-9_\\-]+"
-        # Паттерн для поиска IP-адресов
         - "\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b"
 
   indexing:
@@ -431,7 +386,7 @@ app:
       path: "src/test/java"
       scheduler:
         enabled: true
-        cron: "0 0 5 * * ?" # Каждый день в 5 утра
+        cron: "0 0 5 * * ?"
 
   knowledge-domains:
     domains:
@@ -443,8 +398,6 @@ app:
         description: "Документы кадровой службы: политика отпусков, больничных, правила внутреннего распорядка."
 
   federation:
-    # Каталог проектов, подлежащих федеративному анализу.
-    # `id` должен соответствовать `projectId` в таблице `test_run_metrics`.
     projects:
       - id: "rag-ollama-service"
         name: "Основной RAG Сервис"
@@ -459,9 +412,7 @@ app:
   finops:
     quotas:
       enabled: true
-      # Тарифный план по умолчанию для пользователей без явно указанного
       default-tier: "free"
-      # Описание тарифных планов
       tiers:
         free:
           total-tokens-limit: 5000000
@@ -469,7 +420,6 @@ app:
           total-tokens-limit: 5000000
         developer:
           total-tokens-limit: 2000000
-      # Стоимость в USD за 1000 токенов (для отчетов)
       costs:
-        input: 0.0005  # Примерная стоимость
-        output: 0.0015 # Примерная стоимость
+        input: 0.0005
+        output: 0.0015

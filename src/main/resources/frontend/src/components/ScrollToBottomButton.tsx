@@ -9,7 +9,7 @@ interface ScrollToBottomButtonProps {
 export const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({ onClick }) => {
     return (
         <button className={styles.scrollButton} onClick={onClick} title="Перейти к последнему сообщению">
-            <ArrowDownCircle size={20} /> {/* ИЗМЕНЕНО: размер иконки */}
+            <ArrowDownCircle size={20} />
         </button>
     );
 };

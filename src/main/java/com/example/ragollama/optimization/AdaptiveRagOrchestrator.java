@@ -47,7 +47,8 @@ public class AdaptiveRagOrchestrator {
                     originalRequest.query(),
                     originalRequest.sessionId(),
                     Math.max(1, originalRequest.topK() - 2),
-                    Math.min(1.0, originalRequest.similarityThreshold() + 0.05)
+                    Math.min(1.0, originalRequest.similarityThreshold() + 0.05),
+                    null
             );
         }
 

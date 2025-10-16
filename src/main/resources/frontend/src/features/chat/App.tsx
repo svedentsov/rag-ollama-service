@@ -1,11 +1,11 @@
-import { useChatInteraction } from './hooks/useChatInteraction';
-import { useVisibleMessages } from './hooks/useVisibleMessages';
-import { useScrollManager } from './hooks/useScrollManager';
+import React, { useState, useCallback } from 'react';
+import { useChatMessages } from '../../hooks/useChatMessages';
+import { useScrollManager } from '../../hooks/useScrollManager';
+import { useVisibleMessages } from '../../hooks/useVisibleMessages';
+import { useChatInteraction } from '../../hooks/useChatInteraction';
 import { ChatMessage } from './components/ChatMessage';
-import { useChatMessages } from './hooks/useChatMessages';
 import { ChatInput } from './components/ChatInput';
 import styles from './App.module.css';
-import React, { useState, useCallback } from 'react';
 
 /**
  * @interface AppProps
@@ -18,24 +18,17 @@ interface AppProps {
 
 /**
  * Главный компонент-контейнер для чата.
- * Он является "умным" компонентом, который собирает данные из различных хуков
- * и передает их в дочерние "глупые" (презентационные) компоненты.
- *
  * @param {AppProps} props - Пропсы компонента.
  * @returns {React.ReactElement} Отрендеренный компонент чата.
  */
-const App: React.FC<AppProps> = ({ sessionId }) => {
-  // --- Data Hooks ---
+export const App: React.FC<AppProps> = ({ sessionId }) => {
   const { messages, isLoading: isLoadingHistory, error: historyError, updateMessage, deleteMessage } = useChatMessages(sessionId);
-  const { visibleMessages, messageBranchInfo } = useVisibleMessages(sessionId, messages);
-
-  // --- Interaction & State Hooks ---
   const { handleSendMessage, handleRegenerate, handleStopGenerating, stopStream, isStreaming } = useChatInteraction(sessionId);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+
+  const { visibleMessages, messageBranchInfo } = useVisibleMessages(sessionId, messages);
   const { containerRef, messagesEndRef, showScrollButton, scrollToBottom } = useScrollManager([visibleMessages]);
 
-
-  // --- Callbacks ---
   const handleUpdateMessage = useCallback((messageId: string, newContent: string) => {
     updateMessage({ messageId, newContent });
     setEditingMessageId(null);
@@ -45,7 +38,6 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
     deleteMessage(messageId);
   }, [deleteMessage]);
 
-  // --- Render Logic ---
   const isLastMessage = (msgId: string) => visibleMessages.length > 0 && visibleMessages[visibleMessages.length - 1].id === msgId;
 
   return (
@@ -84,5 +76,3 @@ const App: React.FC<AppProps> = ({ sessionId }) => {
     </div>
   );
 };
-
-export default App;

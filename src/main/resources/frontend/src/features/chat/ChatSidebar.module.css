@@ -127,7 +127,7 @@
     color: hsl(var(--foreground));
     font-size: var(--font-size-sm);
     font-family: var(--font-family-sans);
-    box-sizing: border-box; /* Добавлено */
+    box-sizing: border-box;
 }
 
 .chatTitle {
@@ -135,15 +135,15 @@
     overflow: hidden;
     text-overflow: ellipsis;
     flex-grow: 1;
-    min-width: 0; /* --- ИСПРАВЛЕНИЕ --- */
+    min-width: 0;
     font-weight: var(--font-weight-medium);
-    text-align: left; /* Добавлено */
+    text-align: left;
 }
 
 .chatItemActions {
     display: flex;
     align-items: center;
-    flex-shrink: 0; /* Предотвращает сжатие контейнера с кнопками */
+    flex-shrink: 0;
 }
 
 .moreButton {
@@ -154,10 +154,10 @@
     cursor: pointer;
     border-radius: var(--radius);
     color: hsl(var(--muted-foreground));
-    opacity: 0; /* Скрыта по умолчанию */
+    opacity: 0;
     transition: opacity 0.2s ease-in-out, background-color 0.2s;
     flex-shrink: 0;
-    display: flex; /* Для центрирования иконки */
+    display: flex;
     align-items: center;
     justify-content: center;
 }

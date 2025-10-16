@@ -5,15 +5,13 @@ import { useStreamManager } from './useStreamManager';
 import { Message } from '../types';
 import { useStreamingStore } from '../state/streamingStore';
 import { useAttachmentStore } from '../state/attachmentStore';
+import { useFileSelectionStore } from '../state/useFileSelectionStore';
 
 /**
  * @description Хук, инкапсулирующий всю бизнес-логику действий пользователя в чате.
- * Он отвечает за отправку, регенерацию и остановку сообщений, делегируя сложную
- * логику управления потоками хуку `useStreamManager`.
- *
  * @param {string} sessionId - ID текущей сессии чата.
  * @returns {{
- *   handleSendMessage: (inputText: string, context?: string) => void,
+ *   handleSendMessage: (inputText: string, context?: string, fileIds?: string[]) => void,
  *   handleRegenerate: (assistantMessageToRegenerate: Message) => void,
  *   handleStopGenerating: () => void,
  *   stopStream: (assistantMessageId: string) => void,
@@ -26,86 +24,41 @@ export function useChatInteraction(sessionId: string) {
   const activeStreams = useStreamingStore((state) => state.activeStreams);
   const isStreaming = activeStreams.size > 0;
   const { clearAttachment } = useAttachmentStore();
+  const { clearSelection } = useFileSelectionStore();
 
-  /**
-   * @description Отправляет новое сообщение от пользователя и инициирует поток ответа от ассистента.
-   * @param {string} inputText - Текст сообщения пользователя.
-   * @param {string} [context] - Опциональный строковый контекст (например, содержимое файла).
-   */
-  const handleSendMessage = useCallback((inputText: string, context?: string) => {
-    const userMessage: Message = {
-      id: uuidv4(),
-      type: 'user',
-      text: inputText,
-      createdAt: new Date().toISOString(),
-      context
-    };
+  const handleSendMessage = useCallback((inputText: string, context?: string, fileIds?: string[]) => {
+    const userMessage: Message = { id: uuidv4(), type: 'user', text: inputText, createdAt: new Date().toISOString(), context, fileIds };
+    const assistantMessage: Message = { id: uuidv4(), type: 'assistant', text: '', parentId: userMessage.id, isStreaming: true, createdAt: new Date().toISOString() };
 
-    const assistantMessage: Message = {
-      id: uuidv4(),
-      type: 'assistant',
-      text: '',
-      parentId: userMessage.id,
-      isStreaming: true,
-      createdAt: new Date().toISOString()
-    };
-
-    // Оптимистичное обновление UI
-    queryClient.setQueryData<Message[]>(['messages', sessionId], (old = []) => [...old, userMessage, assistantMessage]);
-
-    // Получаем актуальную историю ПЕРЕД запуском стрима
     const currentMessages = queryClient.getQueryData<Message[]>(['messages', sessionId]) || [];
-    startStream(sessionId, inputText, assistantMessage.id, currentMessages.slice(0, -1), context);
+    queryClient.setQueryData<Message[]>(['messages', sessionId], [...currentMessages, userMessage, assistantMessage]);
 
-    if (context && sessionId) {
-        clearAttachment(sessionId);
+    startStream(sessionId, inputText, assistantMessage.id, [...currentMessages, userMessage], context, fileIds);
+
+    if (sessionId) {
+      if (context) clearAttachment(sessionId);
+      if (fileIds && fileIds.length > 0) clearSelection(sessionId);
     }
-  }, [queryClient, sessionId, startStream, clearAttachment]);
+  }, [queryClient, sessionId, startStream, clearAttachment, clearSelection]);
 
-  /**
-   * @description Запускает повторную генерацию для существующего ответа ассистента.
-   * @param {Message} assistantMessageToRegenerate - Объект сообщения ассистента, которое нужно перегенерировать.
-   */
   const handleRegenerate = useCallback((assistantMessageToRegenerate: Message) => {
     if (!assistantMessageToRegenerate.parentId) return;
-
     const messages = queryClient.getQueryData<Message[]>(['messages', sessionId]) || [];
     const parentMessageIndex = messages.findIndex(m => m.id === assistantMessageToRegenerate.parentId);
 
     if (parentMessageIndex > -1) {
         const parentMessage = messages[parentMessageIndex];
         const historyUpToParent = messages.slice(0, parentMessageIndex + 1);
-        const newAssistantMessage: Message = {
-            id: uuidv4(),
-            type: 'assistant',
-            text: '',
-            parentId: parentMessage.id,
-            isStreaming: true,
-            createdAt: new Date().toISOString()
-        };
+        const newAssistantMessage: Message = { id: uuidv4(), type: 'assistant', text: '', parentId: parentMessage.id, isStreaming: true, createdAt: new Date().toISOString() };
+
         queryClient.setQueryData<Message[]>(['messages', sessionId], (old = []) => [...old, newAssistantMessage]);
-        startStream(sessionId, parentMessage.text, newAssistantMessage.id, historyUpToParent, parentMessage.context);
+        startStream(sessionId, parentMessage.text, newAssistantMessage.id, historyUpToParent, parentMessage.context, parentMessage.fileIds);
     }
   }, [queryClient, sessionId, startStream]);
 
-  /**
-   * @description Останавливает все активные генерации ответов.
-   */
   const handleStopGenerating = useCallback(() => {
-    if (activeStreams.size > 0) {
-      for (const messageId of activeStreams.keys()) {
-        stopStream(messageId);
-      }
-    } else {
-        console.warn("Stop generating called, but no active streams found in the global store.");
-    }
+    activeStreams.forEach((_, messageId) => stopStream(messageId));
   }, [activeStreams, stopStream]);
 
-  return {
-    handleSendMessage,
-    handleRegenerate,
-    handleStopGenerating,
-    stopStream,
-    isStreaming
-  };
+  return { handleSendMessage, handleRegenerate, handleStopGenerating, stopStream, isStreaming };
 }

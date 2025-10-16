@@ -10,6 +10,7 @@ import com.example.ragollama.rag.retrieval.RetrievalProperties;
 import com.example.ragollama.shared.config.properties.AppProperties;
 import com.example.ragollama.shared.llm.LlmRouterService;
 import com.example.ragollama.shared.processing.PiiRedactionService;
+import com.example.ragollama.web.FileManagerProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -31,8 +32,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         AppProperties.class,
         RetrievalProperties.class,
         RerankingProperties.class,
-        EvaluationProperties.class,
         IngestionProperties.class,
+        EvaluationProperties.class,
         ConfluenceProperties.class,
         JiraProperties.class,
         GitProperties.class,
@@ -45,7 +46,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         CostProperties.class,
         FederationProperties.class,
         KnowledgeDomainProperties.class,
-        QuotaProperties.class})
+        QuotaProperties.class,
+        FileManagerProperties.class})
 public class RagOllamaApplication {
     /**
      * Точка входа в приложение.

@@ -1,29 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { useChatSessions } from './hooks/useChatSessions';
-import { useDebounce } from './hooks/useDebounce';
-import { useRouter } from './hooks/useRouter';
-import { useNotificationStore } from './state/notificationStore';
-import { SearchInput } from './components/SearchInput';
+import { useChatSessions } from '../../hooks/useChatSessions';
+import { useDebounce } from '../../hooks/useDebounce';
+import { useRouter } from '../../hooks/useRouter';
+import { useNotificationStore } from '../../state/notificationStore';
+import { SearchInput } from '../../components/SearchInput';
 import { ChatListItem } from './components/ChatListItem';
 import { Plus } from 'lucide-react';
 import styles from './ChatSidebar.module.css';
 
-/**
- * @interface ChatSidebarProps
- * @description Пропсы для компонента ChatSidebar.
- */
 interface ChatSidebarProps {
-  /** @param {string | null} currentSessionId - ID активной в данный момент сессии чата. */
   currentSessionId: string | null;
 }
 
-/**
- * Компонент боковой панели для навигации по чатам.
- * Управляет состоянием поиска, отображает список чатов и кнопку создания нового.
- * @param {ChatSidebarProps} props - Пропсы компонента.
- * @returns {React.ReactElement} Отрендеренный компонент боковой панели.
- */
 export function ChatSidebar({ currentSessionId }: ChatSidebarProps) {
   const { sessions, isLoading, createChat, deleteChat, renameChat } = useChatSessions();
   const { navigate } = useRouter();
@@ -50,7 +39,7 @@ export function ChatSidebar({ currentSessionId }: ChatSidebarProps) {
     if (notifications.has(sessionId)) {
       clearNotification(sessionId);
     }
-    navigate(sessionId);
+    navigate(`/chat?sessionId=${sessionId}`);
   };
 
   return (

@@ -52,8 +52,8 @@ import java.util.Optional;
         "com.example.ragollama.agent.dynamic",
         "com.example.ragollama.agent.finops.domain",
         "com.example.ragollama.evaluation.domain",
-        "com.example.ragollama.shared.task"
-})
+        "com.example.ragollama.shared.task",
+        "com.example.ragollama.web"})
 @EnableR2dbcAuditing(dateTimeProviderRef = "offsetDateTimeProvider")
 @EnableTransactionManagement
 @RequiredArgsConstructor

@@ -1,7 +1,5 @@
 package com.example.ragollama.shared.config.properties;
 
-import com.example.ragollama.ingestion.IngestionProperties;
-import com.example.ragollama.rag.retrieval.RetrievalProperties;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -12,20 +10,18 @@ import org.springframework.validation.annotation.Validated;
 import java.time.Duration;
 
 /**
- * Главный класс для всех кастомных настроек приложения, загружаемых из application.yml с префиксом "app".
- * <p> Этот record-класс использует возможности {@code @ConfigurationProperties} для
- * обеспечения типобезопасного, иммутабельного и самодокументируемого доступа
- * к конфигурации. Каждый вложенный record соответствует логическому блоку в {@code application.yml}.
+ * Главный класс для кастомных настроек приложения, загружаемых из application.yml с префиксом "app".
+ * Этот record-класс является "корневым" для общей конфигурации приложения, в то время как
+ * более специфичные модули (retrieval, ingestion, reranking) имеют свои собственные
+ * классы @ConfigurationProperties для лучшей инкапсуляции.
  */
 @Validated
 @ConfigurationProperties(prefix = "app")
 public record AppProperties(
         @NotNull Prompt prompt,
-        @NotNull Reranking reranking,
         @NotNull Tokenization tokenization,
         @NotNull Context context,
         @NotNull Chat chat,
-        @NotNull IngestionProperties ingestion,
         @NotNull HttpClient httpClient,
         @NotNull TaskExecutor taskExecutor,
         @NotNull TaskExecutor llmExecutor,
@@ -43,16 +39,7 @@ public record AppProperties(
     }
 
     /**
-     * Настройки для сервиса переранжирования.
-     *
-     * @param enabled           Включает/выключает сервис.
-     * @param keywordMatchBoost Фактор усиления для совпадений по ключевым словам.
-     */
-    public record Reranking(boolean enabled, double keywordMatchBoost) {
-    }
-
-    /**
-     * Настройки токенизатора (библиотека jtokkit).
+     * Настройки токенизатора.
      *
      * @param encodingModel Имя модели кодирования (например, "o200k_base").
      */
@@ -62,7 +49,7 @@ public record AppProperties(
     /**
      * Настройки для сборки контекста RAG.
      *
-     * @param maxTokens Максимальное количество токенов, разрешенное для контекста.
+     * @param maxTokens Максимальное количество токенов для контекста.
      */
     public record Context(@Min(512) @Max(16384) int maxTokens) {
     }
@@ -74,18 +61,14 @@ public record AppProperties(
      */
     public record Chat(@NotNull History history) {
         /**
-         * @param maxMessages Количество последних сообщений для поддержания контекста.
+         * @param maxMessages Количество последних сообщений для контекста.
          */
         public record History(@Min(1) @Max(50) int maxMessages) {
         }
     }
 
     /**
-     * Настройки для HTTP-клиентов, таких как WebClient.
-     *
-     * @param connectTimeout   Таймаут на установку TCP-соединения.
-     * @param responseTimeout  Общий таймаут на получение ответа.
-     * @param readWriteTimeout Таймаут на чтение/запись данных в установленном соединении.
+     * Настройки для HTTP-клиентов.
      */
     @Validated
     public record HttpClient(
@@ -103,12 +86,7 @@ public record AppProperties(
     }
 
     /**
-     * Настройки для пула асинхронных задач приложения.
-     *
-     * @param corePoolSize     Базовый размер пула.
-     * @param maxPoolSize      Максимальный размер пула.
-     * @param queueCapacity    Размер очереди для задач.
-     * @param threadNamePrefix Префикс для имен потоков.
+     * Настройки для пула асинхронных задач.
      */
     @Validated
     public record TaskExecutor(
@@ -121,16 +99,9 @@ public record AppProperties(
 
     /**
      * Настройки, специфичные для векторного хранилища.
-     *
-     * @param index Параметры HNSW-индекса.
      */
     @Validated
     public record VectorStoreProperties(@NotNull Index index) {
-        /**
-         * @param m              Количество соседей на слой графа HNSW.
-         * @param efConstruction Глубина поиска при построении индекса.
-         * @param efSearch       Глубина поиска во время запроса.
-         */
         @Validated
         public record Index(
                 @Min(4) @Max(128) int m,
@@ -142,50 +113,29 @@ public record AppProperties(
 
     /**
      * Конфигурация для стратегий расширения контекста.
-     *
-     * @param graph Настройки для расширения через граф знаний.
      */
     @Validated
     public record Expansion(@NotNull Graph graph) {
-        /**
-         * @param enabled Включает/выключает шаг расширения через граф.
-         */
         public record Graph(boolean enabled) {
         }
     }
 
     /**
-     * Общие настройки для всего RAG-конвейера.
-     *
-     * @param noContextStrategy   Стратегия поведения при отсутствии контекста.
-     * @param arrangementStrategy Стратегия компоновки финального контекста.
-     * @param summarizer          Настройки суммаризации.
-     * @param retrieval           Настройки извлечения.
-     * @param validation          Настройки валидации ответа.
+     * Общие настройки для RAG-конвейера.
+     * Специфичные настройки (retrieval, reranking) вынесены в отдельные классы.
      */
     @Validated
     public record Rag(
             @NotBlank String noContextStrategy,
             @NotBlank String arrangementStrategy,
             @NotNull Summarizer summarizer,
-            @NotNull RetrievalProperties retrieval,
             @NotNull Validation validation
     ) {
     }
 
-    /**
-     * Настройки для суммаризации (в данный момент не используются).
-     *
-     * @param enabled Включает/выключает.
-     */
     public record Summarizer(boolean enabled) {
     }
 
-    /**
-     * Настройки для шага валидации ответа.
-     *
-     * @param enabled Включает/выключает AI-критика.
-     */
     public record Validation(boolean enabled) {
     }
 }
