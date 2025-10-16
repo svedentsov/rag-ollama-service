@@ -1,4 +1,4 @@
-import React, { FC } from 'react';
+import React, { FC, useState, useEffect } from 'react';
 import styles from './StatusIndicator.module.css';
 
 /**
@@ -6,33 +6,57 @@ import styles from './StatusIndicator.module.css';
  * @description Пропсы для компонента StatusIndicator.
  */
 interface StatusIndicatorProps {
-    /** @param {string} status - Полностью отформатированная строка статуса для отображения. */
+    /** @param {string} status - Текст статуса для отображения. */
     status: string;
+    /** @param {number | null} startTime - Временная метка начала операции в мс. */
+    startTime: number | null;
 }
 
 /**
- * Отображает информативный статус выполнения асинхронной задачи.
- * В этой версии компонент стал "глупым" и отвечает только за рендеринг
- * спиннера и текста, без внешнего контейнера.
+ * Форматирует прошедшее время в секундах.
+ * @param {number} seconds - Количество секунд.
+ * @returns {string} Отформатированная строка (например, "5s").
+ */
+const formatTime = (seconds: number): string => `${seconds}s`;
+
+/**
+ * Отображает информативный статус выполнения асинхронной задачи с таймером.
+ * Компонент инкапсулирует логику таймера, чтобы предотвратить ненужные
+ * перерисовки родительских компонентов.
+ *
  * @param {StatusIndicatorProps} props - Пропсы компонента.
  * @returns {React.ReactElement | null} Отрендеренный компонент или null, если статус пуст.
  */
-export const StatusIndicator: FC<StatusIndicatorProps> = ({ status }) => {
+export const StatusIndicator: FC<StatusIndicatorProps> = ({ status, startTime }) => {
+    const [elapsedTime, setElapsedTime] = useState(0);
+
+    useEffect(() => {
+        let timer: number | undefined;
+        if (startTime) {
+            // Инициализируем таймер сразу
+            setElapsedTime(Math.round((Date.now() - startTime) / 1000));
+            // И запускаем интервал для его обновления
+            timer = window.setInterval(() => {
+                setElapsedTime(Math.round((Date.now() - startTime) / 1000));
+            }, 1000);
+        } else {
+            // Сбрасываем, если startTime отсутствует
+            setElapsedTime(0);
+        }
+        // Очистка при размонтировании
+        return () => window.clearInterval(timer);
+    }, [startTime]); // Эффект зависит только от startTime
+
     if (!status) {
         return null;
     }
-
-    // Извлекаем время из конца строки для стилизации (например, "Ищу информацию... 5s")
-    const parts = status.match(/(.*)\s(\d+s)$/);
-    const text = parts ? parts[1] : status;
-    const time = parts ? parts[2] : '';
 
     return (
         <div className={styles.statusContent} role="status" aria-live="polite">
             <div className={styles.spinner} aria-hidden="true"></div>
             <div className={styles.statusText}>
-                <span>{text}</span>
-                {time && <span className={styles.timer} aria-label={`Прошло ${time}`}>{time}</span>}
+                <span>{status}</span>
+                {startTime && <span className={styles.timer} aria-label={`Прошло ${elapsedTime} секунд`}>{formatTime(elapsedTime)}</span>}
             </div>
         </div>
     );

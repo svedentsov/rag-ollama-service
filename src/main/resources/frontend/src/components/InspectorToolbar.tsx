@@ -1,7 +1,8 @@
 import React, { FC } from 'react';
-import { Message } from '../types';
-import { QueryFormationSteps } from './QueryFormationSteps';
+import { FileText } from 'lucide-react';
 import { PromptInspector } from './PromptInspector';
+import { QueryFormationSteps } from './QueryFormationSteps';
+import { Message } from '../types';
 import styles from './InspectorToolbar.module.css';
 
 /**
@@ -15,8 +16,9 @@ interface InspectorToolbarProps {
 
 /**
  * Компонент-контейнер для всех инструментов анализа и объяснения ("XAI").
- * Группирует в одном месте QueryFormationSteps и PromptInspector для
+ * Группирует в одном месте `QueryFormationSteps` и `PromptInspector` для
  * обеспечения семантической близости и чистоты интерфейса.
+ *
  * @param {InspectorToolbarProps} props - Пропсы компонента.
  * @returns {React.ReactElement | null} Отрендеренный компонент или null, если нет данных для инспекции.
  */

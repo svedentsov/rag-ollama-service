@@ -3,43 +3,43 @@ import { ThinkingStep } from '../types';
 
 /**
  * @interface TaskState
- * @description Определяет полную структуру состояния для одной активной задачи/стрима.
+ * @description Определяет полную структуру состояния для одной активной асинхронной задачи или потока данных (stream).
  */
 export interface TaskState {
   /** @property {string | null} taskId - ID задачи, полученный от сервера. */
   taskId: string | null;
-  /** @property {string | null} statusText - Текст статуса для отображения (например, "Ищу информацию..."). */
+  /** @property {string | null} statusText - Текст текущего статуса для отображения (например, "Ищу информацию..."). */
   statusText: string | null;
-  /** @property {Map<string, ThinkingStep>} thinkingSteps - Шаги выполнения плана ("мысли" AI). */
+  /** @property {Map<string, ThinkingStep>} thinkingSteps - Карта шагов выполнения плана ("мысли" AI), где ключ - имя шага. */
   thinkingSteps: Map<string, ThinkingStep>;
-  /** @property {number | null} startTime - Временная метка начала выполнения задачи. */
+  /** @property {number | null} startTime - Временная метка начала выполнения задачи в миллисекундах. */
   startTime: number | null;
 }
 
 /**
  * @interface StreamingState
- * @description Определяет структуру глобального стора для отслеживания всех активных стримов.
+ * @description Определяет структуру глобального стора для отслеживания всех активных потоков данных (стримов).
  */
 interface StreamingState {
-  /** @property {Map<string, TaskState>} activeStreams - Карта активных стримов, где ключ - ID сообщения ассистента. */
+  /** @property {Map<string, TaskState>} activeStreams - Карта активных стримов, где ключ - это временный ID сообщения ассистента. */
   activeStreams: Map<string, TaskState>;
   /**
    * @function startStream
-   * @description Инициализирует состояние для нового стрима.
-   * @param {string} assistantMessageId - ID сообщения ассистента.
+   * @description Инициализирует состояние для нового стрима при начале генерации ответа.
+   * @param {string} assistantMessageId - ID сообщения ассистента, к которому привязан стрим.
    */
   startStream: (assistantMessageId: string) => void;
   /**
    * @function stopStream
-   * @description Удаляет стрим из активных.
+   * @description Удаляет стрим из активных по его завершении или отмене.
    * @param {string} assistantMessageId - ID сообщения ассистента.
    */
   stopStream: (assistantMessageId: string) => void;
   /**
    * @function updateStreamState
-   * @description Обновляет состояние конкретного стрима.
+   * @description Обновляет состояние конкретного активного стрима новыми данными.
    * @param {string} assistantMessageId - ID сообщения ассистента.
-   * @param {Partial<TaskState>} updates - Частичное состояние для обновления.
+   * @param {Partial<TaskState>} updates - Частичный объект состояния для обновления.
    */
   updateStreamState: (assistantMessageId: string, updates: Partial<TaskState>) => void;
 }
@@ -58,7 +58,7 @@ export const useStreamingStore = create<StreamingState>((set) => ({
         taskId: null,
         statusText: "Анализирую ваш запрос...",
         thinkingSteps: new Map(),
-        startTime: Date.now(), // Сохраняем время старта
+        startTime: Date.now(),
       });
       return { activeStreams: newStreams };
     }),
@@ -83,7 +83,7 @@ export const useStreamingStore = create<StreamingState>((set) => ({
       newStreams.set(assistantMessageId, {
         ...currentStream,
         ...updates,
-        thinkingSteps: newThinkingSteps
+        thinkingSteps: newThinkingSteps,
       });
       return { activeStreams: newStreams };
     }),

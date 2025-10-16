@@ -1,35 +1,36 @@
 import { useMemo } from 'react';
 import { Message } from '../types';
-import { useChatSessions } from './useChatSessions';
+import { useSessionStore } from '../state/sessionStore';
 
 /**
- * Результат работы хука useVisibleMessages.
+ * @interface UseVisibleMessagesReturn
+ * @description Определяет возвращаемое значение хука `useVisibleMessages`.
  */
 interface UseVisibleMessagesReturn {
-  /** Отфильтрованный массив сообщений, которые должны быть видимы в UI. */
+  /** @property {Message[]} visibleMessages - Отфильтрованный массив сообщений, которые должны быть видимы в UI. */
   visibleMessages: Message[];
-  /** Map с информацией о ветвлении для каждого сообщения ассистента. */
+  /** @property {Map<string, { total: number; current: number; siblings: Message[] }>} messageBranchInfo - Map с информацией о ветвлении для каждого сообщения ассистента. */
   messageBranchInfo: Map<string, { total: number; current: number; siblings: Message[] }>;
 }
 
 /**
- * Хук для инкапсуляции сложной логики определения видимых сообщений
- * с учетом ветвления ответов ассистента.
+ * @description Хук для инкапсуляции сложной логики определения видимых сообщений
+ * с учетом ветвления ответов ассистента. Он является "селектором", который
+ * зависит только от полного списка сообщений и глобального состояния UI (`useSessionStore`).
+ *
  * @param {string} sessionId - ID текущей сессии.
  * @param {Message[]} messages - Полный массив всех сообщений в сессии.
  * @returns {UseVisibleMessagesReturn} Объект с отфильтрованными сообщениями и информацией о ветках.
  */
 export const useVisibleMessages = (sessionId: string, messages: Message[]): UseVisibleMessagesReturn => {
-  const { sessions } = useChatSessions();
-  const activeBranches = useMemo(() => {
-      const currentSession = sessions.find(s => s.sessionId === sessionId);
-      return currentSession?.activeBranches ?? {};
-  }, [sessions, sessionId]);
+  // Хук теперь зависит от глобального стора, а не от другого хука.
+  const activeBranches = useSessionStore((state) => state.sessionBranches.get(sessionId) || {});
 
   const { visibleMessages, messageBranchInfo } = useMemo(() => {
     if (!messages.length) {
       return { visibleMessages: [], messageBranchInfo: new Map() };
     }
+    // 1. Группируем все сообщения по их родителям.
     const childrenMap = new Map<string, Message[]>();
     messages.forEach(m => {
       if (m.parentId) {
@@ -39,12 +40,15 @@ export const useVisibleMessages = (sessionId: string, messages: Message[]): UseV
         childrenMap.get(m.parentId)!.push(m);
       }
     });
+    // Сортируем дочерние сообщения по дате создания для консистентности.
     childrenMap.forEach(children => children.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
 
+    // 2. Определяем, какие сообщения нужно скрыть.
     const hiddenIds = new Set<string>();
     childrenMap.forEach((children, parentId) => {
       if (children.length > 1) {
         let selectedId = activeBranches[parentId];
+        // Если активная ветка не выбрана или не существует, выбираем последнюю.
         if (!selectedId || !children.some(c => c.id === selectedId)) {
           selectedId = children[children.length - 1].id;
         }
@@ -56,6 +60,7 @@ export const useVisibleMessages = (sessionId: string, messages: Message[]): UseV
       }
     });
 
+    // 3. Собираем мета-информацию о ветках для видимых сообщений.
     const branchInfo = new Map<string, { total: number; current: number; siblings: Message[] }>();
     messages.forEach(msg => {
       if (msg.type === 'assistant' && msg.parentId && !hiddenIds.has(msg.id)) {

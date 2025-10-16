@@ -1,35 +1,37 @@
 import React, { FC } from 'react';
-import toast from 'react-hot-toast';
 import { RefreshCw, Edit, Trash, ThumbsUp, ThumbsDown, Square, Copy } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Message } from '../types';
 import styles from './ChatMessage.module.css';
 
 /**
  * @interface MessageActionsProps
- * @description Пропсы для компонента с кнопками действий.
+ * @description Пропсы для компонента с кнопками действий над сообщением.
  */
 interface MessageActionsProps {
-  /** @param {Message} message - Объект сообщения. */
+  /** @param {Message} message - Объект сообщения, для которого отображаются действия. */
   message: Message;
-  /** @param {boolean} isLastInTurn - Является ли сообщение последним в "ходе". */
+  /** @param {boolean} isLastInTurn - Является ли это сообщение последним в текущем "ходе" диалога. */
   isLastInTurn: boolean;
-  /** @param {boolean} isFeedbackSending - Отправляется ли в данный момент фидбэк. */
+  /** @param {boolean} isFeedbackSending - Флаг, указывающий на процесс отправки обратной связи. */
   isFeedbackSending: boolean;
-  /** @param {() => void} onRegenerate - Колбэк для регенерации. */
+  /** @param {() => void} onRegenerate - Колбэк для запроса повторной генерации ответа. */
   onRegenerate: () => void;
-  /** @param {() => void} onStartEdit - Колбэк для начала редактирования. */
+  /** @param {() => void} onStartEdit - Колбэк для переключения сообщения в режим редактирования. */
   onStartEdit: () => void;
-  /** @param {() => void} onDelete - Колбэк для удаления. */
+  /** @param {() => void} onDelete - Колбэк для удаления сообщения. */
   onDelete: () => void;
-  /** @param {() => void} onStop - Колбэк для остановки генерации. */
+  /** @param {() => void} onStop - Колбэк для остановки потоковой генерации. */
   onStop: () => void;
-  /** @param {(isHelpful: boolean) => void} onSendFeedback - Колбэк для отправки фидбэка. */
+  /** @param {(isHelpful: boolean) => void} onSendFeedback - Колбэк для отправки обратной связи (оценки). */
   onSendFeedback: (isHelpful: boolean) => void;
 }
 
 /**
  * Презентационный компонент, который отображает набор кнопок действий
- * для конкретного сообщения.
+ * для конкретного сообщения (регенерация, редактирование, оценка и т.д.).
+ * Является "глупым" компонентом, вся логика передается через пропсы.
+ *
  * @param {MessageActionsProps} props - Пропсы компонента.
  * @returns {React.ReactElement} Отрендеренный компонент.
  */

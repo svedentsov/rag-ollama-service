@@ -7,14 +7,16 @@ import styles from './Sources.module.css';
  * @description Пропсы для компонента отображения источников.
  */
 interface SourcesProps {
-  /** @param {Message} message - Объект сообщения, содержащий источники. */
+  /** @param {Message} message - Объект сообщения, содержащий источники, подтверждающие ответ. */
   message: Message;
 }
 
 /**
- * Компонент, отвечающий исключительно за рендеринг сетки с карточками источников.
+ * Презентационный компонент, отвечающий исключительно за рендеринг
+ * сетки с карточками источников (цитат). Является "глупым" компонентом.
+ *
  * @param {SourcesProps} props - Пропсы компонента.
- * @returns {React.ReactElement | null} Отрендеренный компонент или null, если нет источников.
+ * @returns {React.ReactElement | null} Отрендеренный компонент или null, если у сообщения нет источников.
  */
 export const Sources: FC<SourcesProps> = ({ message }) => {
   const hasSources = message.sources && message.sources.length > 0;
@@ -24,7 +26,7 @@ export const Sources: FC<SourcesProps> = ({ message }) => {
   }
 
   return (
-    <div className={styles.sourcesBlock}>
+    <div className={styles.sourcesContainer}>
       <div className={styles.sourcesHeader}>
         <h4 className={styles.sourcesTitle}>Источники:</h4>
       </div>

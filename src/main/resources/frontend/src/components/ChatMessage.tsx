@@ -1,4 +1,4 @@
-import React, { FC, useCallback } from 'react';
+import React, { FC } from 'react';
 import { Message } from '../types';
 import { useFeedback } from '../hooks/useFeedback';
 import { useChatSessions } from '../hooks/useChatSessions';
@@ -13,35 +13,38 @@ import styles from './ChatMessage.module.css';
 
 /**
  * @interface ChatMessageProps
- * @description Пропсы для компонента ChatMessage.
+ * @description Пропсы для компонента ChatMessage, который отображает одно сообщение в чате.
  */
 export interface ChatMessageProps {
-  /** @param {string} sessionId - ID текущей сессии чата. */
+  /** @param {string} sessionId - ID текущей сессии чата, к которой принадлежит сообщение. */
   sessionId: string;
   /** @param {Message} message - Объект сообщения для отображения. */
   message: Message;
-  /** @param {boolean} isLastInTurn - Является ли это сообщение последним в текущем "ходе" диалога. */
+  /** @param {boolean} isLastInTurn - Является ли это сообщение последним в текущем "ходе" диалога (влияет на отображение действий). */
   isLastInTurn: boolean;
-  /** @param {{ total: number; current: number; siblings: Message[] }} [branchInfo] - Информация о ветвлении для данного сообщения. */
+  /** @param {{ total: number; current: number; siblings: Message[] }} [branchInfo] - Информация о ветвлении для данного сообщения, если оно имеет альтернативы. */
   branchInfo?: { total: number; current: number; siblings: Message[] };
   /** @param {boolean} isEditing - Находится ли сообщение в режиме редактирования. */
   isEditing: boolean;
-  /** @param {() => void} onStartEdit - Колбэк для начала редактирования. */
+  /** @param {() => void} onStartEdit - Колбэк для переключения сообщения в режим редактирования. */
   onStartEdit: () => void;
-  /** @param {() => void} onCancelEdit - Колбэк для отмены редактирования. */
+  /** @param {() => void} onCancelEdit - Колбэк для отмены режима редактирования. */
   onCancelEdit: () => void;
-  /** @param {() => void} onRegenerate - Колбэк для запроса повторной генерации ответа. */
+  /** @param {() => void} onRegenerate - Колбэк для запроса повторной генерации ответа ассистента. */
   onRegenerate: () => void;
-  /** @param {(messageId: string, newContent: string) => void} onUpdateContent - Колбэк для сохранения измененного контента. */
+  /** @param {(messageId: string, newContent: string) => void} onUpdateContent - Колбэк для сохранения измененного контента сообщения. */
   onUpdateContent: (messageId: string, newContent: string) => void;
-  /** @param {() => void} onDelete - Колбэк для удаления сообщения. */
+  /** @param {() => void} onDelete - Колбэк для удаления сообщения и его дочерних веток. */
   onDelete: () => void;
-  /** @param {() => void} onStop - Колбэк для остановки потоковой генерации. */
+  /** @param {() => void} onStop - Колбэк для остановки потоковой генерации ответа. */
   onStop: () => void;
 }
 
 /**
- * Отображает одно сообщение в чате, управляя его состоянием и действиями.
+ * Компонент-сборщик (assembler), который отображает одно сообщение в чате.
+ * Он объединяет более мелкие, сфокусированные компоненты для отображения контента,
+ * метаданных и элементов управления, а также управляет их взаимодействием.
+ *
  * @param {ChatMessageProps} props - Пропсы компонента.
  * @returns {React.ReactElement} Отрендеренный компонент сообщения.
  */
@@ -53,12 +56,14 @@ export const ChatMessage: FC<ChatMessageProps> = React.memo(({
   const { setActiveBranch } = useChatSessions();
   const isUser = message.type === 'user';
 
-  const handleSelectBranch = useCallback((newChildId: string) => {
+  const handleSelectBranch = (newChildId: string) => {
     if (message.parentId) {
       setActiveBranch({ sessionId, parentId: message.parentId, childId: newChildId });
     }
-  }, [sessionId, message.parentId, setActiveBranch]);
+  };
 
+  // Если сообщение ассистента находится в процессе стриминга, но еще не имеет текста,
+  // отображаем только индикатор "мышления".
   if (message.isStreaming && !message.text) {
     return (
         <div className={`${styles.messageWrapper} ${styles.assistant}`}>
@@ -70,19 +75,26 @@ export const ChatMessage: FC<ChatMessageProps> = React.memo(({
   return (
     <div className={`${styles.messageWrapper} ${isUser ? styles.user : styles.assistant} ${isEditing ? styles.isEditing : ''}`} tabIndex={-1}>
       <div className={styles.contentWrapper}>
+        {/* Панель инспекции отображается только для сообщений ассистента в режиме просмотра */}
         {!isEditing && !isUser && <InspectorToolbar message={message} />}
+
+        {/* Основной контент: Markdown-рендер или редактор */}
         <MessageContent
           message={message}
           isEditing={isEditing}
           onSave={(newContent) => onUpdateContent(message.id, newContent)}
           onCancel={onCancelEdit}
         />
+
+        {/* Дополнительные блоки метаданных для сообщений ассистента */}
         {!isEditing && !isUser && (
           <>
             <Sources message={message} />
             {message.trustScoreReport && <TrustScoreIndicator report={message.trustScoreReport} />}
           </>
         )}
+
+        {/* Нижний блок с элементами управления */}
         <div className={`${styles.messageMetaContainer} ${isLastInTurn || isEditing || branchInfo ? styles.metaVisible : ''}`}>
           <div className={styles.messageActions}>
               {branchInfo && message.parentId && !isEditing && (

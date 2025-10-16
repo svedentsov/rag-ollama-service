@@ -38,16 +38,12 @@ export function ChatSidebar({ currentSessionId }: ChatSidebarProps) {
     );
   }, [sessions, debouncedSearchTerm]);
 
-  const handleNewChat = async () => {
-    try {
-      // Теперь createChat возвращает созданный чат
-      const newChat = await createChat();
-      // Навигация происходит здесь, в компоненте, а не в хуке
-      navigate(newChat.sessionId);
-      toast.success('Чат создан!');
-    } catch (error) {
-      toast.error('Ошибка при создании чата.');
-    }
+  const handleNewChat = () => {
+    toast.promise(createChat(), {
+      loading: 'Создание чата...',
+      success: 'Чат успешно создан!',
+      error: 'Ошибка при создании чата.',
+    });
   };
 
   const handleNavigation = (sessionId: string) => {

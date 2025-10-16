@@ -99,8 +99,8 @@ export const api = {
  * @param {string} sessionId - ID текущей сессии.
  * @param {AbortSignal} signal - Сигнал для отмены запроса.
  * @param {Message[]} history - История сообщений для контекста.
- * @param {string} [context] - Опциональный контекст (содержимое файла).
- * @returns {AsyncGenerator<UniversalStreamResponse, void, undefined>} Асинхронный генератор.
+ * @param {string} [context] - Опциональный контекст (например, содержимое файла).
+ * @returns {AsyncGenerator<UniversalStreamResponse, void, undefined>} Асинхронный генератор, который отдает события из потока.
  */
 export async function* streamChatResponse(
     query: string,

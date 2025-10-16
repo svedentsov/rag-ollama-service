@@ -8,22 +8,24 @@ import styles from './ChatMessage.module.css';
 
 /**
  * @interface MessageContentProps
- * @description Пропсы для компонента MessageContent.
+ * @description Пропсы для компонента, отображающего содержимое сообщения.
  */
 interface MessageContentProps {
   /** @param {Message} message - Объект сообщения для отображения. */
   message: Message;
-  /** @param {boolean} isEditing - Находится ли сообщение в режиме редактирования. */
+  /** @param {boolean} isEditing - Флаг, указывающий, находится ли сообщение в режиме редактирования. */
   isEditing: boolean;
-  /** @param {(newContent: string) => void} onSave - Колбэк при сохранении изменений. */
+  /** @param {(newContent: string) => void} onSave - Колбэк для сохранения измененного контента. */
   onSave: (newContent: string) => void;
-  /** @param {() => void} onCancel - Колбэк при отмене редактирования. */
+  /** @param {() => void} onCancel - Колбэк для отмены редактирования. */
   onCancel: () => void;
 }
 
 /**
  * Презентационный компонент, отвечающий исключительно за отображение
- * содержимого сообщения (текст, Markdown) или редактора.
+ * содержимого сообщения (текст, отформатированный Markdown) или редактора для его изменения.
+ * Является "глупым" компонентом, вся логика передается через пропсы.
+ *
  * @param {MessageContentProps} props - Пропсы компонента.
  * @returns {React.ReactElement} Отрендеренный компонент.
  */
@@ -31,8 +33,8 @@ export const MessageContent: FC<MessageContentProps> = ({ message, isEditing, on
   const isUser = message.type === 'user';
 
   /**
-   * Мемоизированный объект с компонентами для рендеринга Markdown.
-   * Предотвращает их пересоздание на каждый рендер.
+   * Мемоизированный объект с кастомными рендерерами для ReactMarkdown.
+   * Предотвращает их пересоздание на каждый рендер, оптимизируя производительность.
    */
   const markdownComponents = useMemo(() => ({
       code: ({ node, className, children, ...props }: any) => {
@@ -48,8 +50,11 @@ export const MessageContent: FC<MessageContentProps> = ({ message, isEditing, on
     return <MessageEditor initialText={message.text} onSave={onSave} onCancel={onCancel} />;
   }
 
+  const contentBubbleClass = isUser ? styles.userBubble : styles.assistantBubble;
+  const errorClass = message.error ? styles.isError : '';
+
   return (
-      <div className={`${styles.bubble} ${isUser ? styles.userBubble : styles.assistantBubble} ${message.error ? styles.isError : ''}`}>
+      <div className={`${styles.bubble} ${contentBubbleClass} ${errorClass}`}>
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
           {message.text || (message.error ? `**Ошибка:** ${message.error}` : '')}
         </ReactMarkdown>

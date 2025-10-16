@@ -1,7 +1,7 @@
 import React, { FC } from 'react';
 import { FileText } from 'lucide-react';
 import { CodeBlock } from './CodeBlock';
-import styles from './QueryFormationSteps.module.css'; // Переиспользуем стили
+import styles from './QueryFormationSteps.module.css';
 
 /**
  * @interface PromptInspectorProps
@@ -13,8 +13,10 @@ interface PromptInspectorProps {
 }
 
 /**
- * Компонент, который отображает финальный промпт внутри раскрывающегося
- * блока `<details>`, унифицируя UX с `QueryFormationSteps`.
+ * Компонент, который отображает финальный промпт, отправленный в LLM.
+ * Использует стандартный HTML-элемент `<details>` для создания раскрывающегося
+ * блока, что является семантичным и доступным решением.
+ *
  * @param {PromptInspectorProps} props - Пропсы компонента.
  * @returns {React.ReactElement} Отрендеренный компонент.
  */
