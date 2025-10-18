@@ -1,45 +1,36 @@
 import { useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { v4 as uuidv4 } from 'uuid';
+import toast from 'react-hot-toast';
 import { useStreamManager } from './useStreamManager';
 import { Message } from '../types';
 import { useStreamingStore } from '../state/streamingStore';
-import { useAttachmentStore } from '../state/attachmentStore';
 import { useFileSelectionStore } from '../state/useFileSelectionStore';
+import { useFileUpload } from '../features/file-manager/useFileUpload';
 
 /**
- * @description Хук, инкапсулирующий всю бизнес-логику действий пользователя в чате.
- * @param {string} sessionId - ID текущей сессии чата.
- * @returns {{
- *   handleSendMessage: (inputText: string, context?: string, fileIds?: string[]) => void,
- *   handleRegenerate: (assistantMessageToRegenerate: Message) => void,
- *   handleStopGenerating: () => void,
- *   stopStream: (assistantMessageId: string) => void,
- *   isStreaming: boolean
- * }} Объект с функциями для взаимодействия с чатом и флагом активности.
+ * Хук, инкапсулирующий всю бизнес-логику действий пользователя в чате.
+ * @param sessionId - ID текущей сессии чата.
+ * @returns Объект с функциями для взаимодействия с чатом и флагами состояния.
  */
 export function useChatInteraction(sessionId: string) {
   const queryClient = useQueryClient();
   const { startStream, stopStream } = useStreamManager();
+  const { uploadFilesAsync, isUploading } = useFileUpload();
+  const { toggleSelection } = useFileSelectionStore();
+
   const activeStreams = useStreamingStore((state) => state.activeStreams);
   const isStreaming = activeStreams.size > 0;
-  const { clearAttachment } = useAttachmentStore();
-  const { clearSelection } = useFileSelectionStore();
 
-  const handleSendMessage = useCallback((inputText: string, context?: string, fileIds?: string[]) => {
-    const userMessage: Message = { id: uuidv4(), type: 'user', text: inputText, createdAt: new Date().toISOString(), context, fileIds };
+  const handleSendMessage = useCallback((inputText: string, fileIds?: string[]) => {
+    const userMessage: Message = { id: uuidv4(), type: 'user', text: inputText, createdAt: new Date().toISOString(), fileIds };
     const assistantMessage: Message = { id: uuidv4(), type: 'assistant', text: '', parentId: userMessage.id, isStreaming: true, createdAt: new Date().toISOString() };
 
     const currentMessages = queryClient.getQueryData<Message[]>(['messages', sessionId]) || [];
     queryClient.setQueryData<Message[]>(['messages', sessionId], [...currentMessages, userMessage, assistantMessage]);
 
-    startStream(sessionId, inputText, assistantMessage.id, [...currentMessages, userMessage], context, fileIds);
-
-    if (sessionId) {
-      if (context) clearAttachment(sessionId);
-      if (fileIds && fileIds.length > 0) clearSelection(sessionId);
-    }
-  }, [queryClient, sessionId, startStream, clearAttachment, clearSelection]);
+    startStream(sessionId, inputText, assistantMessage.id, [...currentMessages, userMessage], fileIds);
+  }, [queryClient, sessionId, startStream]);
 
   const handleRegenerate = useCallback((assistantMessageToRegenerate: Message) => {
     if (!assistantMessageToRegenerate.parentId) return;
@@ -52,7 +43,7 @@ export function useChatInteraction(sessionId: string) {
         const newAssistantMessage: Message = { id: uuidv4(), type: 'assistant', text: '', parentId: parentMessage.id, isStreaming: true, createdAt: new Date().toISOString() };
 
         queryClient.setQueryData<Message[]>(['messages', sessionId], (old = []) => [...old, newAssistantMessage]);
-        startStream(sessionId, parentMessage.text, newAssistantMessage.id, historyUpToParent, parentMessage.context, parentMessage.fileIds);
+        startStream(sessionId, parentMessage.text, newAssistantMessage.id, historyUpToParent, parentMessage.fileIds);
     }
   }, [queryClient, sessionId, startStream]);
 
@@ -60,5 +51,32 @@ export function useChatInteraction(sessionId: string) {
     activeStreams.forEach((_, messageId) => stopStream(messageId));
   }, [activeStreams, stopStream]);
 
-  return { handleSendMessage, handleRegenerate, handleStopGenerating, stopStream, isStreaming };
+  /**
+   * Обрабатывает загрузку одного файла и его "прикрепление" к текущей сессии.
+   * @param file - Файл для загрузки.
+   */
+  const handleUploadAndAttach = useCallback((file: File) => {
+    toast.promise(
+      uploadFilesAsync([file]).then(({ successful }) => {
+        if (successful.length > 0) {
+          toggleSelection(sessionId, successful[0].id);
+        }
+      }),
+      {
+        loading: 'Загрузка файла...',
+        success: 'Файл загружен и прикреплен!',
+        error: 'Ошибка при загрузке файла.',
+      }
+    );
+  }, [uploadFilesAsync, sessionId, toggleSelection]);
+
+  return {
+    handleSendMessage,
+    handleRegenerate,
+    handleStopGenerating,
+    handleUploadAndAttach,
+    stopStream,
+    isStreaming,
+    isUploading,
+  };
 }

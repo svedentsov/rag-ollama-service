@@ -183,7 +183,6 @@ resilience4j:
   timelimiter:
     instances:
       ollama:
-        # ИЗМЕНЕНИЕ: Увеличиваем таймаут для большей устойчивости в dev-окружении
         timeout-duration: 30m
         cancel-running-future: true
       database:
@@ -211,6 +210,7 @@ app:
       - "text/xml"
       - "application/pdf"
       - "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      - "text/x-java-source"
 
   llm:
     fallback-model: "phi3"
@@ -255,7 +255,6 @@ app:
     response-timeout: 30s
     read-write-timeout: 30s
     ollama:
-      # ИЗМЕНЕНИЕ: Увеличиваем таймауты для большей устойчивости в dev-окружении
       response-timeout: 25m
       read-write-timeout: 25m
 
@@ -282,6 +281,11 @@ app:
       m: 32
       ef-construction: 128
       ef-search: 64
+
+  ingestion:
+    chunking:
+      default-chunk-size: 512
+      chunk-overlap: 64
 
   rag:
     no-context-strategy: fixed

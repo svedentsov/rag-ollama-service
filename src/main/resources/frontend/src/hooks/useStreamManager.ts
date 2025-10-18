@@ -8,15 +8,12 @@ import { useSessionStore } from '../state/sessionStore';
 import { useStreamingStore } from '../state/streamingStore';
 
 /**
- * @description Чистая функция для обработки одного события из потока (SSE).
- * Она инкапсулирует логику обновления кэша React Query и глобального стора Zustand.
- * Это делает логику тестируемой и отделенной от React-хуков.
- *
- * @param {QueryClient} queryClient - Инстанс клиента React Query.
- * @param {(assistantMessageId: string, updates: Partial<import('../state/streamingStore').TaskState>) => void} updateStreamState - Функция для обновления стора стриминга.
- * @param {string} sessionId - ID сессии чата.
- * @param {string} assistantMessageId - ID сообщения ассистента, которое обновляется.
- * @param {UniversalStreamResponse} event - Событие из потока SSE.
+ * Чистая функция для обработки одного события из потока (SSE).
+ * @param queryClient - Инстанс клиента React Query.
+ * @param updateStreamState - Функция для обновления стора стриминга.
+ * @param sessionId - ID сессии чата.
+ * @param assistantMessageId - ID сообщения ассистента, которое обновляется.
+ * @param event - Событие из потока SSE.
  */
 const processStreamEvent = (
     queryClient: QueryClient,
@@ -73,13 +70,8 @@ const processStreamEvent = (
 };
 
 /**
- * @description Хук для управления жизненным циклом потоков данных (SSE).
- * Отвечает за запуск, обработку событий, остановку и финальную синхронизацию состояния.
- *
- * @returns {{
- *   startStream: (sessionId: string, query: string, assistantMessageId: string, history: Message[], context?: string) => Promise<void>,
- *   stopStream: (assistantMessageId: string) => void
- * }} Объект с функциями `startStream` и `stopStream`.
+ * Хук для управления жизненным циклом потоков данных (SSE).
+ * @returns Объект с функциями `startStream` и `stopStream`.
  */
 export function useStreamManager() {
   const queryClient = useQueryClient();
@@ -92,14 +84,14 @@ export function useStreamManager() {
     query: string,
     assistantMessageId: string,
     history: Message[],
-    context?: string
+    fileIds?: string[]
   ) => {
     startStreamInStore(assistantMessageId);
     const abortController = new AbortController();
     abortControllersRef.current.set(assistantMessageId, abortController);
 
     try {
-      for await (const event of streamChatResponse(query, sessionId, abortController.signal, history, context)) {
+      for await (const event of streamChatResponse(query, sessionId, abortController.signal, history, fileIds)) {
         processStreamEvent(queryClient, updateStreamState, sessionId, assistantMessageId, event);
       }
     } catch (error) {
@@ -121,16 +113,12 @@ export function useStreamManager() {
       if (sessionId !== currentSessionId) {
         addNotification(sessionId);
       }
-      // Инвалидация для перезагрузки финального, полного состояния с сервера
+
       await queryClient.invalidateQueries({ queryKey: ['chatSessions'] });
       await queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
     }
   }, [queryClient, updateStreamState, addNotification, startStreamInStore, stopStreamInStore]);
 
-  /**
-   * @description Инициирует остановку генерации ответа для конкретного сообщения.
-   * @param {string} assistantMessageId - ID сообщения ассистента, генерацию которого нужно остановить.
-   */
   const stopStream = useCallback((assistantMessageId: string) => {
     const controller = abortControllersRef.current.get(assistantMessageId);
     if (controller) {

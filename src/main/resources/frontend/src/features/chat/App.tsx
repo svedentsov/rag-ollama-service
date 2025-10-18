@@ -1,8 +1,10 @@
+// src/features/chat/App.tsx
 import React, { useState, useCallback } from 'react';
 import { useChatMessages } from '../../hooks/useChatMessages';
 import { useScrollManager } from '../../hooks/useScrollManager';
 import { useVisibleMessages } from '../../hooks/useVisibleMessages';
 import { useChatInteraction } from '../../hooks/useChatInteraction';
+import { useFileSelectionStore } from '../../state/useFileSelectionStore';
 import { ChatMessage } from './components/ChatMessage';
 import { ChatInput } from './components/ChatInput';
 import styles from './App.module.css';
@@ -23,8 +25,19 @@ interface AppProps {
  */
 export const App: React.FC<AppProps> = ({ sessionId }) => {
   const { messages, isLoading: isLoadingHistory, error: historyError, updateMessage, deleteMessage } = useChatMessages(sessionId);
-  const { handleSendMessage, handleRegenerate, handleStopGenerating, stopStream, isStreaming } = useChatInteraction(sessionId);
+  const { 
+    handleSendMessage, 
+    handleRegenerate, 
+    handleStopGenerating, 
+    handleUploadAndAttach,
+    stopStream, 
+    isStreaming,
+    isUploading 
+  } = useChatInteraction(sessionId);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+
+  const { getSelectedIds, clearSelection } = useFileSelectionStore();
+  const selectedFileIds = getSelectedIds(sessionId);
 
   const { visibleMessages, messageBranchInfo } = useVisibleMessages(sessionId, messages);
   const { containerRef, messagesEndRef, showScrollButton, scrollToBottom } = useScrollManager([visibleMessages]);
@@ -72,6 +85,10 @@ export const App: React.FC<AppProps> = ({ sessionId }) => {
         onStopGenerating={handleStopGenerating}
         showScrollButton={showScrollButton}
         onScrollToBottom={() => scrollToBottom('smooth')}
+        onUpload={handleUploadAndAttach}
+        isUploading={isUploading}
+        selectedFileIds={selectedFileIds}
+        onClearSelection={() => clearSelection(sessionId)}
       />
     </div>
   );

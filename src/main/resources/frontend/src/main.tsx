@@ -6,11 +6,11 @@ import { Toaster } from 'react-hot-toast';
 
 // Pages
 import { WelcomePage } from './pages/WelcomePage';
+import { FileManagerPage } from './features/file-manager/FileManagerPage';
 
 // Features
 import { App as ChatApp } from './features/chat/App';
 import { ChatSidebar } from './features/chat/ChatSidebar';
-import { FileManager } from './features/file-manager/FileManager';
 
 // Shared UI Components
 import { RootSidebar } from './components/RootSidebar';
@@ -31,7 +31,7 @@ const MainContent = () => {
     const { pathname, sessionId } = useRouter();
 
     if (pathname.startsWith('/files')) {
-        return <FileManager />;
+        return <FileManagerPage />;
     }
 
     if (pathname.startsWith('/chat') || pathname === '/') {
@@ -48,7 +48,7 @@ const MainContent = () => {
     return <WelcomePage />;
 };
 
-const RootContent = () => {
+const RootLayout = () => {
     return (
         <div id="root-layout">
             <RootSidebar />
@@ -57,12 +57,12 @@ const RootContent = () => {
     );
 };
 
-const Root = () => {
+const AppRoot = () => {
     return (
         <QueryClientProvider client={queryClient}>
             <Toaster position="bottom-center" />
             <RouterProvider>
-                <RootContent />
+                <RootLayout />
             </RouterProvider>
         </QueryClientProvider>
     );
@@ -72,7 +72,7 @@ const rootEl = document.getElementById('app-root');
 if (rootEl) {
     ReactDOM.createRoot(rootEl).render(
         <React.StrictMode>
-            <Root />
+            <AppRoot />
         </React.StrictMode>
     );
 } else {

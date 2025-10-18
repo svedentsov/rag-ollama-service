@@ -54,14 +54,12 @@ public class IndexingPipelineService {
         log.info("Запуск идемпотентного конвейера индексации для источника: '{}', ID: {}",
                 request.sourceName(), request.documentId());
 
-        // Шаг 1: Идемпотентное удаление старых версий
         return vectorStoreRepository.deleteByDocumentId(request.documentId())
                 .flatMap(deletedCount -> {
                     if (deletedCount > 0) {
                         log.info("Удалено {} старых чанков для документа '{}' перед обновлением.", deletedCount, request.sourceName());
                     }
 
-                    // Шаг 2: Подготовка текста и метаданных
                     String redactedText = piiRedactionService.redact(request.textContent());
                     String cleanedText = dataCleaningService.cleanDocumentText(redactedText);
 
@@ -71,12 +69,10 @@ public class IndexingPipelineService {
                     metadata.put("documentId", request.documentId());
                     metadata.put("embedding_model_version", this.embeddingModelVersion);
 
-                    // Шаг 3: Разделение на чанки
                     Document documentToSplit = new Document("passage: " + cleanedText, metadata);
                     List<Document> chunks = textSplitterService.split(documentToSplit);
                     log.debug("Создано {} чанков для документа '{}'", chunks.size(), request.sourceName());
 
-                    // Шаг 4: Добавление новых чанков в VectorStore и инвалидация кэша
                     if (!chunks.isEmpty()) {
                         vectorStore.add(chunks);
                         vectorCacheService.evictAll();
@@ -110,5 +106,23 @@ public class IndexingPipelineService {
                     }
                 })
                 .then();
+    }
+
+    /**
+     * Перегруженный метод для удаления по списку ID.
+     *
+     * @param documentIds Список ID документов для удаления.
+     * @return Mono с количеством удаленных чанков.
+     */
+    @Transactional
+    public Mono<Long> delete(List<String> documentIds) {
+        log.info("Запуск удаления чанков для {} документов.", documentIds.size());
+        return vectorStoreRepository.deleteByDocumentIds(documentIds)
+                .doOnSuccess(deletedCount -> {
+                    if (deletedCount > 0) {
+                        vectorCacheService.evictAll();
+                        log.info("Удалено {} чанков. Кэш поиска очищен.", deletedCount);
+                    }
+                });
     }
 }

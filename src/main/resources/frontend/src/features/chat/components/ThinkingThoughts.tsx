@@ -4,10 +4,21 @@ import { ThinkingStep } from './ThinkingStep';
 import { StatusIndicator } from './StatusIndicator';
 import styles from './ThinkingThoughts.module.css';
 
+/**
+ * @interface ThinkingThoughtsProps
+ * @description Пропсы для компонента ThinkingThoughts.
+ */
 interface ThinkingThoughtsProps {
+  /** @param {string} assistantMessageId - ID сообщения ассистента, для которого отображается статус "мышления". */
   assistantMessageId: string;
 }
 
+/**
+ * Отображает визуализацию процесса "мышления" AI-агента, включая
+ * статусы и пошаговое выполнение плана.
+ * @param {ThinkingThoughtsProps} props - Пропсы компонента.
+ * @returns {React.ReactElement | null} Отрендеренный компонент.
+ */
 export const ThinkingThoughts: FC<ThinkingThoughtsProps> = ({ assistantMessageId }) => {
     const taskState = useStreamingStore((state) => state.activeStreams.get(assistantMessageId));
 

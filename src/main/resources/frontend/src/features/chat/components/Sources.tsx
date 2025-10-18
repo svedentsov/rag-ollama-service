@@ -1,5 +1,5 @@
 import React, { FC } from 'react';
-import { Message } from '../types';
+import { Message, SourceCitation } from '../../../types';
 import styles from './Sources.module.css';
 
 /**
@@ -9,16 +9,16 @@ import styles from './Sources.module.css';
 interface SourcesProps {
   /** @param {Message} message - Объект сообщения, содержащий источники, подтверждающие ответ. */
   message: Message;
+  /** @param {(source: SourceCitation) => void} onViewSource - Колбэк для открытия просмотра источника. */
+  onViewSource: (source: SourceCitation) => void;
 }
 
 /**
- * Презентационный компонент, отвечающий исключительно за рендеринг
- * сетки с карточками источников (цитат). Является "глупым" компонентом.
- *
+ * Презентационный компонент, отвечающий за рендеринг сетки с карточками источников (цитат).
  * @param {SourcesProps} props - Пропсы компонента.
  * @returns {React.ReactElement | null} Отрендеренный компонент или null, если у сообщения нет источников.
  */
-export const Sources: FC<SourcesProps> = ({ message }) => {
+export const Sources: FC<SourcesProps> = ({ message, onViewSource }) => {
   const hasSources = message.sources && message.sources.length > 0;
 
   if (!hasSources) {
@@ -32,11 +32,9 @@ export const Sources: FC<SourcesProps> = ({ message }) => {
       </div>
       <div className={styles.sourcesGrid}>
         {message.sources!.map((source, index) => (
-          <a
+          <button
             key={source.chunkId || index}
-            href={source.metadata.url || '#'}
-            target="_blank"
-            rel="noopener noreferrer"
+            onClick={() => onViewSource(source)}
             className={styles.sourceCard}
             title={source.textSnippet}
           >
@@ -45,7 +43,7 @@ export const Sources: FC<SourcesProps> = ({ message }) => {
               <span className={styles.sourceName}>{source.sourceName}</span>
             </div>
             <p className={styles.sourceSnippet}>{source.textSnippet}</p>
-          </a>
+          </button>
         ))}
       </div>
     </div>

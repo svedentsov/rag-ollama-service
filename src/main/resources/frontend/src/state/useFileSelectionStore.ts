@@ -2,21 +2,22 @@ import { create } from 'zustand';
 
 /**
  * @interface FileSelectionState
- * @description Определяет состояние и действия для управления выбором файлов в сессиях.
+ * @description Определяет состояние и действия для управления выбором файлов в разных сессиях чата.
  */
 interface FileSelectionState {
   /** Карта, где ключ - ID сессии, а значение - Set с ID выбранных файлов. */
   selections: Map<string, Set<string>>;
-  /** Выбирает или отменяет выбор файла для сессии. */
+  /** Выбирает или отменяет выбор файла для указанной сессии. */
   toggleSelection: (sessionId: string, fileId: string) => void;
-  /** Очищает выбор для сессии. */
+  /** Очищает выбор файлов для указанной сессии. */
   clearSelection: (sessionId: string) => void;
-  /** Возвращает Set с ID выбранных файлов для сессии. */
+  /** Возвращает Set с ID выбранных файлов для указанной сессии. */
   getSelectedIds: (sessionId: string) => Set<string>;
 }
 
 /**
- * Глобальный стор Zustand для управления файлами, выбранными для контекста в каждой сессии.
+ * Глобальный стор Zustand для управления файлами, выбранными для использования в качестве контекста в каждой сессии чата.
+ * Является единым источником правды для межфункционального взаимодействия (например, выбор файла в FileManager для использования в Chat).
  */
 export const useFileSelectionStore = create<FileSelectionState>((set, get) => ({
   selections: new Map(),

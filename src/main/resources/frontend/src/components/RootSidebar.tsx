@@ -10,7 +10,7 @@ import styles from './RootSidebar.module.css';
 interface NavItemProps {
   /** @param {string} href - Целевой URL для навигации. */
   href: string;
-  /** @param {string} label - Текстовая метка (для tooltip). */
+  /** @param {string} label - Текстовая метка. */
   label: string;
   /** @param {React.ReactNode} icon - Иконка элемента. */
   icon: React.ReactNode;
@@ -34,11 +34,11 @@ const NavItem: React.FC<NavItemProps> = ({ href, label, icon, isActive }) => {
         e.preventDefault();
         navigate(href);
       }}
-      title={label}
       aria-label={label}
       aria-current={isActive ? 'page' : undefined}
     >
       {icon}
+      <span className={styles.navLabel}>{label}</span>
     </a>
   );
 };
@@ -56,13 +56,13 @@ export const RootSidebar: React.FC = () => {
                 <NavItem
                     href="/chat"
                     label="AI Чат"
-                    icon={<MessageSquare size={24} />}
+                    icon={<MessageSquare size={20} />}
                     isActive={pathname.startsWith('/chat') || pathname === '/'}
                 />
                 <NavItem
                     href="/files"
-                    label="Файловый менеджер"
-                    icon={<Files size={24} />}
+                    label="Файлы"
+                    icon={<Files size={20} />}
                     isActive={pathname.startsWith('/files')}
                 />
             </nav>

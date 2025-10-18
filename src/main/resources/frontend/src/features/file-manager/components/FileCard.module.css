@@ -1,0 +1,65 @@
+.fileRowButton {
+    display: contents; /* Позволяет кнопке вести себя как контейнер для grid-элементов */
+}
+
+/* Применяем стили к дочерним элементам кнопки, чтобы они выглядели как ячейки */
+.fileRowButton > div {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid hsl(var(--border));
+    display: flex;
+    align-items: center;
+    background-color: transparent;
+    transition: background-color 0.15s ease-in-out;
+}
+
+.fileRowButton:hover > div {
+    background-color: hsl(var(--accent));
+}
+
+.fileRowButton:focus-visible {
+    outline: none;
+}
+.fileRowButton:focus-visible > div {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: -2px;
+    z-index: 1;
+}
+
+
+.fileNameCell {
+    gap: 0.75rem;
+    font-weight: 500;
+}
+
+.fileDetailCell {
+    color: hsl(var(--muted-foreground));
+}
+
+.actionsCell {
+    justify-content: flex-end;
+}
+
+.actionButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: none;
+    border-radius: 50%;
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.actionButton:hover {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+}
+
+.deleteButton:hover {
+    background-color: hsl(var(--destructive) / 0.1);
+    color: hsl(var(--destructive));
+}

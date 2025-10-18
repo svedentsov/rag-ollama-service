@@ -15,7 +15,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 @RequiredArgsConstructor
 public class TextSplitterService {
 
-    // ИСПРАВЛЕНИЕ: Зависимость от сфокусированного IngestionProperties
     private final IngestionProperties ingestionProperties;
     private final List<DocumentSplitterStrategy> strategies;
 

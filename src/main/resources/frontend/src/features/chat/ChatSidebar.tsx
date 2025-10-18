@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import toast from 'react-hot-toast';
 import { useChatSessions } from '../../hooks/useChatSessions';
 import { useDebounce } from '../../hooks/useDebounce';
 import { useRouter } from '../../hooks/useRouter';
@@ -9,10 +8,21 @@ import { ChatListItem } from './components/ChatListItem';
 import { Plus } from 'lucide-react';
 import styles from './ChatSidebar.module.css';
 
+/**
+ * @interface ChatSidebarProps
+ * @description Пропсы для компонента боковой панели чатов.
+ */
 interface ChatSidebarProps {
+  /** @param {string | null} currentSessionId - ID текущей активной сессии чата. */
   currentSessionId: string | null;
 }
 
+/**
+ * Компонент боковой панели, отображающий список чатов и управляющий навигацией.
+ * Является "умным" компонентом, который получает данные и функции для мутаций из хука `useChatSessions`.
+ * @param {ChatSidebarProps} props - Пропсы компонента.
+ * @returns {React.ReactElement}
+ */
 export function ChatSidebar({ currentSessionId }: ChatSidebarProps) {
   const { sessions, isLoading, createChat, deleteChat, renameChat } = useChatSessions();
   const { navigate } = useRouter();
@@ -26,14 +36,6 @@ export function ChatSidebar({ currentSessionId }: ChatSidebarProps) {
       session.chatName.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
     );
   }, [sessions, debouncedSearchTerm]);
-
-  const handleNewChat = () => {
-    toast.promise(createChat(), {
-      loading: 'Создание чата...',
-      success: 'Чат успешно создан!',
-      error: 'Ошибка при создании чата.',
-    });
-  };
 
   const handleNavigation = (sessionId: string) => {
     if (notifications.has(sessionId)) {
@@ -68,18 +70,10 @@ export function ChatSidebar({ currentSessionId }: ChatSidebarProps) {
                   isActive={session.sessionId === currentSessionId}
                   hasNotification={notifications.has(session.sessionId)}
                   onNavigate={handleNavigation}
-                  onRename={(newName) => toast.promise(renameChat({ sessionId: session.sessionId, newName }), {
-                    loading: 'Переименование...',
-                    success: 'Чат переименован.',
-                    error: 'Ошибка переименования.',
-                  })}
+                  onRename={(newName) => renameChat({ sessionId: session.sessionId, newName })}
                   onDelete={() => {
                     if (window.confirm(`Вы уверены, что хотите удалить чат "${session.chatName}"?`)) {
-                      toast.promise(deleteChat(session.sessionId), {
-                        loading: 'Удаление...',
-                        success: 'Чат удален!',
-                        error: 'Ошибка при удалении.',
-                      });
+                      deleteChat(session.sessionId);
                     }
                   }}
                 />
@@ -89,7 +83,7 @@ export function ChatSidebar({ currentSessionId }: ChatSidebarProps) {
         )}
       </div>
       <div className={styles.sidebarFooter}>
-        <button className={styles.newChatButton} onClick={handleNewChat}>
+        <button className={styles.newChatButton} onClick={() => createChat()}>
           <Plus size={16} aria-hidden="true" /> <span>Новый чат</span>
         </button>
       </div>

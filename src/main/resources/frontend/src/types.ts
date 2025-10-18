@@ -85,6 +85,8 @@ export interface Message {
   error?: string;
   /** Флаг, указывающий, что сообщение находится в процессе генерации (стриминга). */
   isStreaming?: boolean;
+  /** ID файлов, прикрепленных к сообщению. */
+  fileIds?: string[];
 }
 
 /**
@@ -97,6 +99,48 @@ export interface ChatSession {
   lastMessageTimestamp?: string;
   activeBranches?: Record<string, string>;
 }
+
+/**
+ * Представляет метаданные одного загруженного файла.
+ */
+export interface FileDto {
+  id: string;
+  fileName: string;
+  filePath: string;
+  mimeType: string;
+  fileSize: number;
+  createdAt: string;
+  updatedAt: string;
+  userName: string;
+}
+
+/**
+ * Статус загрузки отдельного файла.
+ */
+export type UploadStatus = 'pending' | 'uploading' | 'success' | 'error';
+
+/**
+ * Представляет состояние загрузки одного файла.
+ */
+export interface UploadProgress {
+  id: string; // Временный клиентский ID
+  file: File;
+  status: UploadStatus;
+  progress: number; // 0-100
+  error?: string;
+}
+
+/**
+ * Универсальный пагинированный ответ от API.
+ */
+export interface Page<T> {
+  content: T[];
+  totalPages: number;
+  totalElements: number;
+  number: number; // current page number
+  size: number;
+}
+
 
 /**
  * Представляет один из возможных типов событий в потоке SSE от бэкенда.

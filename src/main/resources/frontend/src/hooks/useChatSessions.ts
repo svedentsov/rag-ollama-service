@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { api } from '../api';
 import { ChatSession } from '../types';
 import { useRouter } from './useRouter';
@@ -8,17 +8,9 @@ import { useSessionStore } from '../state/sessionStore';
 const CHAT_SESSIONS_QUERY_KEY = ['chatSessions'];
 
 /**
- * @description Хук для управления сессиями чата. Инкапсулирует всю логику
- * взаимодействия с API сессий (получение, создание, удаление, переименование)
- * и управляет состоянием кэша React Query и глобального UI-стора `useSessionStore`.
- *
- * @returns {{
- *   sessions: ChatSession[],
- *   createChat: () => Promise<ChatSession>,
- *   deleteChat: (sessionId: string) => Promise<void>,
- *   renameChat: (vars: { sessionId: string, newName: string }) => Promise<void>,
- *   setActiveBranch: (vars: { sessionId: string, parentId: string, childId: string }) => void
- * } & Omit<ReturnType<typeof useQuery>, 'data'>} Объект с данными о сессиях и функциями-мутациями.
+ * Хук для управления сессиями чата с реализацией оптимистичных обновлений
+ * и централизованной обработкой обратной связи (toast).
+ * @returns Объект с данными о сессиях и отказоустойчивыми функциями-мутациями.
  */
 export function useChatSessions() {
     const queryClient = useQueryClient();
@@ -38,24 +30,49 @@ export function useChatSessions() {
         onSuccess: (newChat) => {
             queryClient.invalidateQueries({ queryKey: CHAT_SESSIONS_QUERY_KEY });
             navigate(`/chat?sessionId=${newChat.sessionId}`);
-            return newChat;
+            toast.success('Чат успешно создан!');
         },
+        onError: (error: Error) => {
+            toast.error(`Ошибка при создании чата: ${error.message}`);
+        }
     });
 
     const deleteChatMutation = useMutation({
         mutationFn: api.deleteChatSession,
         onSuccess: (_, sessionIdToDelete) => {
             deleteSessionState(sessionIdToDelete);
+            toast.success('Чат удален!');
             queryClient.invalidateQueries({ queryKey: CHAT_SESSIONS_QUERY_KEY });
             if (currentSessionId === sessionIdToDelete) {
                 navigate(null);
             }
         },
+        onError: (error: Error) => {
+            toast.error(`Ошибка при удалении чата: ${error.message}`);
+        }
     });
 
     const renameChatMutation = useMutation({
         mutationFn: api.updateChatName,
+        onMutate: async ({ sessionId, newName }) => {
+            await queryClient.cancelQueries({ queryKey: CHAT_SESSIONS_QUERY_KEY });
+            const previousSessions = queryClient.getQueryData<ChatSession[]>(CHAT_SESSIONS_QUERY_KEY) ?? [];
+            queryClient.setQueryData<ChatSession[]>(CHAT_SESSIONS_QUERY_KEY, old =>
+                old?.map(session => session.sessionId === sessionId ? { ...session, chatName: newName } : session)
+            );
+            return { previousSessions };
+        },
         onSuccess: () => {
+            toast.success('Чат успешно переименован.');
+        },
+        onError: (err: Error, variables, context) => {
+            console.error("Ошибка переименования чата:", err);
+            if (context?.previousSessions) {
+                queryClient.setQueryData(CHAT_SESSIONS_QUERY_KEY, context.previousSessions);
+            }
+            toast.error(`Не удалось переименовать чат: ${err.message}`);
+        },
+        onSettled: () => {
             queryClient.invalidateQueries({ queryKey: CHAT_SESSIONS_QUERY_KEY });
         },
     });
@@ -63,9 +80,28 @@ export function useChatSessions() {
     const setActiveBranchMutation = useMutation({
         mutationFn: api.setActiveBranch,
         onMutate: async ({ sessionId, parentId, childId }) => {
+            await queryClient.cancelQueries({ queryKey: CHAT_SESSIONS_QUERY_KEY });
+            const previousSessions = queryClient.getQueryData<ChatSession[]>(CHAT_SESSIONS_QUERY_KEY) ?? [];
+
             setActiveBranchInStore(sessionId, parentId, childId);
+            queryClient.setQueryData<ChatSession[]>(CHAT_SESSIONS_QUERY_KEY, old =>
+                old?.map(session => {
+                    if (session.sessionId === sessionId) {
+                        return { ...session, activeBranches: { ...(session.activeBranches || {}), [parentId]: childId } };
+                    }
+                    return session;
+                })
+            );
+            return { previousSessions };
         },
-        onSuccess: () => {
+        onError: (err: Error, variables, context) => {
+            if (context?.previousSessions) {
+                queryClient.setQueryData(CHAT_SESSIONS_QUERY_KEY, context.previousSessions);
+                setSessions(context.previousSessions);
+            }
+            toast.error(`Ошибка при выборе ветки: ${err.message}`);
+        },
+        onSettled: () => {
             queryClient.invalidateQueries({ queryKey: CHAT_SESSIONS_QUERY_KEY });
         },
     });
@@ -73,9 +109,9 @@ export function useChatSessions() {
     return {
         sessions,
         ...queryInfo,
-        createChat: createChatMutation.mutateAsync,
-        deleteChat: deleteChatMutation.mutateAsync,
-        renameChat: renameChatMutation.mutateAsync,
+        createChat: createChatMutation.mutate,
+        deleteChat: deleteChatMutation.mutate,
+        renameChat: renameChatMutation.mutate,
         setActiveBranch: setActiveBranchMutation.mutate,
     };
 }
